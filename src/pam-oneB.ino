@@ -19,6 +19,7 @@
 //#include <SPI.h>
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME680.h"
+#include "Telaire_T6713.h"
 
 #define BME_SCK 13
 #define BME_MISO 12
@@ -28,8 +29,9 @@
 #define SEALEVELPRESSURE_HPA (1013.25)
 SYSTEM_MODE(MANUAL);        //manually control connection to cellular network
 Adafruit_BME680 bme; // I2C
-//Adafruit_BME680 bme(BME_CS); // hardware SPI
-//Adafruit_BME680 bme(BME_CS, BME_MOSI, BME_MISO,  BME_SCK);
+Telaire_T6713 t6713;  //CO2 sensor
+
+int co2 = 0;
 
 void setup() {
   delay(5000);
@@ -40,6 +42,10 @@ void setup() {
   if (!bme.begin()) {
     Serial.println("Could not find a valid BME680 sensor, check wiring!");
     while (1);
+  }
+
+  if(!t6713.begin()){
+    Serial.println("Could not find a valid T6713 sensor, check wiring!");
   }
 
   // Set up oversampling and filter initialization
@@ -75,6 +81,15 @@ void loop() {
   Serial.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
   Serial.println(" m");
 
+
+  Serial.print("CO2 = ");
+  Serial.print(t6713.readPPM());
+  Serial.println(" ppm");
   Serial.println();
+
+  //read CO2
+  //if(!t6713.queryPPM()){
+  //  Serial.println("Failed to read CO2");
+  //}
   delay(2000);
 }
