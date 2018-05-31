@@ -22,6 +22,12 @@
 #include "Telaire_T6713.h"
 #include "Adafruit_ADS1X15.h"
 #include "LMP91000.h"
+//#include "Serial5/Serial5.h"
+//#include "Serial1/Serial1.h"
+#include "SdFat.h"
+
+//enable or disable different parts of the firmware by setting the following values to 1 or 0
+#define sd_en 1
 
 
 
@@ -29,6 +35,8 @@
 #define BME_MISO 12
 #define BME_MOSI 11
 #define BME_CS 10
+
+#define CS A2 //Chip select for SPI/uSD card
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 SYSTEM_MODE(MANUAL);        //manually control connection to cellular network
@@ -42,12 +50,66 @@ int co2 = 0;
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
 int cellular_en = D5;
 int plantower_en = B4;
+int counter = 0;
+
+
+#if sd_en
+SdFat sd;
+SdFile file;
+File file1;
+String fileName;
+#endif
 
 void setup() {
+  String init_log; //intialization error log
   pinMode(lmp91000_1_en, OUTPUT);
   digitalWrite(lmp91000_1_en, HIGH);
+  Serial1.begin(9600, SERIAL_8N1);
   delay(5000);
   Serial.begin(9600);
+  //Serial1.begin(9600);  //Serial4 used for communicating with BLE (TX)
+
+  //Serial1.setTimeout(5000);
+  //outputToBLE();
+  #if sd_en
+  Serial.println("In loop checking for sd card");
+
+  if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
+    file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
+    file.remove();
+    file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
+    init_log += "MCP,";
+    file.print(init_log);
+    file.close();
+
+
+  }else { //uSD is not functioning
+
+      Serial.println("MCP error log fail. Particle LED should be flashing");
+
+  }
+
+  #endif
+
+
+  //outputToBLE();
+
+  /*Serial5.begin(9600);    //testing gps
+  Serial.println("reading serial5 from gps");
+  long gps_counter=0;
+  while(1){
+    if (Serial5.available())
+    {
+      int inByte = Serial5.read();
+      if(inByte == '$'){
+        gps_counter++;
+        Serial.print(gps_counter);
+        Serial.print(":");
+      }
+      Serial.write(inByte);
+    }
+
+  }*/
   //setup the AFE
   Serial.println("Starting LMP91000 initialization");
   Wire.begin();   //this must be done for the LMP91000
@@ -103,6 +165,7 @@ void setup() {
   bme.setPressureOversampling(BME680_OS_4X);
   bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
   bme.setGasHeater(320, 150); // 320*C for 150 ms
+
 }
 
 void loop() {
@@ -247,5 +310,87 @@ void loop() {
     Serial.println("Volts");
 
 
-  delay(2000);
+  delay(4000);
+  outputToBLE();
+}
+
+
+void outputToBLE()
+{
+
+    String ble_data = "";
+    String start = "$";
+    String delim = "|";
+    String delim1 = "#";
+    String end = "X";
+    //Phantower PM measurements Designators
+    String pm1_measurement = "PM1";
+    String pm25_measurement = "PM25";
+    String pm10_measurement = "PM10";
+    //Alphasense Electrochemical Sensors Designators
+    String alpha1_measurement = "A1";
+    String alpha2_measurement = "A2";
+    String alpha3_measurement = "A3";
+    String alpha4_measurement = "CO";
+    //HMOS Designators
+    String HMOS_VOC = "TVOCs";
+    //Analog-in Designator
+    String analog_jack = "A-in";
+    //ELT CO2 Sensor Designator
+    String co2_measurement = "CO2";
+    //BME 280 Temperature, Pressure, Humidity Designators
+    String temp_measurement = "Temp";
+    String pres_measurement = "Pres";
+    String hum_measurement = "rhum";
+    //Date and Time Designators
+    String date_measurement = "Date";
+    String time_measurement = "Time";
+    String batteryVoltage_measurement = "Batt";
+    //units
+    String ppb = "ppb";
+    String ppm = "ppm";
+    String degC = "C";
+    String rh = "%";
+    String mbar = "mbar";
+    String ugm3 = "ug";
+    String volts = "volts";
+    String units = "units";
+
+    /*ble_data = start + String(ID) + delim + sample_counter + ppm + alpha4_ppmRounded + alpha4_measurement + delim1;  //Alpha 4
+    ble_data += String(ID) + delim + sample_counter + ppm + co2_data + co2_measurement + delim1; //ELT CO2
+    ble_data += String(ID) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
+    ble_data += String(ID) + delim + sample_counter + ugm3 + PM2_5Value + pm25_measurement + delim1; //PM 2.5
+    ble_data += String(ID) + delim + sample_counter + ugm3 +  PM10Value + pm10_measurement + delim1; //PM 10
+    ble_data += String(ID) + delim + sample_counter + degC + bme_temp + temp_measurement + delim1; //temperature
+    ble_data += String(ID) + delim + sample_counter + mbar + bme_pres + pres_measurement + delim1; //pressure
+    ble_data += String(ID) + delim + sample_counter + rh + bme_hum + hum_measurement + delim1; //humidity
+    ble_data += String(ID) + delim + sample_counter + volts + batvolt_rounded + batteryVoltage_measurement + delim1 + end; //Battery Voltage
+    */
+    //ble_data = "$1|1PPB400CO2#1|2PPB100O3#X";
+    counter++;
+    ble_data = "$123|";
+    ble_data += String(counter);
+    ble_data += "ppm";
+    ble_data += String(counter);
+    ble_data += "CO2#X";
+    //ble_data = "U";
+
+    Serial1.print(ble_data);
+
+
+    int bytes = Serial1.available();
+    if (bytes)
+    {
+      Serial.print("Bytes recieved:");
+      Serial.print(bytes);
+      Serial.println();
+      for(int x = 0; x < bytes; x++){
+        int inByte = Serial1.read();
+        Serial.write(inByte);
+      }
+
+    }
+    //Serial.println(ble_data);
+
+
 }
