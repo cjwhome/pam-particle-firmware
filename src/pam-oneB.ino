@@ -91,6 +91,7 @@ void setup() {
     pinMode(plantower_en, OUTPUT);
     pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
+    pinMode(kill_power, INPUT);
 
 
     digitalWrite(lmp91000_1_en, HIGH);
@@ -204,7 +205,11 @@ void loop() {
     if(sample_counter == 99)    {
           sample_counter = 0;
     }
-
+    if(!kill_power)
+    {
+      Serial.println("Going to sleep!");
+      goToSleep();
+    }
     delay(2000);
 
 }
@@ -386,10 +391,10 @@ void outputToBLE()
     delay(2000);
 
     ble_data = start;
-    ble_data += String(ID) + delim + sample_counter + degC + bme.temperature + temp_measurement + delim1; //temperature
-    ble_data += String(ID) + delim + sample_counter + mbar + bme.pressure / 100.0 + pres_measurement + delim1; //pressure
-    ble_data += String(ID) + delim + sample_counter + rh + bme.humidity + hum_measurement + delim1; //humidity
-    ble_data += String(ID) + delim + sample_counter + chargePercent + fuel.getSoC() + batteryVoltage_measurement + delim1; //Battery Voltage
+    ble_data += String(ID) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
+    ble_data += String(ID) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
+    ble_data += String(ID) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
+    ble_data += String(ID) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
     ble_data += end;
     Serial1.print(ble_data);
     Serial.println(ble_data);
@@ -479,4 +484,12 @@ int transmitPM10(char *thebuf)  {
     int PM10Val;
     PM10Val=((thebuf[7]<<8) + thebuf[8]); //count PM10 value of the air detector module
     return PM10Val;
+}
+
+void goToSleep()
+{
+    digitalWrite(power_led_en, LOW);
+    digitalWrite(plantower_en, LOW);
+    digitalWrite(esp_wroom_en, LOW);
+    System.sleep(kill_power, RISING, 10);
 }
