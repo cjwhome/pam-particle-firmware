@@ -42,12 +42,16 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define BME_MOSI 11
 #define BME_CS 10
 #define CS A2               //Chip select for SPI/uSD card
+#define SLEEP_EN D3
+
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
 int cellular_en = D5;
 int plantower_en = B4;
 int power_led_en = D6;
 int kill_power = WKP;
 int esp_wroom_en = D7;
+int blower_en = D2;
+
 
 
 //manually control connection to cellular network
@@ -91,12 +95,18 @@ void setup() {
     pinMode(plantower_en, OUTPUT);
     pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
+    pinMode(blower_en, OUTPUT);
+    pinMode(D3, INPUT);
+    //if user presses power button during operation, reset and it will go to low power mode
+    attachInterrupt(D3, System.reset, RISING);
+
 
 
     digitalWrite(lmp91000_1_en, HIGH);
     digitalWrite(power_led_en, HIGH);
     digitalWrite(plantower_en, HIGH);
-    digitalWrite(esp_wroom_en, LOW);
+    digitalWrite(esp_wroom_en, HIGH);
+    digitalWrite(blower_en, HIGH);
 
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600, SERIAL_8N1);
@@ -104,7 +114,9 @@ void setup() {
     Serial4.begin(9600);
     //set the Timeout to 1500ms, longer than the data transmission periodic time of the sensor
     Serial4.setTimeout(5000);
-
+    if(digitalRead(D3)){
+      goToSleep();
+    }
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(5000);
     //initialize main serial port for debug output
@@ -205,7 +217,6 @@ void loop() {
           sample_counter = 0;
     }
 
-    delay(2000);
 
 }
 
@@ -479,4 +490,16 @@ int transmitPM10(char *thebuf)  {
     int PM10Val;
     PM10Val=((thebuf[7]<<8) + thebuf[8]); //count PM10 value of the air detector module
     return PM10Val;
+}
+
+void goToSleep(void){
+  //Serial.println("Going to sleep:)");
+  digitalWrite(power_led_en, LOW);
+  digitalWrite(plantower_en, LOW);
+  digitalWrite(esp_wroom_en, LOW);
+  digitalWrite(blower_en, LOW);
+  System.sleep(D3,FALLING);
+  delay(500);
+  System.reset();
+  //detachInterrupt(D3);
 }
