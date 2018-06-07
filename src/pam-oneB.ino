@@ -77,6 +77,7 @@ int PM2_5Value=0;
 int PM10Value=0;
 #define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
 char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
+char incomingByte;  //serial connection from user
 
 
 #if sd_en
@@ -202,6 +203,7 @@ void setup() {
 }
 
 void loop() {
+
     if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
       return;
@@ -217,6 +219,47 @@ void loop() {
           sample_counter = 0;
     }
 
+    if (Serial.available() > 0) {
+    // read the incoming byte:
+    incomingByte = Serial.read();
+    Serial.println(incomingByte);
+    if(incomingByte == 'm'){
+      serialMenu();
+    }
+
+  }
+
+}
+void serialMenu(){
+  int addr;
+  uint16_t value;
+  char recieveStr[5];
+  Serial.print("Menu>");
+  while(!Serial.available());
+  incomingByte = Serial.read();
+  if(incomingByte == 'C'){
+    addr = 10;
+      EEPROM.get(addr, value);
+      Serial.println();
+      Serial.print("Current CO2 zero:");
+      Serial.print(value);
+      Serial.println(" ppm");
+      Serial.print("Enter new CO2 Zero");
+      for(int i=0;i<5;i++){
+        while(!Serial.available());
+        recieveStr[i] = Serial.read();
+      }
+      String tempString = String(recieveStr);
+      int tempValue = tempString.toInt();
+      Serial.print("New zero: ");
+      Serial.println(tempValue);
+      if(tempValue >= -1000 && tempValue < 1000){
+        EEPROM.put(addr, tempValue);
+      }
+    }else if(incomingByte == 'B'){
+      Serial.println("gotta B!");
+
+    }
 
 }
 
