@@ -34,6 +34,19 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
 #define sd_en 1
 
+//define addresses of eeprom stored variables
+#define DEVICE_ID_MEM_ADDRESS 0
+#define CO2_ZERO_MEM_ADDRESS 4
+#define CO2_SLOPE_MEM_ADDRESS 8
+#define CO_ZERO_MEM_ADDRESS 12
+#define CO_SLOPE_MEM_ADDRESS 16
+#define PM_1_ZERO_MEM_ADDRESS 20
+#define PM_1_SLOPE_MEM_ADDRESS 24
+#define PM_25_ZERO_MEM_ADDRESS 28
+#define PM_25_SLOPE_MEM_ADDRESS 32
+#define PM_10_ZERO_MEM_ADDRESS 36
+#define PM_10_SLOPE_MEM_ADDRESS 40
+
 
 //define pin functions
 //fix these so they are more consistent!
@@ -64,13 +77,37 @@ LMP91000 lmp91000;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
 FuelGauge fuel;
 
+//sdcard
+SdFat sd;
+SdFile file;
+File file1;
+String fileName;
+
+//wifi
+String ssid; //wifi network name
+String password; //wifi network password
+
 //global variables
 int counter = 0;
-String CO_value = "";
+float CO_float = 0;
 float CO2_float = 0;
 int CO2_value = 0;
-int ID = 555;
+int DEVICE_id = 555;       //default value
 int sample_counter = 0;
+float tempfloat = 0;
+
+//calibration parameters
+float CO2_slope;
+int CO2_zero;
+float CO_slope;
+int CO_zero;
+float PM_1_slope;
+float PM_25_slope;
+float PM_10_slope;
+int PM_1_zero;
+int PM_25_zero;
+int PM_10_zero;
+
 //plantower PMS5003 vars
 int PM01Value=0;
 int PM2_5Value=0;
@@ -80,14 +117,148 @@ char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
 char incomingByte;  //serial connection from user
 
 
-#if sd_en
-SdFat sd;
-SdFile file;
-File file1;
-String fileName;
-#endif
 
-void setup() {
+//function declarations
+void readStoredVars(void);
+void check_cal_file(void);
+size_t readField(File* file, char* str, size_t size, const char* delim);
+void check_wifi_file(void);
+void serialMenu();
+void serial_get_co2_zero(void);
+void serial_get_co2_zero(void);
+void output_serial_menu_options(void);
+
+
+//read all eeprom stored variables
+void readStoredVars(void)
+{
+    EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
+    if(DEVICE_id == -1){
+        DEVICE_id = 555;
+    }
+
+    EEPROM.get(CO2_SLOPE_MEM_ADDRESS, CO2_slope);
+    CO2_slope /= 10;
+    EEPROM.get(CO_SLOPE_MEM_ADDRESS, CO_slope);
+    CO_slope /= 10;
+    EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, PM_1_slope);
+    PM_1_slope /= 10;
+    EEPROM.get(PM_25_SLOPE_MEM_ADDRESS, PM_25_slope);
+    PM_25_slope /= 10;
+    EEPROM.get(PM_10_SLOPE_MEM_ADDRESS, PM_10_slope);
+    PM_10_slope /= 10;
+
+    EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
+    EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
+    EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
+    EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
+    EEPROM.get(PM_10_ZERO_MEM_ADDRESS, PM_10_zero);
+
+    //check all values to make sure are within limits
+    if(!CO2_slope)
+    {
+        CO2_slope = 1;
+    }
+    if(!CO_slope)
+    {
+        CO_slope = 1;
+    }
+    if(!PM_1_slope)
+    {
+        PM_1_slope = 1;
+    }
+    if(!PM_25_slope)
+    {
+        PM_25_slope = 1;
+    }
+    if(!PM_10_slope)
+    {
+        PM_10_slope = 1;
+    }
+}
+
+void check_cal_file(void)
+{
+
+}
+
+size_t readField(File* file, char* str, size_t size, const char* delim) {
+  char ch;
+  size_t n = 0;
+  while ((n + 1) < size && file->read(&ch, 1) == 1) {
+    // Delete CR.
+    if (ch == '\r') {
+      continue;
+    }
+    str[n++] = ch;
+    if (strchr(delim, ch)) {
+        break;
+    }
+  }
+  str[n] = '\0';
+  return n;
+}
+
+void check_wifi_file(void)
+{
+    file1 = sd.open("wifi.txt", O_READ);
+    size_t n;      // Length of returned field with delimiter.
+    char str[50];  // Must hold longest field with delimiter and zero byte.
+    // Read the file and print fields.
+    int cred = 0;
+    int i = 0;
+    Serial.println("Contents of wifi file line by line:");
+    while(1)
+    {
+        n = readField(&file1, str, sizeof(str), ",\n");
+        // done if Error or at EOF.
+        if (n == 0){
+            break;
+        }
+        //Serial.print("I:");
+        //Serial.print(i);
+        //Serial.print(":");
+        //Serial.println(str);
+        //the first field is "SSID,PASSWORD", the second is the actual values
+        if(i>1)
+        {
+            if (str[n-1] == ','){
+              str[n-1] = 0;
+              ssid = str;
+              ssid.trim();
+              cred++;
+            }
+            else if (str[n-1] == '\n') {
+              str[n-1] = 0;
+              password = str;
+              password.trim();
+              cred++;
+            }
+            else if(file1.available() == 0) { //There's a better way to do this. Buggy, fix soon!
+              password = str;
+              cred++;
+            }
+            else {
+              // At eof, too long, or read error.  Too long is error.
+              Serial.print(file1.available() ? F("error: ") : F("eof:   "));
+            }
+            if(cred >= 2){ //at least one pair of ssid and password
+              Serial.print("Found SSID:");
+              Serial.println(ssid);
+              Serial.print("Found password:");
+              Serial.println(password);
+              break;
+            }
+            //WiFi.setCredentials(ssid, password);
+        }
+
+        i++;
+    }
+    file1.close();
+
+}
+void setup()
+{
     String init_log; //intialization error log
 
     //setup i/o
@@ -109,6 +280,8 @@ void setup() {
     digitalWrite(esp_wroom_en, HIGH);
     digitalWrite(blower_en, HIGH);
 
+    //read all stored variables (calibration parameters)
+    readStoredVars();
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600, SERIAL_8N1);
     //init serial4 to communicate with Plantower PMS5003
@@ -125,7 +298,7 @@ void setup() {
 
 
     #if sd_en
-    Serial.println("In loop checking for sd card");
+    Serial.println("Checking for sd card");
 
     if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
       file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
@@ -135,11 +308,12 @@ void setup() {
       file.print(init_log);
       file.close();
 
-
+      //look for a wifi file
+      check_wifi_file();
+      //look for a calibration file
+      check_cal_file();
     }else { //uSD is not functioning
-
         Serial.println("MCP error log fail. Particle LED should be flashing");
-
     }
     #endif
 
@@ -152,24 +326,17 @@ void setup() {
     if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000");
-          //init_log += "AFE";
-          //init_log += i-7;
-          //init_log += ",";
-          //digitalWrite(red_status_led, HIGH);
-          //delay(200);
-          //digitalWrite(red_status_led, LOW);
-          //delay(200);
     }else{
-      Serial.println("Initialized LMP91000");
-      Serial.print("STATUS: ");
-      Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
-      Serial.print("TIACN: ");
-      Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
-      Serial.print("REFCN: ");
-      Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
-      Serial.print("MODECN: ");
-      Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);
-      digitalWrite(lmp91000_1_en, HIGH);  //disable
+          Serial.println("Initialized LMP91000");
+          /*Serial.print("STATUS: ");
+          Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
+          Serial.print("TIACN: ");
+          Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
+          Serial.print("REFCN: ");
+          Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
+          Serial.print("MODECN: ");
+          Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
+          digitalWrite(lmp91000_1_en, HIGH);  //disable
     }
     ads1.begin();
     if(Wire.requestFrom(0x49,1) == 0) { //if can't get 1 byte from ADC1, add it to the init error log
@@ -204,14 +371,23 @@ void setup() {
 
 void loop() {
 
+    //read temp, press, humidity, and TVOCs
     if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
       return;
     }
 
-    CO_value = read_alpha1();
+    //read CO values and apply calibration factors
+    CO_float = read_alpha1();
+    CO_float += CO_zero;
+    CO_float *= CO_slope;
+
+    //read CO2 values and apply calibration factors
     CO2_float = t6713.readPPM();
-    CO2_value = CO2_float;
+    CO2_float += CO2_zero;
+    CO2_float *= CO2_slope;
+
+    //read PM values and apply calibration factors
     readPlantower();
     outputToBLE();
     sample_counter = ++sample_counter;
@@ -230,42 +406,11 @@ void loop() {
   }
 
 }
-void serialMenu(){
-  int addr;
-  uint16_t value;
-  char recieveStr[5];
-  Serial.print("Menu>");
-  while(!Serial.available());
-  incomingByte = Serial.read();
-  if(incomingByte == 'C'){
-    addr = 10;
-      EEPROM.get(addr, value);
-      Serial.println();
-      Serial.print("Current CO2 zero:");
-      Serial.print(value);
-      Serial.println(" ppm");
-      Serial.print("Enter new CO2 Zero");
-      for(int i=0;i<5;i++){
-        while(!Serial.available());
-        recieveStr[i] = Serial.read();
-      }
-      String tempString = String(recieveStr);
-      int tempValue = tempString.toInt();
-      Serial.print("New zero: ");
-      Serial.println(tempValue);
-      if(tempValue >= -1000 && tempValue < 1000){
-        EEPROM.put(addr, tempValue);
-      }
-    }else if(incomingByte == 'B'){
-      Serial.println("gotta B!");
 
-    }
-
-}
 
 
 //read Carbon monoxide alphasense sensor
-String read_alpha1(void){
+float read_alpha1(void){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -377,7 +522,7 @@ String read_alpha1(void){
       Serial.print("Volt1 Aux:");
       Serial.print(volt1_aux);
       Serial.println("Volts");*/
-      return alpha1_ppmRounded;
+      return alpha1_ppmraw;
 }
 
 
@@ -422,28 +567,28 @@ void outputToBLE()
 
 
     ble_data = start;
-    ble_data += String(ID) + delim + sample_counter + ppm + CO_value + CO_measurement + delim1;  //Alpha 4
-    ble_data += String(ID) + delim + sample_counter + ppm + CO2_value + co2_measurement + delim1; //ELT CO2
-    ble_data += String(ID) + delim + sample_counter + resistance + String(bme.gas_resistance / 1000.0, 1) + voc_measurement + delim1;
+    ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO_float, 3) + CO_measurement + delim1;  //Alpha 4
+    ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO2_float, 0) + co2_measurement + delim1; //ELT CO2
+    ble_data += String(DEVICE_id) + delim + sample_counter + resistance + String(bme.gas_resistance / 1000.0, 1) + voc_measurement + delim1;
     ble_data += end;
     Serial1.print(ble_data);
     Serial.println(ble_data);
     delay(2000);
 
     ble_data = start;
-    ble_data += String(ID) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
-    ble_data += String(ID) + delim + sample_counter + ugm3 + PM2_5Value + pm25_measurement + delim1; //PM 2.5
-    ble_data += String(ID) + delim + sample_counter + ugm3 +  PM10Value + pm10_measurement + delim1; //PM 10
+    ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
+    ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM2_5Value + pm25_measurement + delim1; //PM 2.5
+    ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 +  PM10Value + pm10_measurement + delim1; //PM 10
     ble_data += end;
     Serial1.print(ble_data);
     Serial.println(ble_data);
     delay(2000);
 
     ble_data = start;
-    ble_data += String(ID) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
-    ble_data += String(ID) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
-    ble_data += String(ID) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
-    ble_data += String(ID) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
+    ble_data += String(DEVICE_id) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
+    ble_data += String(DEVICE_id) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
+    ble_data += String(DEVICE_id) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
+    ble_data += String(DEVICE_id) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
     ble_data += end;
     Serial1.print(ble_data);
     Serial.println(ble_data);
@@ -546,3 +691,130 @@ void goToSleep(void){
   System.reset();
   //detachInterrupt(D3);
 }
+
+/************************Serial menu stuff******************/
+void serialMenu(){
+  int addr;
+  uint16_t value;
+  char recieveStr[5];
+  Serial.print("Menu>");
+  while(!Serial.available());
+  incomingByte = Serial.read();
+  if(incomingByte == 'a'){
+      serial_get_co2_slope();
+  }else if(incomingByte == 'b'){
+      serial_get_co2_zero();
+  }else if(incomingByte == 'c'){
+  }else if(incomingByte == 'd'){
+  }else if(incomingByte == 'e'){
+  }else if(incomingByte == 'f'){
+  }else if(incomingByte == 'g'){
+  }else if(incomingByte == 'h'){
+  }else if(incomingByte == 'i'){
+  }else if(incomingByte == 'v'){
+      serial_get_device_id();
+  }else if(incomingByte == '?'){
+      output_serial_menu_options();
+    }
+
+}
+
+void serial_get_device_id(void){
+    Serial.println();
+    Serial.print("Current Device ID:");
+    Serial.println(DEVICE_id);
+    Serial.println("Please enter password in order to change the ID");
+    for(int i=0;i<5;i++){
+      while(!Serial.available());
+      recieveStr[i] = Serial.read();
+    }
+    String tempString = String(recieveStr);
+
+
+    if(tempValue == "bould"){
+        Serial.println("Password correct!");
+        Serial.println("Enter new Device ID:");
+        for(int i=0;i<5;i++){
+          while(!Serial.available());
+          recieveStr[i] = Serial.read();
+        }
+        String tempString = String(recieveStr);
+
+
+        if(tempValue == "bould"){
+            Serial.print("Password correct!");
+            Serial.println(tempValue);
+            CO2_zero = tempValue;
+            EEPROM.put(addr, tempValue);
+        }else{
+            Serial.println("Incorrect password!");
+        }
+    }else{
+        Serial.println("Incorrect password!");
+    }
+}
+
+void serial_get_co2_slope(void){
+    addr = CO2_SLOPE_MEM_ADDRESS;
+    Serial.println();
+    Serial.print("Current CO2 slope:");
+    Serial.print(String(CO2_slope, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new CO2 slope");
+    for(int i=0;i<5;i++){
+      while(!Serial.available());
+      recieveStr[i] = Serial.read();
+    }
+    String tempString = String(recieveStr);
+    float tempfloat = tempString.tofloat();
+
+    if(tempValue >= 0.5 && tempValue < 1.5){
+        CO2_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("New CO2 slope: ");
+        Serial.println(String(CO2_slope,2));
+
+        EEPROM.put(addr, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_co2_zero(void){
+    Serial.println();
+    Serial.print("Current CO2 zero:");
+    Serial.print(CO2_zero);
+    Serial.println(" ppm");
+    Serial.print("Enter new CO2 Zero");
+    for(int i=0;i<5;i++){
+      while(!Serial.available());
+      recieveStr[i] = Serial.read();
+    }
+    String tempString = String(recieveStr);
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -1000 && tempValue < 1000){
+        Serial.print("New zero: ");
+        Serial.println(tempValue);
+        CO2_zero = tempValue;
+        EEPROM.put(addr, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void output_serial_menu_options(void)
+{
+    Serial.println("Command:  Description");
+    Serial.println("a:  Adjust CO2 slope");
+    Serial.println("b:  Adjust CO2 zero");
+    Serial.println("c:  Adjust CO slope");
+    Serial.println("d:  Adjust CO zero");
+    Serial.println("e:  Adjust PM1 slope");
+    Serial.println("f:  Adjust PM1 zero");
+    Serial.println("g:  Adjust PM2.5 slope");
+    Serial.println("h:  Adjust PM2.5 zero");
+    Serial.println("i:  Adjust PM10 slope");
+    Serial.println("j:  Adjust PM10 zero");
+    Serial.println("?:  Output this menu");
