@@ -47,6 +47,10 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define PM_10_ZERO_MEM_ADDRESS 36
 #define PM_10_SLOPE_MEM_ADDRESS 40
 
+//max and min values
+#define MIN_DEVICE_ID_NUMBER 1
+#define MAX_DEVICE_ID_NUMBER 9999
+
 
 //define pin functions
 //fix these so they are more consistent!
@@ -108,6 +112,11 @@ int PM_1_zero;
 int PM_25_zero;
 int PM_10_zero;
 
+//serial menu variables
+int addr;
+uint16_t value;
+char recieveStr[5];
+
 //plantower PMS5003 vars
 int PM01Value=0;
 int PM2_5Value=0;
@@ -124,29 +133,35 @@ void check_cal_file(void);
 size_t readField(File* file, char* str, size_t size, const char* delim);
 void check_wifi_file(void);
 void serialMenu();
+void serial_get_device_id(void);
 void serial_get_co2_zero(void);
 void serial_get_co2_zero(void);
+void serial_get_co_zero(void);
+void serial_get_co_zero(void);
 void output_serial_menu_options(void);
 
 
 //read all eeprom stored variables
 void readStoredVars(void)
 {
+  int tempValue;
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
     if(DEVICE_id == -1){
         DEVICE_id = 555;
     }
 
-    EEPROM.get(CO2_SLOPE_MEM_ADDRESS, CO2_slope);
-    CO2_slope /= 10;
-    EEPROM.get(CO_SLOPE_MEM_ADDRESS, CO_slope);
-    CO_slope /= 10;
+    EEPROM.get(CO2_SLOPE_MEM_ADDRESS, tempValue);
+    CO2_slope = tempValue;
+    CO2_slope /= 100;
+    EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempValue);
+    CO_slope = tempValue;
+    CO_slope /= 100;
     EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, PM_1_slope);
-    PM_1_slope /= 10;
+    PM_1_slope /= 100;
     EEPROM.get(PM_25_SLOPE_MEM_ADDRESS, PM_25_slope);
-    PM_25_slope /= 10;
+    PM_25_slope /= 100;
     EEPROM.get(PM_10_SLOPE_MEM_ADDRESS, PM_10_slope);
-    PM_10_slope /= 10;
+    PM_10_slope /= 100;
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
@@ -694,32 +709,37 @@ void goToSleep(void){
 
 /************************Serial menu stuff******************/
 void serialMenu(){
-  int addr;
-  uint16_t value;
-  char recieveStr[5];
-  Serial.print("Menu>");
-  while(!Serial.available());
-  incomingByte = Serial.read();
-  if(incomingByte == 'a'){
-      serial_get_co2_slope();
-  }else if(incomingByte == 'b'){
-      serial_get_co2_zero();
-  }else if(incomingByte == 'c'){
-  }else if(incomingByte == 'd'){
-  }else if(incomingByte == 'e'){
-  }else if(incomingByte == 'f'){
-  }else if(incomingByte == 'g'){
-  }else if(incomingByte == 'h'){
-  }else if(incomingByte == 'i'){
-  }else if(incomingByte == 'v'){
-      serial_get_device_id();
-  }else if(incomingByte == '?'){
-      output_serial_menu_options();
+  incomingByte = '0';
+  while(incomingByte!= 'x')
+  {
+    Serial.print("Menu>");
+    while(!Serial.available());
+    incomingByte = Serial.read();
+    if(incomingByte == 'a'){
+        serial_get_co2_slope();
+    }else if(incomingByte == 'b'){
+        serial_get_co2_zero();
+    }else if(incomingByte == 'c'){
+        serial_get_co_slope();
+    }else if(incomingByte == 'd'){
+        serial_get_co_zero();
+    }else if(incomingByte == 'e'){
+    }else if(incomingByte == 'f'){
+    }else if(incomingByte == 'g'){
+    }else if(incomingByte == 'h'){
+    }else if(incomingByte == 'i'){
+    }else if(incomingByte == 'v'){
+        serial_get_device_id();
+    }else if(incomingByte == '?'){
+        output_serial_menu_options();
     }
+  }
+
 
 }
 
 void serial_get_device_id(void){
+
     Serial.println();
     Serial.print("Current Device ID:");
     Serial.println(DEVICE_id);
@@ -731,7 +751,7 @@ void serial_get_device_id(void){
     String tempString = String(recieveStr);
 
 
-    if(tempValue == "bould"){
+    if(tempString == "bould"){
         Serial.println("Password correct!");
         Serial.println("Enter new Device ID:");
         for(int i=0;i<5;i++){
@@ -739,15 +759,15 @@ void serial_get_device_id(void){
           recieveStr[i] = Serial.read();
         }
         String tempString = String(recieveStr);
-
-
-        if(tempValue == "bould"){
-            Serial.print("Password correct!");
+        int tempValue = tempString.toInt();
+        Serial.println("");
+        if(tempValue > MIN_DEVICE_ID_NUMBER && tempValue < MAX_DEVICE_ID_NUMBER){
+            Serial.print("New Device ID:");
             Serial.println(tempValue);
-            CO2_zero = tempValue;
-            EEPROM.put(addr, tempValue);
+            DEVICE_id = tempValue;
+            EEPROM.put(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
         }else{
-            Serial.println("Incorrect password!");
+            Serial.println("Invalid value!");
         }
     }else{
         Serial.println("Incorrect password!");
@@ -755,7 +775,7 @@ void serial_get_device_id(void){
 }
 
 void serial_get_co2_slope(void){
-    addr = CO2_SLOPE_MEM_ADDRESS;
+
     Serial.println();
     Serial.print("Current CO2 slope:");
     Serial.print(String(CO2_slope, 2));
@@ -766,16 +786,17 @@ void serial_get_co2_slope(void){
       recieveStr[i] = Serial.read();
     }
     String tempString = String(recieveStr);
-    float tempfloat = tempString.tofloat();
+    float tempfloat = tempString.toFloat();
+    int tempValue;
 
-    if(tempValue >= 0.5 && tempValue < 1.5){
+    if(tempfloat >= 0.5 && tempfloat < 1.5){
         CO2_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
         Serial.print("New CO2 slope: ");
         Serial.println(String(CO2_slope,2));
 
-        EEPROM.put(addr, tempValue);
+        EEPROM.put(CO2_SLOPE_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("Invalid value!");
     }
@@ -795,10 +816,61 @@ void serial_get_co2_zero(void){
     int tempValue = tempString.toInt();
 
     if(tempValue >= -1000 && tempValue < 1000){
-        Serial.print("New zero: ");
+        Serial.print("New CO2 zero: ");
         Serial.println(tempValue);
         CO2_zero = tempValue;
-        EEPROM.put(addr, tempValue);
+        EEPROM.put(CO2_ZERO_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_co_slope(void){
+
+    Serial.println();
+    Serial.print("Current CO slope:");
+    Serial.print(String(CO_slope, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new CO slope");
+    for(int i=0;i<5;i++){
+      while(!Serial.available());
+      recieveStr[i] = Serial.read();
+    }
+    String tempString = String(recieveStr);
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.5 && tempfloat < 1.5){
+        CO_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("New CO slope: ");
+        Serial.println(String(CO_slope,2));
+
+        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_co_zero(void){
+    Serial.println();
+    Serial.print("Current CO zero:");
+    Serial.print(CO_zero);
+    Serial.println(" ppm");
+    Serial.print("Enter new CO Zero");
+    for(int i=0;i<5;i++){
+      while(!Serial.available());
+      recieveStr[i] = Serial.read();
+    }
+    String tempString = String(recieveStr);
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -1000 && tempValue < 1000){
+        Serial.print("New CO zero: ");
+        Serial.println(tempValue);
+        CO_zero = tempValue;
+        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("Invalid value!");
     }
@@ -818,3 +890,4 @@ void output_serial_menu_options(void)
     Serial.println("i:  Adjust PM10 slope");
     Serial.println("j:  Adjust PM10 zero");
     Serial.println("?:  Output this menu");
+  }
