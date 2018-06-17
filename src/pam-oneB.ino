@@ -29,6 +29,9 @@
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
+#define VOLTS_PER_UNIT (0.0008)   //3.3V/4096  3.3 is the adc reference voltage and the adc is 12 bits or 4096
+#define VOLTS_PER_PPB (0.0125)  //2.5V/200 ppb this is what you divide the voltage reading by to get ppb in ozone if the ozone monitor is set to 2.5V=200ppb
+
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
@@ -68,6 +71,7 @@ int power_led_en = D6;
 int kill_power = WKP;
 int esp_wroom_en = D7;
 int blower_en = D2;
+int analog_input = A0;  //ozone monitor's voltage output is connected to this input
 
 
 
@@ -96,6 +100,7 @@ int counter = 0;
 float CO_float = 0;
 float CO2_float = 0;
 int CO2_value = 0;
+float O3_float = 0;
 int DEVICE_id = 555;       //default value
 int sample_counter = 0;
 float tempfloat = 0;
@@ -402,6 +407,12 @@ void loop() {
     CO2_float += CO2_zero;
     CO2_float *= CO2_slope;
 
+    tempValue = analogRead(analog_input);  // read the analogPin for ozone voltage
+    O3_float = tempValue;
+    O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
+    O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
+
+
     //read PM values and apply calibration factors
     readPlantower();
     outputToBLE();
@@ -561,6 +572,10 @@ void outputToBLE()
     String analog_jack = "A-in";
     //ELT CO2 Sensor Designator
     String co2_measurement = "CO2";
+
+    //Ozone measurement from analog input connected to 106-L
+    String o3_measurement = "O3";
+
     //BME 280 Temperature, Pressure, Humidity Designators
     String temp_measurement = "Temp";
     String pres_measurement = "Pres";
@@ -588,7 +603,7 @@ void outputToBLE()
     ble_data += end;
     Serial1.print(ble_data);
     Serial.println(ble_data);
-    delay(2000);
+    delay(1000);
 
     ble_data = start;
     ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
@@ -597,17 +612,24 @@ void outputToBLE()
     ble_data += end;
     Serial1.print(ble_data);
     Serial.println(ble_data);
-    delay(2000);
+    delay(1000);
 
     ble_data = start;
     ble_data += String(DEVICE_id) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
     ble_data += String(DEVICE_id) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
     ble_data += String(DEVICE_id) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
+    ble_data += end;
+    Serial1.print(ble_data);
+    Serial.println(ble_data);
+    delay(1000);
+
+    ble_data = start;
+    ble_data += String(DEVICE_id) + delim + sample_counter + ppb + String(O3_float, 1) + o3_measurement + delim1;
     ble_data += String(DEVICE_id) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
     ble_data += end;
     Serial1.print(ble_data);
     Serial.println(ble_data);
-    delay(2000);
+    delay(1000);
     //ble_data = "$1|1PPB400CO2#1|2PPB100O3#X";
     /*counter++;
     ble_data = "$123|";
