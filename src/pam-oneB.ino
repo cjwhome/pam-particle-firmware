@@ -54,6 +54,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define MIN_DEVICE_ID_NUMBER 1
 #define MAX_DEVICE_ID_NUMBER 9999
 
+#define MEASUREMENTS_TO_AVERAGE 1
+
 
 //define pin functions
 //fix these so they are more consistent!
@@ -104,6 +106,15 @@ float O3_float = 0;
 int DEVICE_id = 555;       //default value
 int sample_counter = 0;
 float tempfloat = 0;
+int tempValue;
+
+
+//used for averaging
+float CO_sum = 0;
+float CO2_sum = 0;
+float O3_sum = 0;
+int measurement_count = 0;
+
 
 //calibration parameters
 float CO2_slope;
@@ -144,7 +155,35 @@ void serial_get_co2_zero(void);
 void serial_get_co_zero(void);
 void serial_get_co_zero(void);
 void output_serial_menu_options(void);
+void output_to_cloud(void);
 
+void output_to_cloud(void){
+    String webhook_data = " ";
+    CO_sum += CO_float;
+    CO2_sum += CO2_float;
+    O3_sum += O3_float;
+    measurement_count++;
+
+    if(measurement_count == MEASUREMENTS_TO_AVERAGE){
+        CO_sum /= MEASUREMENTS_TO_AVERAGE;
+        CO2_sum /= MEASUREMENTS_TO_AVERAGE;
+        O3_sum /= MEASUREMENTS_TO_AVERAGE;
+
+        measurement_count = 0;
+        String webhook_data = String(DEVICE_id) + "," + String(bme.gas_resistance / 1000.0, 1) + "," + PM01Value + "," + PM2_5Value + "," + PM10Value + "," + String(bme.temperature, 1) + "," + String(bme.pressure / 100.0, 1) + "," + String(bme.humidity, 1) + "\n\r";
+
+        if(Particle.connected()){
+            Particle.publish("pam", webhook_data, PRIVATE);
+            Particle.process(); //attempt at ensuring the publish is complete before sleeping
+            Serial.println("Published data!");
+        }else{
+            Serial.println("Couldn't connect to particle");
+        }
+        CO_sum = 0;
+        CO2_sum = 0;
+        O3_sum = 0;
+    }
+}
 
 //read all eeprom stored variables
 void readStoredVars(void)
@@ -288,9 +327,9 @@ void setup()
     pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
     pinMode(blower_en, OUTPUT);
-    pinMode(D3, INPUT);
+    pinMode(D4, INPUT);
     //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D3, System.reset, RISING);
+    attachInterrupt(D4, System.reset, RISING);
 
 
 
@@ -308,7 +347,7 @@ void setup()
     Serial4.begin(9600);
     //set the Timeout to 1500ms, longer than the data transmission periodic time of the sensor
     Serial4.setTimeout(5000);
-    if(digitalRead(D3)){
+    if(digitalRead(D4)){
       goToSleep();
     }
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
@@ -373,7 +412,7 @@ void setup()
 
     if (!bme.begin()) {
       Serial.println("Could not find a valid BME680 sensor, check wiring!");
-      while (1);
+      //while (1);
     }
 
     if(!t6713.begin()){
@@ -392,13 +431,13 @@ void setup()
 void loop() {
 
     //read temp, press, humidity, and TVOCs
-    if (! bme.performReading()) {
+    /*if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
       return;
-    }
+  }*/
 
     //read CO values and apply calibration factors
-    CO_float = read_alpha1();
+    //CO_float = read_alpha1();
     CO_float += CO_zero;
     CO_float *= CO_slope;
 
@@ -416,6 +455,7 @@ void loop() {
     //read PM values and apply calibration factors
     readPlantower();
     outputToBLE();
+    output_to_cloud();
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
           sample_counter = 0;
@@ -723,7 +763,7 @@ void goToSleep(void){
   digitalWrite(plantower_en, LOW);
   digitalWrite(esp_wroom_en, LOW);
   digitalWrite(blower_en, LOW);
-  System.sleep(D3,FALLING);
+  System.sleep(D4,FALLING);
   delay(500);
   System.reset();
   //detachInterrupt(D3);
