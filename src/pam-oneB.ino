@@ -211,7 +211,7 @@ void GPS::set_lat_decimal(String latString, char nsString){
     latitude = whole_part;
     latitude += (frac_part)/60;
     if(nsString == 'S'){
-        latitude *= -1;
+      //  latitude *= -1;
     }
 }
 
@@ -233,7 +233,7 @@ void GPS::set_long_decimal(String longString, char ewString){
     longitude = whole_part;
     longitude += (frac_part)/60;
     if(ewString == 'W'){
-        longitude *= -1;
+      //  longitude *= -1;
     }
 }
 
@@ -654,7 +654,7 @@ void read_gps(){
     //longitude is after 4th comma (dddmm.mmmm)
     //E/W indicator is after 5th comma
     //quality is after 6th comma
-    gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
+    //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
     //
     comma_counter = 0;
 
@@ -880,11 +880,11 @@ void outputToBLE()
         ble_data += String(DEVICE_id) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
         ble_data += String(DEVICE_id) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
         ble_data += String(DEVICE_id) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
-        ble_data += String(DEVICE_id) + delim + sample_counter + ppb + String(O3_float, 1) + o3_measurement + delim1;
+        //ble_data += String(DEVICE_id) + delim + sample_counter + ppb + String(O3_float, 1) + o3_measurement + delim1;
         ble_data += String(DEVICE_id) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
-        ble_data += String(DEVICE_id) + delim + sample_counter + "DBs" + String(sound_average, 0) + "Snd" + delim1;
-        ble_data += String(DEVICE_id) + delim + sample_counter + "D" + String(gps.get_latitude(), 5) + "L" + delim1;
-        ble_data += String(DEVICE_id) + delim + sample_counter + "D" + String(gps.get_longitude(), 5) + "G" + delim1;
+        //ble_data += String(DEVICE_id) + delim + sample_counter + "DBs" + String(sound_average, 0) + "Snd" + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + String("D") + String(gps.get_latitude(), 5) + String("L") + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + String("D") + String(gps.get_longitude(), 5) + String("G") + delim1;
         ble_data += end;
         Serial1.print(ble_data);
         Serial.println(ble_data);
