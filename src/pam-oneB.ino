@@ -23,7 +23,7 @@
 #include "Adafruit_ADS1X15.h"
 #include "LMP91000.h"
 #include "Serial4/Serial4.h"
-//#include "Serial5/Serial5.h"
+#include "Serial5/Serial5.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
@@ -54,7 +54,20 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define MIN_DEVICE_ID_NUMBER 1
 #define MAX_DEVICE_ID_NUMBER 9999
 
-#define MEASUREMENTS_TO_AVERAGE 1
+#define MEASUREMENTS_TO_AVERAGE 1       //change to 30 for 3 minute uploads
+
+//gps sentence
+#define TIME_FIELD_INDEX 0
+#define LATITUDE_FIELD_INDEX 1
+#define NORTH_SOUTH_FIELD_INDEX 2
+#define LONGITUDE_FIELD_INDEX 3
+#define EAST_WEST_FIELD_INDEX 4
+#define GPS_QUALITY_FIELD_INDEX 5
+
+//double utc_time = 0;
+//float latitude = 0;
+//float longitude = 0;
+
 
 
 //define pin functions
@@ -73,7 +86,9 @@ int power_led_en = D6;
 int kill_power = WKP;
 int esp_wroom_en = D7;
 int blower_en = D2;
-int analog_input = A0;  //ozone monitor's voltage output is connected to this input
+int sound_input = B5;  //ozone monitor's voltage output is connected to this input
+int co2_en = C5;        //enables the CO2 sensor power
+
 
 
 
@@ -114,6 +129,7 @@ float CO_sum = 0;
 float CO2_sum = 0;
 float O3_sum = 0;
 int measurement_count = 0;
+double sound_average;
 
 
 //calibration parameters
@@ -156,8 +172,82 @@ void serial_get_co_zero(void);
 void serial_get_co_zero(void);
 void output_serial_menu_options(void);
 void output_to_cloud(void);
+void echo_gps();
 
-void output_to_cloud(void){
+class GPS {
+    double utc_time;
+    double latitude;
+    double longitude;
+    float altitude;
+    char ns_indicator;              //north south
+    char ew_indicator;              //'E' = east, 'W' = west
+    int quality_indicator;          //0-2
+    int satellites_used;            //0-24
+    float horizontal_dillution;     //00.0-99.9
+
+public:
+    //(d)dd + (mm.mmmm/60) (* -1 for W and S)
+    void set_lat_decimal(String latString, char nsString);
+    void set_long_decimal(String longString, char ewString);
+    double get_latitude(void);
+    double get_longitude(void);
+
+};
+
+//set decimal value of latitude from NMEA string
+void GPS::set_lat_decimal(String latString, char nsString){
+    String whole_str = latString.substring(0,2);
+    String frac_str = latString.substring(2,10);
+
+    int whole_part = whole_str.toInt();
+    //Serial.print("Whole part:");
+    //Serial.println(whole_part);
+
+    double frac_part = frac_str.toFloat();
+    //Serial.print("Frac part:");
+    //Serial.println(frac_part, 5);
+
+
+    latitude = whole_part;
+    latitude += (frac_part)/60;
+    if(nsString == 'S'){
+        latitude *= -1;
+    }
+}
+
+void GPS::set_long_decimal(String longString, char ewString){
+    String whole_str = longString.substring(0,3);
+    String frac_str = longString.substring(3,10);
+
+    int whole_part = whole_str.toInt();
+    //Serial.print("Whole string: ");
+    //Serial.println(whole_str);
+    //Serial.print("Whole part:");
+    //Serial.println(whole_part);
+
+    double frac_part = frac_str.toFloat();
+    //Serial.print("Frac part:");
+    //Serial.println(frac_part, 5);
+
+
+    longitude = whole_part;
+    longitude += (frac_part)/60;
+    if(ewString == 'W'){
+        longitude *= -1;
+    }
+}
+
+double GPS::get_latitude(void){
+    return latitude;
+}
+
+double GPS::get_longitude(void){
+    return longitude;
+}
+
+GPS gps;
+
+void output_to_cloud(String data){
     String webhook_data = " ";
     CO_sum += CO_float;
     CO2_sum += CO2_float;
@@ -170,10 +260,11 @@ void output_to_cloud(void){
         O3_sum /= MEASUREMENTS_TO_AVERAGE;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + "," + String(bme.gas_resistance / 1000.0, 1) + "," + PM01Value + "," + PM2_5Value + "," + PM10Value + "," + String(bme.temperature, 1) + "," + String(bme.pressure / 100.0, 1) + "," + String(bme.humidity, 1) + "\n\r";
+        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + PM2_5Value + ", PM10: " + PM10Value + ",Temp: " + String(bme.temperature, 1) + ",Press: ";
+        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
-        if(Particle.connected()){
-            Particle.publish("pam", webhook_data, PRIVATE);
+        if(Particle.connected() && cellular_en){
+            Particle.publish("airdb-pamtest", webhook_data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             Serial.println("Published data!");
         }else{
@@ -328,6 +419,7 @@ void setup()
     pinMode(esp_wroom_en, OUTPUT);
     pinMode(blower_en, OUTPUT);
     pinMode(D4, INPUT);
+    pinMode(co2_en, OUTPUT);
     //if user presses power button during operation, reset and it will go to low power mode
     attachInterrupt(D4, System.reset, RISING);
 
@@ -338,6 +430,7 @@ void setup()
     digitalWrite(plantower_en, HIGH);
     digitalWrite(esp_wroom_en, HIGH);
     digitalWrite(blower_en, HIGH);
+    digitalWrite(co2_en, HIGH);
 
     //read all stored variables (calibration parameters)
     readStoredVars();
@@ -345,6 +438,7 @@ void setup()
     Serial1.begin(9600, SERIAL_8N1);
     //init serial4 to communicate with Plantower PMS5003
     Serial4.begin(9600);
+    Serial5.begin(9600);        //gps is connected to this serial port
     //set the Timeout to 1500ms, longer than the data transmission periodic time of the sensor
     Serial4.setTimeout(5000);
     if(digitalRead(D4)){
@@ -426,18 +520,23 @@ void setup()
     bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
     bme.setGasHeater(320, 150); // 320*C for 150 ms
 
+    //output current time
+    Serial.print("Time:");
+    Serial.println(Time.now());
+
 }
 
 void loop() {
 
     //read temp, press, humidity, and TVOCs
-    /*if (! bme.performReading()) {
+    if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
       return;
-  }*/
-
+    }
+    read_gps();
+    //sound_average = read_sound();
     //read CO values and apply calibration factors
-    //CO_float = read_alpha1();
+    CO_float = read_alpha1();
     CO_float += CO_zero;
     CO_float *= CO_slope;
 
@@ -446,35 +545,171 @@ void loop() {
     CO2_float += CO2_zero;
     CO2_float *= CO2_slope;
 
-    tempValue = analogRead(analog_input);  // read the analogPin for ozone voltage
+    tempValue = analogRead(A0);  // read the analogPin for ozone voltage
     O3_float = tempValue;
     O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
     O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
 
 
     //read PM values and apply calibration factors
+    sound_average = read_sound();
     readPlantower();
     outputToBLE();
-    output_to_cloud();
+    output_to_cloud("Blah");
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
           sample_counter = 0;
     }
 
     if (Serial.available() > 0) {
-    // read the incoming byte:
-    incomingByte = Serial.read();
-    Serial.println(incomingByte);
-    if(incomingByte == 'm'){
-      serialMenu();
+        // read the incoming byte:
+        incomingByte = Serial.read();
+        Serial.println(incomingByte);
+        if(incomingByte == 'm'){
+          serialMenu();
+        }
     }
 
-  }
+    if(cellular_en == 1){
+      if (Particle.connected() == false) {
+          Serial.println("Connecting to cellular network");
+          Cellular.on();
+          Particle.connect();
+      }
+    }else{
+      if (Particle.connected() == true) {
+          Serial.println("Disconnecting from cellular network");
+          Cellular.off();
+      }
+    }
 
 }
 
+void echo_gps(){
+    char gps_byte = 0;
+    while(!Serial.available()){
+        if(Serial5.available() > 0){
+            gps_byte = Serial5.read();
+            Serial.print(gps_byte);
+        }
+
+    }
+}
+
+void read_gps(){
+    int got_start = 0;
+    int got_sentence = 0;
+    char inData[100]; // Allocate some space for the string
+    String gps_sentence;
+    int comma_counter;
+    //String gps_sentence_type;
+    char byte = 0;
+    Serial.println("Reading gps");
+
+    while(!got_sentence){
+        //wait for '$'
+        while(!got_start){
+            if(Serial5.available() > 0){
+                byte = Serial5.read();
+                if(byte=='$'){
+                    got_start = 1;
+                }
+            }
+        }
+        got_start = 0;
+        //read next 5 characters
+        int i = 1;
+        inData[0] = 35;             //give it a # for noting the start
+        int endofline = 0;
+        while( endofline != 13){ //read until the next $ is reached
+            delay(3);
+            if(Serial5.available() > 0){
+                inData[i] = Serial5.read();
+                endofline = inData[i];
+                i++;
+                //Serial.println(temp_char);
+            }
+        }
+        inData[i] = '\0';
+        gps_sentence = String(inData);
+        //Serial.print("Read this string: ");
+        //Serial.println(gps_sentence_type);
+        int end_of_sentence = 0;
+
+        String prefix_string = gps_sentence.substring(3,6);
+        //Serial.print("prefix: ");
+        //Serial.println(prefix_string);
+        if(prefix_string.equals("GGA")){
+            //Serial.println("Found gngga!");
+            //Serial.print("Sentence: ");
+            //Serial.println(inData);
+            got_sentence = 1;
+        }
+    }
+
+    //parse the gps string into latitude, longitude
+    //UTC time is after first comma
+    //Latitude is after second comma (ddmm.mmmm)
+    //N/S indicator is after 3rd comma
+    //longitude is after 4th comma (dddmm.mmmm)
+    //E/W indicator is after 5th comma
+    //quality is after 6th comma
+    gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
+    //
+    comma_counter = 0;
+
+    for(int a = 0; a<gps_sentence.length(); a++){
+        if(gps_sentence.charAt(a) == ','){
+            if(comma_counter == TIME_FIELD_INDEX){
+                if(gps_sentence.charAt(a+1)!=','){
+                    String utc_string = gps_sentence.substring(a+1,a+11);
+                    Serial.print("GPS utc string: ");
+                    Serial.println(utc_string);
+                }
+            }else if(comma_counter == LATITUDE_FIELD_INDEX){
+                if(gps_sentence.charAt(a+1)!=','){
+                    String latitudeString = gps_sentence.substring(a+1,a+11);
+                    //Serial.print("Latitude string: ");
+                    //Serial.print(latitudeString);
+                    //Serial.print(" ");
+                    //Serial.println(gps_sentence.charAt(a+12));
+                    gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
+                    //Serial.print("Latitude decimal: ");
+                    //Serial.println(gps.get_latitude(), 5);
+                }
+            }else if(comma_counter == LONGITUDE_FIELD_INDEX){
+                if(gps_sentence.charAt(a+1)!=','){
+                    String longitudeString = gps_sentence.substring(a+1,a+12);
+                    //Serial.print("Longitude string: ");
+                    //Serial.print(longitudeString);
+                    //Serial.print(" ");
+                    //Serial.println(gps_sentence.charAt(a+13));
+                    gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
+                    //Serial.print("Longitude decimal: ");
+                    //Serial.println(gps.get_longitude(), 5);
+                }
+            }
+            comma_counter++;
+        }
+    }
 
 
+}
+
+//read sound from
+double read_sound(void){
+    int val;
+    double sum = 0;
+    float average = 0;
+    for(int i=0; i< 10;i++){
+        val = analogRead(sound_input);
+        sum += val;
+        //Serial.print("Sound level: ");
+        //Serial.println(val);
+    }
+    sum = sum/10;
+    return sum;
+}
 //read Carbon monoxide alphasense sensor
 float read_alpha1(void){
     //read from CO sensor
@@ -635,41 +870,26 @@ void outputToBLE()
     String resistance = "KOhms";
 
 
+        ble_data = start;
+        ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO_float, 3) + CO_measurement + delim1;  //Alpha 4
+        ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO2_float, 0) + co2_measurement + delim1; //ELT CO2
+        ble_data += String(DEVICE_id) + delim + sample_counter + resistance + String(bme.gas_resistance / 1000.0, 1) + voc_measurement + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
+        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM2_5Value + pm25_measurement + delim1; //PM 2.5
+        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 +  PM10Value + pm10_measurement + delim1; //PM 10
+        ble_data += String(DEVICE_id) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
+        ble_data += String(DEVICE_id) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
+        ble_data += String(DEVICE_id) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
+        ble_data += String(DEVICE_id) + delim + sample_counter + ppb + String(O3_float, 1) + o3_measurement + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
+        ble_data += String(DEVICE_id) + delim + sample_counter + "DBs" + String(sound_average, 0) + "Snd" + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + "D" + String(gps.get_latitude(), 5) + "L" + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + "D" + String(gps.get_longitude(), 5) + "G" + delim1;
+        ble_data += end;
+        Serial1.print(ble_data);
+        Serial.println(ble_data);
+        delay(1000);
 
-    ble_data = start;
-    ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO_float, 3) + CO_measurement + delim1;  //Alpha 4
-    ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO2_float, 0) + co2_measurement + delim1; //ELT CO2
-    ble_data += String(DEVICE_id) + delim + sample_counter + resistance + String(bme.gas_resistance / 1000.0, 1) + voc_measurement + delim1;
-    ble_data += end;
-    Serial1.print(ble_data);
-    Serial.println(ble_data);
-    delay(1000);
-
-    ble_data = start;
-    ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
-    ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM2_5Value + pm25_measurement + delim1; //PM 2.5
-    ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 +  PM10Value + pm10_measurement + delim1; //PM 10
-    ble_data += end;
-    Serial1.print(ble_data);
-    Serial.println(ble_data);
-    delay(1000);
-
-    ble_data = start;
-    ble_data += String(DEVICE_id) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
-    ble_data += String(DEVICE_id) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
-    ble_data += String(DEVICE_id) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
-    ble_data += end;
-    Serial1.print(ble_data);
-    Serial.println(ble_data);
-    delay(1000);
-
-    ble_data = start;
-    ble_data += String(DEVICE_id) + delim + sample_counter + ppb + String(O3_float, 1) + o3_measurement + delim1;
-    ble_data += String(DEVICE_id) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
-    ble_data += end;
-    Serial1.print(ble_data);
-    Serial.println(ble_data);
-    delay(1000);
     //ble_data = "$1|1PPB400CO2#1|2PPB100O3#X";
     /*counter++;
     ble_data = "$123|";
@@ -763,6 +983,7 @@ void goToSleep(void){
   digitalWrite(plantower_en, LOW);
   digitalWrite(esp_wroom_en, LOW);
   digitalWrite(blower_en, LOW);
+  digitalWrite(co2_en, LOW);
   System.sleep(D4,FALLING);
   delay(500);
   System.reset();
