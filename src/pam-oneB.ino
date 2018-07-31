@@ -63,6 +63,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define LONGITUDE_FIELD_INDEX 3
 #define EAST_WEST_FIELD_INDEX 4
 #define GPS_QUALITY_FIELD_INDEX 5
+#define NUMBER_OF_SATELLITES_INDEX 6
+#define HORZONTAL_DILLUTION_INDEX 7
+#define ALTITUDE_FIELD_INDEX 8
 
 //double utc_time = 0;
 //float latitude = 0;
@@ -191,6 +194,10 @@ public:
     void set_long_decimal(String longString, char ewString);
     double get_latitude(void);
     double get_longitude(void);
+    void set_satellites(String satString);
+    void set_horizontalDillution(String hdString);
+    int get_satellites(void);
+    int get_horizontalDillution(void);
 
 };
 
@@ -237,12 +244,31 @@ void GPS::set_long_decimal(String longString, char ewString){
     }
 }
 
+void GPS::set_satellites(String satString){
+    satellites_used = satString.toInt();
+}
+
+void GPS::set_horizontalDillution(String hdString){
+    float temp_float = hdString.toFloat();
+    temp_float *= 10;
+
+    horizontal_dillution = temp_float;
+}
+
 double GPS::get_latitude(void){
     return latitude;
 }
 
 double GPS::get_longitude(void){
     return longitude;
+}
+
+int GPS::get_satellites(void){
+    return satellites_used;
+}
+
+int GPS::get_horizontalDillution(void){
+    return horizontal_dillution;
 }
 
 GPS gps;
@@ -555,8 +581,8 @@ void loop() {
     //read PM values and apply calibration factors
     sound_average = read_sound();
     readPlantower();
-    outputToBLE();
-    output_to_cloud("Blah");
+    outputBinaryToBLE();
+    //output_to_cloud("Blah");
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
           sample_counter = 0;
@@ -659,6 +685,16 @@ void read_gps_stream(void){
                         gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
                         //Serial.print("Longitude decimal: ");
                         //Serial.println(gps.get_longitude(), 5);
+                    }
+                }else if(comma_counter == NUMBER_OF_SATELLITES_INDEX){
+                    if(gps_sentence.charAt(a+1)!=','){
+                        String numberOfSatellitesString = gps_sentence.substring(a+1,a+3);
+                        gps.set_satellites(numberOfSatellitesString);
+                    }
+                }else if(comma_counter == HORZONTAL_DILLUTION_INDEX){
+                    if(gps_sentence.charAt(a+1)!=','){
+                        String hdString = gps_sentence.substring(a+1,a+3);
+                        gps.set_horizontalDillution(hdString);
                     }
                 }
                 comma_counter++;
@@ -889,6 +925,150 @@ void outputToBLE()
 
     }
     Serial.println(ble_data);*/
+
+
+}
+
+void outputBinaryToBLE()
+{
+    //used for converting double to bytes for latitude and longitude
+    union{
+	       double myDouble;
+	       unsigned char bytes[sizeof(double)];
+    } doubleBytes;
+    //doubleBytes.myDouble = double;
+    //
+
+    //used for converting float to bytes for measurement value
+    union {
+        float myFloat;
+        unsigned char bytes[4];
+    } floatBytes;
+
+
+
+
+
+    byte output_array[28];
+    //byte 0 - version
+    output_array[0] = 0;
+
+    //bytes 1,2 - Device ID
+    output_array[1] = DEVICE_id >> 8;
+    output_array[2] = DEVICE_id & 0x0F;
+
+    //byte 3 - Measurement number
+    output_array[3] = sample_counter;
+
+    //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
+    //T:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
+    //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
+    output_array[4] = 'P';  //CO2
+
+    //bytes 5,6,7,8 - Measurement Value
+    CO2_float = 420.1;
+    floatBytes.myFloat = CO2_float;
+    output_array[5] = floatBytes.bytes[0];
+    output_array[6] = floatBytes.bytes[1];
+    output_array[7] = floatBytes.bytes[2];
+    output_array[8] = floatBytes.bytes[3];
+
+    //bytes 9-16 - latitude
+    doubleBytes.myDouble = gps.get_latitude();
+    output_array[9] = doubleBytes.bytes[0];
+    output_array[10] = doubleBytes.bytes[1];
+    output_array[11] = doubleBytes.bytes[2];
+    output_array[12] = doubleBytes.bytes[3];
+    output_array[13] = doubleBytes.bytes[4];
+    output_array[14] = doubleBytes.bytes[5];
+    output_array[15] = doubleBytes.bytes[6];
+    output_array[16] = doubleBytes.bytes[7];
+
+    //bytes 17-24 - longitude
+    doubleBytes.myDouble = gps.get_longitude();
+    output_array[17] = doubleBytes.bytes[0];
+    output_array[18] = doubleBytes.bytes[1];
+    output_array[19] = doubleBytes.bytes[2];
+    output_array[20] = doubleBytes.bytes[3];
+    output_array[21] = doubleBytes.bytes[4];
+    output_array[22] = doubleBytes.bytes[5];
+    output_array[23] = doubleBytes.bytes[6];
+    output_array[24] = doubleBytes.bytes[7];
+
+    //byte 25 - horizontal dillution
+    output_array[25] = gps.get_horizontalDillution();
+    //byte 26 - number of satellites
+    output_array[26] = gps.get_satellites();
+    //byte 27 - open
+
+    Serial1.print("$");
+    Serial1.write(output_array, 28);
+    Serial1.print("X");
+    Serial.println("outputted data");
+    //output_array[5] =
+    /*String ble_data = "";
+    String start = "$";
+    String delim = "|";
+    String delim1 = "#";
+    String end = "X";
+    //Phantower PM measurements Designators
+    String pm1_measurement = "PM1";
+    String pm25_measurement = "PM25";
+    String pm10_measurement = "PM10";
+    //Alphasense Electrochemical Sensors Designators
+    String CO_measurement = "CO";
+
+    String voc_measurement = "VOC";
+    //Analog-in Designator
+    String analog_jack = "A-in";
+    //ELT CO2 Sensor Designator
+    String co2_measurement = "CO2";
+
+    //Ozone measurement from analog input connected to 106-L
+    String o3_measurement = "O3";
+
+    //BME 280 Temperature, Pressure, Humidity Designators
+    String temp_measurement = "Temp";
+    String pres_measurement = "Pres";
+    String hum_measurement = "rhum";
+    //Date and Time Designators
+    String date_measurement = "Date";
+    String time_measurement = "Time";
+    String batteryVoltage_measurement = "Batt";
+    //units
+    String ppb = "ppb";
+    String ppm = "ppm";
+    String degC = "C";
+    String rh = "%";
+    String mbar = "hPa";
+    String ugm3 = "ug";
+    String chargePercent = "%";
+    String resistance = "KOhms";
+
+
+        ble_data = start;
+        ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO_float, 3) + CO_measurement + delim1;  //Alpha 4
+        ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO2_float, 0) + co2_measurement + delim1; //ELT CO2
+        ble_data += String(DEVICE_id) + delim + sample_counter + resistance + String(bme.gas_resistance / 1000.0, 1) + voc_measurement + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
+        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM2_5Value + pm25_measurement + delim1; //PM 2.5
+        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 +  PM10Value + pm10_measurement + delim1; //PM 10
+        ble_data += String(DEVICE_id) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
+        ble_data += String(DEVICE_id) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
+        ble_data += String(DEVICE_id) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
+        ble_data += String(DEVICE_id) + delim + sample_counter + ppb + String(O3_float, 1) + o3_measurement + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
+        ble_data += String(DEVICE_id) + delim + sample_counter + "DBs" + String(sound_average, 0) + "Snd" + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + String("D") + String(gps.get_longitude(), 5) + String("F") + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + String("D") + String(gps.get_latitude(), 5) + String("L") + delim1;
+
+        ble_data += end;
+        Serial1.print(ble_data);
+        Serial.println(ble_data);
+        delay(1000);
+
+    //ble_data = "$1|1PPB400CO2#1|2PPB100O3#X";
+    */
 
 
 }
