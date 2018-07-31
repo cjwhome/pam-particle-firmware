@@ -67,6 +67,11 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define HORZONTAL_DILLUTION_INDEX 7
 #define ALTITUDE_FIELD_INDEX 8
 
+//ble data output
+#define NUMBER_OF_SPECIES 12    //total number of measurements being output through ble
+#define BLE_PAYLOAD_SIZE 19     //number of bytes allowed in payload - this is sent to the ESP chip to be output in ble broadcast packets
+
+
 //double utc_time = 0;
 //float latitude = 0;
 //float longitude = 0;
@@ -182,8 +187,12 @@ class GPS {
     double latitude;
     double longitude;
     float altitude;
-    char ns_indicator;              //north south
-    char ew_indicator;              //'E' = east, 'W' = west
+    int16_t latWhole;
+    int16_t latFrac;
+    int16_t longWhole;
+    int16_t longFrac;
+    int8_t ns_indicator;              //north south
+    int8_t ew_indicator;              //'E' = east, 'W' = west
     int quality_indicator;          //0-2
     int satellites_used;            //0-24
     float horizontal_dillution;     //00.0-99.9
@@ -198,13 +207,20 @@ public:
     void set_horizontalDillution(String hdString);
     int get_satellites(void);
     int get_horizontalDillution(void);
-
+    int16_t get_latitudeWhole(void);
+    int16_t get_latitudeFrac(void);
+    int16_t get_longitudeWhole(void);
+    int16_t get_longitudeFrac(void);
+    int8_t get_nsIndicator(void);
+    int8_t get_ewIndicator(void);
 };
 
 //set decimal value of latitude from NMEA string
 void GPS::set_lat_decimal(String latString, char nsString){
     String whole_str = latString.substring(0,2);
     String frac_str = latString.substring(2,10);
+    latWhole = whole_str.toInt();
+    latFrac = frac_str.toInt();
 
     int whole_part = whole_str.toInt();
     //Serial.print("Whole part:");
@@ -218,7 +234,9 @@ void GPS::set_lat_decimal(String latString, char nsString){
     latitude = whole_part;
     latitude += (frac_part)/60;
     if(nsString == 'S'){
-      //  latitude *= -1;
+        ns_indicator = 0;
+    }else{
+        ns_indicator = 0x80;
     }
 }
 
@@ -226,6 +244,8 @@ void GPS::set_long_decimal(String longString, char ewString){
     String whole_str = longString.substring(0,3);
     String frac_str = longString.substring(3,10);
 
+    longWhole = whole_str.toInt();
+    longFrac = frac_str.toInt();
     int whole_part = whole_str.toInt();
     //Serial.print("Whole string: ");
     //Serial.println(whole_str);
@@ -239,8 +259,10 @@ void GPS::set_long_decimal(String longString, char ewString){
 
     longitude = whole_part;
     longitude += (frac_part)/60;
-    if(ewString == 'W'){
-      //  longitude *= -1;
+    if(ewString == 'E'){
+      ew_indicator = 0;
+    }else{
+      ew_indicator = 0x01;
     }
 }
 
@@ -271,6 +293,26 @@ int GPS::get_horizontalDillution(void){
     return horizontal_dillution;
 }
 
+int16_t GPS::get_latitudeWhole(void){
+    return latWhole;
+}
+int16_t GPS::get_latitudeFrac(void){
+    return latFrac;
+}
+int16_t GPS::get_longitudeWhole(void){
+    return longWhole;
+}
+int16_t GPS::get_longitudeFrac(void){
+    return longFrac;
+}
+
+int8_t GPS::get_nsIndicator(void){
+    return ns_indicator;
+}
+
+int8_t GPS::get_ewIndicator(void){
+    return ew_indicator;
+}
 GPS gps;
 
 void output_to_cloud(String data){
@@ -289,7 +331,7 @@ void output_to_cloud(String data){
         String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + PM2_5Value + ", PM10: " + PM10Value + ",Temp: " + String(bme.temperature, 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
-        if(Particle.connected() && cellular_en){
+        if(Particle.connected() && digitalRead(cellular_en)){
             Particle.publish("airdb-pamtest", webhook_data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             Serial.println("Published data!");
@@ -581,6 +623,7 @@ void loop() {
     //read PM values and apply calibration factors
     sound_average = read_sound();
     readPlantower();
+    //outputToBLE();
     outputBinaryToBLE();
     //output_to_cloud("Blah");
     sample_counter = ++sample_counter;
@@ -597,13 +640,15 @@ void loop() {
         }
     }
 
-    if(cellular_en == 1){
+    if(digitalRead(cellular_en)){
+        Serial.println("Cellular is enabled");
       if (Particle.connected() == false) {
           Serial.println("Connecting to cellular network");
           Cellular.on();
           Particle.connect();
       }
     }else{
+        Serial.println("Cellular is disabled");
       if (Particle.connected() == true) {
           Serial.println("Disconnecting from cellular network");
           Cellular.off();
@@ -652,7 +697,7 @@ void read_gps_stream(void){
         //longitude is after 4th comma (dddmm.mmmm)
         //E/W indicator is after 5th comma
         //quality is after 6th comma
-        //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
+        gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
         //
         comma_counter = 0;
 
@@ -666,9 +711,9 @@ void read_gps_stream(void){
                     }
                 }else if(comma_counter == LATITUDE_FIELD_INDEX){
                     if(gps_sentence.charAt(a+1)!=','){
-                        String latitudeString = gps_sentence.substring(a+1,a+11);
-                        //Serial.print("Latitude string: ");
-                        //Serial.print(latitudeString);
+                        String latitudeString = gps_sentence.substring(a+1,a+10);
+                        Serial.print("Latitude string: ");
+                        Serial.print(latitudeString);
                         //Serial.print(" ");
                         //Serial.println(gps_sentence.charAt(a+12));
                         gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
@@ -677,9 +722,9 @@ void read_gps_stream(void){
                     }
                 }else if(comma_counter == LONGITUDE_FIELD_INDEX){
                     if(gps_sentence.charAt(a+1)!=','){
-                        String longitudeString = gps_sentence.substring(a+1,a+12);
-                        //Serial.print("Longitude string: ");
-                        //Serial.print(longitudeString);
+                        String longitudeString = gps_sentence.substring(a+1,a+11);
+                        Serial.print("Longitude string: ");
+                        Serial.print(longitudeString);
                         //Serial.print(" ");
                         //Serial.println(gps_sentence.charAt(a+13));
                         gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
@@ -945,17 +990,27 @@ void outputBinaryToBLE()
         unsigned char bytes[4];
     } floatBytes;
 
+    //used for converting word to bytes for lat and longitude
+    union {
+        int16_t myWord;
+        unsigned char bytes[2];
+    }wordBytes;
 
 
 
+    DEVICE_id = 123;
 
-    byte output_array[28];
+    //byte output_array[19];
+    byte output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
+
+
     //byte 0 - version
-    output_array[0] = 0;
+    output_array[0] = 1;
 
     //bytes 1,2 - Device ID
-    output_array[1] = DEVICE_id >> 8;
-    output_array[2] = DEVICE_id & 0x0F;
+    wordBytes.myWord = DEVICE_id;
+    output_array[1] = wordBytes.bytes[0];
+    output_array[2] = wordBytes.bytes[1];
 
     //byte 3 - Measurement number
     output_array[3] = sample_counter;
@@ -963,7 +1018,7 @@ void outputBinaryToBLE()
     //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
     //T:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
     //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
-    output_array[4] = 'P';  //CO2
+    output_array[4] = 4;  //CO2
 
     //bytes 5,6,7,8 - Measurement Value
     CO2_float = 420.1;
@@ -973,38 +1028,41 @@ void outputBinaryToBLE()
     output_array[7] = floatBytes.bytes[2];
     output_array[8] = floatBytes.bytes[3];
 
-    //bytes 9-16 - latitude
-    doubleBytes.myDouble = gps.get_latitude();
-    output_array[9] = doubleBytes.bytes[0];
-    output_array[10] = doubleBytes.bytes[1];
-    output_array[11] = doubleBytes.bytes[2];
-    output_array[12] = doubleBytes.bytes[3];
-    output_array[13] = doubleBytes.bytes[4];
-    output_array[14] = doubleBytes.bytes[5];
-    output_array[15] = doubleBytes.bytes[6];
-    output_array[16] = doubleBytes.bytes[7];
+    //bytes 9-12 - latitude
+    wordBytes.myWord = gps.get_latitudeWhole();
+    output_array[9] = wordBytes.bytes[0];
+    output_array[10] = wordBytes.bytes[1];
 
-    //bytes 17-24 - longitude
-    doubleBytes.myDouble = gps.get_longitude();
-    output_array[17] = doubleBytes.bytes[0];
-    output_array[18] = doubleBytes.bytes[1];
-    output_array[19] = doubleBytes.bytes[2];
-    output_array[20] = doubleBytes.bytes[3];
-    output_array[21] = doubleBytes.bytes[4];
-    output_array[22] = doubleBytes.bytes[5];
-    output_array[23] = doubleBytes.bytes[6];
-    output_array[24] = doubleBytes.bytes[7];
+    wordBytes.myWord = gps.get_latitudeFrac();
+    output_array[11] = wordBytes.bytes[0];
+    output_array[12] = wordBytes.bytes[1];
 
-    //byte 25 - horizontal dillution
-    output_array[25] = gps.get_horizontalDillution();
-    //byte 26 - number of satellites
-    output_array[26] = gps.get_satellites();
-    //byte 27 - open
+    //bytes 14-17 - longitude
+    wordBytes.myWord = gps.get_longitudeWhole();
+    output_array[13] = wordBytes.bytes[0];
+    output_array[14] = wordBytes.bytes[1];
+
+    wordBytes.myWord = gps.get_longitudeFrac();
+    output_array[15] = wordBytes.bytes[0];
+    output_array[16] = wordBytes.bytes[1];
+
+
+    //byte 18 - east west and north south indicator
+    //  LSB 0 = East, LSB 1 = West
+    //  MSB 0 = South, MSB 1 = North
+    int northSouth = gps.get_nsIndicator();
+    int eastWest = gps.get_ewIndicator();
+
+    output_array[17] = northSouth | eastWest;
+    output_array[18] = gps.get_horizontalDillution();
 
     Serial1.print("$");
-    Serial1.write(output_array, 28);
+    Serial1.write(output_array, 19);
     Serial1.print("X");
-    Serial.println("outputted data");
+    Serial.println("binary data going to ESP:");
+    for(int a=0;a<19;a++){
+        Serial.printf("ay[%d]:%X\n", a, output_array[a]);
+    }
     //output_array[5] =
     /*String ble_data = "";
     String start = "$";
