@@ -69,7 +69,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 //ble data output
 #define NUMBER_OF_SPECIES 12    //total number of measurements being output through ble
-#define BLE_PAYLOAD_SIZE 19     //number of bytes allowed in payload - this is sent to the ESP chip to be output in ble broadcast packets
+#define BLE_PAYLOAD_SIZE 20     //number of bytes allowed in payload - this is sent to the ESP chip to be output in ble broadcast packets
 
 
 //double utc_time = 0;
@@ -624,7 +624,7 @@ void loop() {
     sound_average = read_sound();
     readPlantower();
     //outputToBLE();
-    outputBinaryToBLEtest();
+    outputBinaryToBLE();
     //output_to_cloud("Blah");
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
@@ -697,7 +697,7 @@ void read_gps_stream(void){
         //longitude is after 4th comma (dddmm.mmmm)
         //E/W indicator is after 5th comma
         //quality is after 6th comma
-        gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
+        //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
         //
         comma_counter = 0;
 
@@ -712,8 +712,8 @@ void read_gps_stream(void){
                 }else if(comma_counter == LATITUDE_FIELD_INDEX){
                     if(gps_sentence.charAt(a+1)!=','){
                         String latitudeString = gps_sentence.substring(a+1,a+10);
-                        Serial.print("Latitude string: ");
-                        Serial.print(latitudeString);
+                        //Serial.print("Latitude string: ");
+                        //Serial.print(latitudeString);
                         //Serial.print(" ");
                         //Serial.println(gps_sentence.charAt(a+12));
                         gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
@@ -723,8 +723,8 @@ void read_gps_stream(void){
                 }else if(comma_counter == LONGITUDE_FIELD_INDEX){
                     if(gps_sentence.charAt(a+1)!=','){
                         String longitudeString = gps_sentence.substring(a+1,a+11);
-                        Serial.print("Longitude string: ");
-                        Serial.print(longitudeString);
+                        //Serial.print("Longitude string: ");
+                        //Serial.print(longitudeString);
                         //Serial.print(" ");
                         //Serial.println(gps_sentence.charAt(a+13));
                         gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
@@ -1000,10 +1000,10 @@ void outputBinaryToBLE()
 
     //create an array to store and send all data at once to the ESP
     //Each "section" in the array is separated by a #
-    byte output_array[NUMBER_OF_SPECIES*(BLE_PAYLOAD_SIZE+1)];     //19 bytes per data line and 12 species to output
-    for(int i=0; i< NUMBER_OF_SPECIES; i++){
+    byte output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
+    for(int i=0; i<NUMBER_OF_SPECIES; i++){
 
-
+        Serial.printf("making array[%d]\n", i);
         //byte 0 - version
         output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
 
@@ -1110,22 +1110,24 @@ void outputBinaryToBLE()
         output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
 
     }
+    Serial.println("Before outputting array ");
     //send start delimeter to ESP
     Serial1.print("$");
     //send the packaged data with # delimeters in between packets
     Serial1.write(output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
+    Serial.println("After outputting array");
     //send ending delimeter
-    Serial1.print("&\n");
+    Serial1.print("&");
+    Serial.println("after ampersand");
+    //Serial.println("Line output to ble:");
+    //Serial.println("$");
 
-    Serial.println("Line output to ble:");
-    Serial.println("$");
-    for(int a=0;a<NUMBER_OF_SPECIES;a++){
-        Serial.printf("Species[%d]:\n", a);
-        for(int b=0;b<(BLE_PAYLOAD_SIZE+1);b++){
-            Serial.printf("     output_array[%d]:%X\n", b, output_array[b+(a*BLE_PAYLOAD_SIZE+1)]);
-        }
-    }
-    Serial.println("&\n");
+
+        //for(int b=0;b<(NUMBER_OF_SPECIES*(BLE_PAYLOAD_SIZE));b++){
+        //    Serial.printf("     output_array[%d]:%X\n\r", b, output_array[b]);
+        //}
+
+    //Serial.println("&\n");
 
 }
 
