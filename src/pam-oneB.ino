@@ -29,6 +29,8 @@
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
+#define LOW_PRESSURE_LIMIT (100)
+#define HIGH_PRESSURE_LIMIT (1500)
 #define VOLTS_PER_UNIT (0.0008)   //3.3V/4096  3.3 is the adc reference voltage and the adc is 12 bits or 4096
 #define VOLTS_PER_PPB (0.0125)  //2.5V/200 ppb this is what you divide the voltage reading by to get ppb in ozone if the ozone monitor is set to 2.5V=200ppb
 
@@ -68,14 +70,29 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define ALTITUDE_FIELD_INDEX 8
 
 //ble data output
-#define NUMBER_OF_SPECIES 12    //total number of measurements being output through ble
+
 #define BLE_PAYLOAD_SIZE 20     //number of bytes allowed in payload - this is sent to the ESP chip to be output in ble broadcast packets
 
+//define constants for species - to do in future - read from json file!
+#define DEVICE_ID_PACKET_CONSTANT 'Z'       //instrument ID number as INTEGER
+#define VOC_PACKET_CONSTANT 'g'             //VOCs as IAQ
+#define CARBON_MONOXIDE_PACKET_CONSTANT 'M' //CO as PPM
+#define CARBON_DIOXIDE_PACKET_CONSTANT 'C'  //CO2 as PPM
+#define PM1_PACKET_CONSTANT 'r'             //PM1 as UG/M3
+#define PM2PT5_PACKET_CONSTANT 'R'          //PM2.5 as UG/M3
+#define PM10_PACKET_CONSTANT 'q'            //PM10 as UG/M3
+#define TEMPERATURE_PACKET_CONSTANT 't'     //temperature as DEGREES CELSIUS
+#define PRESSURE_PACKET_CONSTANT 'P'        //pressure as MILLIBARS
+#define HUMIDITY_PACKET_CONSTANT 'h'        //humidity as PERCENTAGE
+#define SOUND_PACKET_CONSTANT 's'           //sound as DECIBELS
+#define LATITUDE_PACKET_CONSTANT 'a'        //Latitude as DEGREES
+#define LONGITUDE_PACKET_CONSTANT 'o'       //Longitude as DEGREES
+#define PARTICLE_TIME_PACKET_CONSTANT 'Y'   //result of now()
+#define OZONE_PACKET_CONSTANT 'O'           //Ozone
+#define BATTERY_PACKET_CONSTANT 'B'         //Battery in percentage
 
-//double utc_time = 0;
-//float latitude = 0;
-//float longitude = 0;
 
+#define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
 
 
 //define pin functions
@@ -130,6 +147,7 @@ int DEVICE_id = 555;       //default value
 int sample_counter = 0;
 float tempfloat = 0;
 int tempValue;
+float air_quality_score = 0;
 
 
 //used for averaging
@@ -165,6 +183,13 @@ int PM10Value=0;
 char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
 char incomingByte;  //serial connection from user
 
+//Air quality index variables for calculating from humidity and VOC from BME680
+float hum_weighting = 0.25; // so hum effect is 25% of the total air quality score
+float gas_weighting = 0.75; // so gas effect is 75% of the total air quality score
+
+float hum_score, gas_score;
+float gas_reference = 250000;
+float hum_reference = 40;
 
 
 //function declarations
@@ -586,7 +611,7 @@ void setup()
     bme.setHumidityOversampling(BME680_OS_2X);
     bme.setPressureOversampling(BME680_OS_4X);
     bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    //bme.setGasHeater(320, 150); // 320*C for 150 ms
+    bme.setGasHeater(320, 150); // 320*C for 150 ms
 
     //output current time
 
@@ -603,7 +628,7 @@ void loop() {
     }
     //read_gps();
     read_gps_stream();
-    //sound_average = read_sound();
+
     //read CO values and apply calibration factors
     CO_float = read_alpha1();
     CO_float += CO_zero;
@@ -613,6 +638,15 @@ void loop() {
     CO2_float = t6713.readPPM();
     CO2_float += CO2_zero;
     CO2_float *= CO2_slope;
+    //correct for altitude
+    float pressure_correction = bme.pressure/100;
+    if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
+        CO2_float *= pressure_correction/SEALEVELPRESSURE_HPA;
+    }else{
+        Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
+        Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
+    }
+
 
     tempValue = analogRead(A0);  // read the analogPin for ozone voltage
     O3_float = tempValue;
@@ -620,12 +654,13 @@ void loop() {
     O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
 
 
+    sound_average = 0;
+    calculate_AQI();
+    //sound_average = read_sound();
     //read PM values and apply calibration factors
-    sound_average = read_sound();
     readPlantower();
-    //outputToBLE();
-    outputBinaryToBLE();
-    //output_to_cloud("Blah");
+    outputDataToESP();
+    output_to_cloud("Blah");
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
           sample_counter = 0;
@@ -654,6 +689,34 @@ void loop() {
           Cellular.off();
       }
     }
+
+}
+
+void calculate_AQI(void){
+    //Calculate humidity contribution to IAQ index
+      float current_humidity = bme.readHumidity();
+      if (current_humidity >= 38 && current_humidity <= 42)
+        hum_score = 0.25*100; // Humidity +/-5% around optimum
+      else
+      { //sub-optimal
+        if (current_humidity < 38)
+          hum_score = 0.25/hum_reference*current_humidity*100;
+        else
+        {
+          hum_score = ((-0.25/(100-hum_reference)*current_humidity)+0.416666)*100;
+        }
+      }
+
+      //Calculate gas contribution to IAQ index
+      int gas_lower_limit = 5000;   // Bad air quality limit
+      int gas_upper_limit = 50000;  // Good air quality limit
+      if (gas_reference > gas_upper_limit) gas_reference = gas_upper_limit;
+      if (gas_reference < gas_lower_limit) gas_reference = gas_lower_limit;
+      gas_score = (0.75/(gas_upper_limit-gas_lower_limit)*gas_reference -(gas_lower_limit*(0.75/(gas_upper_limit-gas_lower_limit))))*100;
+
+      //Combine results for the final IAQ index value (0-100% where 100% is good quality air)
+      air_quality_score = hum_score + gas_score;
+
 
 }
 
@@ -920,13 +983,13 @@ void outputToBLE()
     String mbar = "hPa";
     String ugm3 = "ug";
     String chargePercent = "%";
-    String resistance = "KOhms";
+    String resistance = "AQI";
 
 
         ble_data = start;
         ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO_float, 3) + CO_measurement + delim1;  //Alpha 4
         ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO2_float, 0) + co2_measurement + delim1; //ELT CO2
-        ble_data += String(DEVICE_id) + delim + sample_counter + resistance + String(bme.gas_resistance / 1000.0, 1) + voc_measurement + delim1;
+        ble_data += String(DEVICE_id) + delim + sample_counter + resistance + String(air_quality_score, 1) + voc_measurement + delim1;
         ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
         ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM2_5Value + pm25_measurement + delim1; //PM 2.5
         ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 +  PM10Value + pm10_measurement + delim1; //PM 10
@@ -944,37 +1007,12 @@ void outputToBLE()
         Serial.println(ble_data);
         delay(1000);
 
-    //ble_data = "$1|1PPB400CO2#1|2PPB100O3#X";
-    /*counter++;
-    ble_data = "$123|";
-    ble_data += String(counter);
-    ble_data += "ppm";
-    ble_data += String(counter);
-    ble_data += "CO2#X";*/
-    //ble_data = "U";
 
-    //transmit to the ble through the serial port
-    //Serial1.print(ble_data);
-
-
-    /*int bytes = Serial1.available();
-    if (bytes)
-    {
-      //Serial.print("Bytes recieved:");
-      //Serial.print(bytes);
-      //Serial.println();
-      for(int x = 0; x < bytes; x++){
-        int inByte = Serial1.read();
-        Serial.write(inByte);
-      }
-
-    }
-    Serial.println(ble_data);*/
 
 
 }
 
-void outputBinaryToBLE()
+void outputDataToESP()
 {
     //used for converting double to bytes for latitude and longitude
     union{
@@ -997,24 +1035,55 @@ void outputBinaryToBLE()
     }wordBytes;
 
 
+    //************Fill the cloud output array *****************************/
+    //This is different than the ble packet in that we are putting all of the data that we have in one packet
+    //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
+    String cloud_output_string = "";                               //create a clean string
+    cloud_output_string += '^';         //start delimeter
+    cloud_output_string += String(1) + ":";           //header
+    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
+    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
+    cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM2_5Value);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
+    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(bme.temperature, 1);
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
+    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(bme.humidity, 1);
+    cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
+    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
+    cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
+    cloud_output_string += '&';
 
-    //create an array to store and send all data at once to the ESP
+    //Serial1.println(cloud_output_string);
+    delay(3000);
+
+    //Serial.print("Successfully output Cloud string to ESP: ");
+    //Serial.println(cloud_output_string);
+
+    //create an array of binary data to store and send all data at once to the ESP
     //Each "section" in the array is separated by a #
-    byte output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
+    //we are using binary for the ble packets so we can compress the data into 19 bytes for the small payload
+
+    byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
+
+
     for(int i=0; i<NUMBER_OF_SPECIES; i++){
 
-        Serial.printf("making array[%d]\n", i);
+        //************Fill the ble output array**********************//
+        //Serial.printf("making array[%d]\n", i);
         //byte 0 - version
-        output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
+        ble_output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
 
         //bytes 1,2 - Device ID
-        DEVICE_id = 555;
+        //DEVICE_id = 555;
         wordBytes.myWord = DEVICE_id;
-        output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+        ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+        ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
         //byte 3 - Measurement number
-        output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
+        ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
 
         //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
         //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
@@ -1033,69 +1102,71 @@ void outputBinaryToBLE()
         10-fuel.getSoC()
         11-sound_average
 
+
+
         */
         if(i == 0){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'M';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
             floatBytes.myFloat = CO_float;
         }else if(i == 1){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'C';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
             floatBytes.myFloat = CO2_float;
         }else if(i == 2){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'g';
-            floatBytes.myFloat = bme.gas_resistance / 1000.0;
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+            floatBytes.myFloat = air_quality_score;
         }else if(i == 3){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'r';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
             floatBytes.myFloat = PM01Value;
         }else if(i == 4){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'R';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
             floatBytes.myFloat = PM10Value;
         }else if(i == 5){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'q';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
             floatBytes.myFloat = PM10Value;
         }else if(i == 6){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 't';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
             floatBytes.myFloat = bme.temperature;
         }else if(i == 7){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'P';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
             floatBytes.myFloat = bme.pressure / 100.0;
         }else if(i == 8){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'h';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
             floatBytes.myFloat = bme.humidity;
         }else if(i == 9){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'O';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
             floatBytes.myFloat = O3_float;
         }else if(i == 10){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 'B';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
             floatBytes.myFloat = fuel.getSoC();
         }else if(i == 11){
-            output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 's';
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
             floatBytes.myFloat = sound_average;
         }
 
         //bytes 5,6,7,8 - Measurement Value
-        output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
-        output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
-        output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
-        output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
+        ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
+        ble_output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
+        ble_output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
+        ble_output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
 
 
         //bytes 9-12 - latitude
         wordBytes.myWord = gps.get_latitudeWhole();
-        output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+        ble_output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+        ble_output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
         wordBytes.myWord = gps.get_latitudeFrac();
-        output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+        ble_output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+        ble_output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
         //bytes 14-17 - longitude
         wordBytes.myWord = gps.get_longitudeWhole();
-        output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+        ble_output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+        ble_output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
         wordBytes.myWord = gps.get_longitudeFrac();
-        output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+        ble_output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+        ble_output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
 
         //byte 18 - east west and north south indicator
@@ -1104,155 +1175,41 @@ void outputBinaryToBLE()
         int northSouth = gps.get_nsIndicator();
         int eastWest = gps.get_ewIndicator();
 
-        output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
-        output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
+        ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
+        ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
 
-        output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
+        ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
+
+
+
+
 
     }
-    Serial.println("Before outputting array ");
+
     //send start delimeter to ESP
     Serial1.print("$");
     //send the packaged data with # delimeters in between packets
-    Serial1.write(output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
-    Serial.println("After outputting array");
+    Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
+
     //send ending delimeter
     Serial1.print("&");
-    Serial.println("after ampersand");
-    //Serial.println("Line output to ble:");
-    //Serial.println("$");
 
-
-        //for(int b=0;b<(NUMBER_OF_SPECIES*(BLE_PAYLOAD_SIZE));b++){
-        //    Serial.printf("     output_array[%d]:%X\n\r", b, output_array[b]);
-        //}
-
-    //Serial.println("&\n");
+    Serial.println("Successfully output BLE string to ESP");
+    for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
+        Serial.printf("array[%d]:%X ", i, ble_output_array[i]);
+        if(ble_output_array[i]=='#')
+            Serial.printf("\n\r");
+    }
+    Serial.println("End of array");
 
 }
 
-
-void outputBinaryToBLEtest()
-{
-    //used for converting double to bytes for latitude and longitude
-    union{
-	       double myDouble;
-	       unsigned char bytes[sizeof(double)];
-    } doubleBytes;
-    //doubleBytes.myDouble = double;
-    //
-
-    //used for converting float to bytes for measurement value
-    union {
-        float myFloat;
-        unsigned char bytes[4];
-    } floatBytes;
-
-    //used for converting word to bytes for lat and longitude
-    union {
-        int16_t myWord;
-        unsigned char bytes[2];
-    }wordBytes;
-
-
-
-    //create an array to store and send all data at once to the ESP
-    //Each "section" in the array is separated by a #
-    byte output_array[18];     //19 bytes per data line and 12 species to output
-
-
-
-        //byte 0 - version
-        output_array[0] = 1;
-
-        //bytes 1,2 - Device ID
-        DEVICE_id = 555;
-        wordBytes.myWord = DEVICE_id;
-        output_array[1] = wordBytes.bytes[0];
-        output_array[2] = wordBytes.bytes[1];
-
-        //byte 3 - Measurement number
-        output_array[3] = sample_counter;
-
-        //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
-        //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
-        //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
-        /*
-        0-CO_float
-        1-CO2_float
-        2-bme.gas_resistance / 1000.0
-        3-PM01Value
-        4-PM2_5Value
-        5-PM10Value
-        6-bme.temperature
-        7-bme.pressure / 100.0
-        8-bme.humidity
-        9-O3_float
-        10-fuel.getSoC()
-        11-sound_average
-
-        */
-
-
-            output_array[4] = 4;
-            floatBytes.myFloat = CO2_float;
-
-
-        //bytes 5,6,7,8 - Measurement Value
-        output_array[5] = floatBytes.bytes[0];
-        output_array[6] = floatBytes.bytes[1];
-        output_array[7] = floatBytes.bytes[2];
-        output_array[8] = floatBytes.bytes[3];
-
-
-        //bytes 9-12 - latitude
-        wordBytes.myWord = gps.get_latitudeWhole();
-        output_array[9] = wordBytes.bytes[0];
-        output_array[10] = wordBytes.bytes[1];
-
-        wordBytes.myWord = gps.get_latitudeFrac();
-        output_array[11] = wordBytes.bytes[0];
-        output_array[12] = wordBytes.bytes[1];
-
-        //bytes 14-17 - longitude
-        wordBytes.myWord = gps.get_longitudeWhole();
-        output_array[13] = wordBytes.bytes[0];
-        output_array[14] = wordBytes.bytes[1];
-
-        wordBytes.myWord = gps.get_longitudeFrac();
-        output_array[15] = wordBytes.bytes[0];
-        output_array[16] = wordBytes.bytes[1];
-
-
-        //byte 18 - east west and north south indicator
-        //  LSB 0 = East, LSB 1 = West
-        //  MSB 0 = South, MSB 1 = North
-        int northSouth = gps.get_nsIndicator();
-        int eastWest = gps.get_ewIndicator();
-
-        output_array[17] = northSouth | eastWest;
-        output_array[18] = gps.get_horizontalDillution();
-
-        //output_array[19] = '#';     //delimeter for separating species
-
-
-    //send start delimeter to ESP
-    Serial1.print("$");
-    //send the packaged data with # delimeters in between packets
-    Serial1.write(output_array, BLE_PAYLOAD_SIZE);
-    Serial1.print("#");
-    //send ending delimeter
-    Serial1.print("&");
-
-    Serial.println("Line output to ble:");
-    Serial.println("$");
-
-        for(int b=0;b<(BLE_PAYLOAD_SIZE);b++){
-            Serial.printf("     output_array[%d]:%X\n", b, output_array[b]);
-        }
-
-    Serial.println("&\n");
-
+//send wifi information to the ESP
+void sendWifiInfo(void){
+    String wifiCredentials = "@" + String(ssid) + "," + String(password) + "&";
+    Serial.println("Sending new wifi credentials to ESP");
+    Serial1.println(wifiCredentials);
+    Serial.println("Success!");
 }
 
 /***start of all plantower functions***/
@@ -1331,6 +1288,7 @@ void serialMenu(){
   while(incomingByte!= 'x')
   {
     Serial.print("Menu>");
+    Serial.flush();
     while(!Serial.available());
     incomingByte = Serial.read();
     if(incomingByte == 'a'){
@@ -1349,12 +1307,59 @@ void serialMenu(){
     }else if(incomingByte == 'i'){
     }else if(incomingByte == 'v'){
         serial_get_device_id();
+    }else if(incomingByte == 'w'){
+        serial_get_wifi_credentials();
     }else if(incomingByte == '?'){
         output_serial_menu_options();
     }
   }
 
 
+}
+
+
+void serial_get_wifi_credentials(void){
+    Serial.print("Current stored ssid: ");
+    Serial.println(ssid);
+    Serial.print("Current stored password: ");
+    Serial.println(password);
+    Serial.println("Please enter password in order to make changes.\n\r");
+    for(int i=0;i<5;i++){
+      while(!Serial.available());
+      recieveStr[i] = Serial.read();
+    }
+    String tempString = String(recieveStr);
+
+
+    if(tempString.equals("bould")){
+        Serial.println("Password correct!");
+        Serial.println("Enter new ssid:");
+        Serial.setTimeout(50000);
+        String tempSsid = Serial.readStringUntil('\r');
+        Serial.print("Your new ssid will be: ");
+        Serial.println(tempSsid);
+        Serial.println("Is this okay?(y or n)");
+        String ok = Serial.readStringUntil('\r');
+        if(ok.equals("y")){
+            Serial.println("Saving new ssid");
+            ssid = tempSsid;
+            Serial.println("Enter new password");
+            String tempPassword = Serial.readStringUntil('\r');
+            Serial.print("Your new password will be: ");
+            Serial.println(tempPassword);
+            String ok = Serial.readStringUntil('\r');
+            if(ok.equals("y")){
+                Serial.println("Saving new password");
+                password = tempPassword;
+                sendWifiInfo();
+            }else{
+                Serial.println("okay, no problem\n\r");
+            }
+        }else{
+            Serial.println("okay, no problem\n\r");
+            return;
+        }
+    }
 }
 
 void serial_get_device_id(void){
@@ -1508,5 +1513,14 @@ void output_serial_menu_options(void)
     Serial.println("h:  Adjust PM2.5 zero");
     Serial.println("i:  Adjust PM10 slope");
     Serial.println("j:  Adjust PM10 zero");
+    Serial.println("k:  Adjust Temperature slope");
+    Serial.println("l:  Adjust Temperature zero");
+    Serial.println("m:  Adjust Pressure slope");
+    Serial.println("n:  Adjust Pressure zero");
+    Serial.println("o:  Adjust Humidity slope");
+    Serial.println("p:  Adjust Humidity zero");
+    Serial.println("v:  Adjust the Device ID");
+
+    Serial.println("w:  Get wifi credentials");
     Serial.println("?:  Output this menu");
   }
