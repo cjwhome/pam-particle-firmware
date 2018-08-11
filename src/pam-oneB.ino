@@ -57,6 +57,11 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define PRESSURE_SLOPE_MEM_ADDRESS 56
 #define RH_ZERO_MEM_ADDRESS 60
 #define RH_SLOPE_MEM_ADDRESS 64
+#define SERIAL_CELLULAR_EN_MEM_ADDRESS 68
+#define DEBUGGING_ENABLED_MEM_ADDRESS  72
+#define GAS_LOWER_LIMIT_MEM_ADDRESS 76
+#define GAS_UPPER_LIMIT_MEM_ADDRESS 80
+
 
 //max and min values
 #define MIN_DEVICE_ID_NUMBER 1
@@ -97,6 +102,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'B'         //Battery in percentage
 
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Date/Time"
+
 
 #define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
 
@@ -125,6 +132,7 @@ int co2_en = C5;        //enables the CO2 sensor power
 
 //manually control connection to cellular network
 SYSTEM_MODE(MANUAL);
+SYSTEM_THREAD(ENABLED);
 
 //global objects
 Adafruit_BME680 bme; // I2C
@@ -138,6 +146,7 @@ SdFat sd;
 SdFile file;
 File file1;
 String fileName;
+int file_started = 0;
 
 //wifi
 String ssid; //wifi network name
@@ -155,6 +164,8 @@ float tempfloat = 0;
 int tempValue;
 float air_quality_score = 0;
 int esp_wifi_connection_status = 0;
+int serial_cellular_enabled = 0;
+int debugging_enabled = 0;
 
 
 //used for averaging
@@ -182,6 +193,8 @@ float pressure_slope;
 int pressure_zero;
 float rh_slope;
 int rh_zero;
+int gas_lower_limit = 1200;   // Bad air quality limit
+int gas_upper_limit = 50000;  // Good air quality limit
 
 //serial menu variables
 int addr;
@@ -366,15 +379,20 @@ void output_to_cloud(String data){
         O3_sum /= MEASUREMENTS_TO_AVERAGE;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + PM2_5Value + ", PM10: " + PM10Value + ",Temp: " + String(bme.temperature, 1) + ",Press: ";
+        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + PM2_5Value + ", PM10: " + PM10Value + ",Temp: " + String(read_temperature(), 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
-        if(Particle.connected() && digitalRead(cellular_en)){
+        if(Particle.connected() && (digitalRead(cellular_en) || serial_cellular_enabled)){
             Particle.publish("airdb-camconf", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             Serial.println("Published data!");
         }else{
-            Serial.println("Couldn't connect to particle");
+            if(digitalRead(cellular_en) == 0 && serial_cellular_enabled == 0){
+                if(debugging_enabled)
+                    Serial.println("Cellular is disabled.");
+            }else{
+                Serial.println("Couldn't connect to particle.");
+            }
         }
         CO_sum = 0;
         CO2_sum = 0;
@@ -385,7 +403,7 @@ void output_to_cloud(String data){
 //read all eeprom stored variables
 void readStoredVars(void)
 {
-  int tempValue;
+    int tempValue;
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
     if(DEVICE_id == -1){
         DEVICE_id = 555;
@@ -397,18 +415,39 @@ void readStoredVars(void)
     EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempValue);
     CO_slope = tempValue;
     CO_slope /= 100;
-    EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, PM_1_slope);
+    EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, tempValue);
+    PM_1_slope = tempValue;
     PM_1_slope /= 100;
-    EEPROM.get(PM_25_SLOPE_MEM_ADDRESS, PM_25_slope);
+    EEPROM.get(PM_25_SLOPE_MEM_ADDRESS, tempValue);
+    PM_25_slope = tempValue;
     PM_25_slope /= 100;
-    EEPROM.get(PM_10_SLOPE_MEM_ADDRESS, PM_10_slope);
+    EEPROM.get(PM_10_SLOPE_MEM_ADDRESS, tempValue);
+    PM_10_slope = tempValue;
     PM_10_slope /= 100;
+    EEPROM.get(TEMP_SLOPE_MEM_ADDRESS, tempValue);  //temperature
+    temp_slope = tempValue;
+    temp_slope /= 100;
+    EEPROM.get(PRESSURE_SLOPE_MEM_ADDRESS, tempValue);
+    pressure_slope = tempValue;
+    pressure_slope /= 100;
+    EEPROM.get(RH_SLOPE_MEM_ADDRESS, tempValue);
+    rh_slope = tempValue;
+    rh_slope /= 100;
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
     EEPROM.get(PM_10_ZERO_MEM_ADDRESS, PM_10_zero);
+    EEPROM.get(TEMP_ZERO_MEM_ADDRESS, temp_zero);
+    EEPROM.get(PRESSURE_ZERO_MEM_ADDRESS, pressure_zero);
+    EEPROM.get(RH_ZERO_MEM_ADDRESS, rh_zero);
+
+    EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+    EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
+    EEPROM.get(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
+    EEPROM.get(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
+
 
     //check all values to make sure are within limits
     if(!CO2_slope)
@@ -557,10 +596,11 @@ void setup()
 
 
     #if sd_en
-    Serial.println("Checking for sd card");
+     fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+     Serial.println("Checking for sd card");
 
     if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
-      file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
+      /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
       file.remove();
       file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
       init_log += "MCP,";
@@ -570,9 +610,12 @@ void setup()
       //look for a wifi file
       check_wifi_file();
       //look for a calibration file
-      check_cal_file();
+      check_cal_file();*/
+
+      Serial.print("Created new file to log to uSD card: ");
+      Serial.println(fileName);
     }else { //uSD is not functioning
-        Serial.println("MCP error log fail. Particle LED should be flashing");
+        Serial.println("No uSD card detected.");
     }
     #endif
 
@@ -628,7 +671,17 @@ void setup()
 
     //output current time
 
-    Serial.printf("Time now: %u\n", Time.now());
+    //Serial.printf("Time now: %u\n\r", Time.now());
+    //Serial.println(Time.timeStr());
+    Serial.println(String(HEADER_STRING));
+    if (sd.begin(CS)){
+        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
+        file.println("File Start timestamp: ");
+        file.println(Time.timeStr());
+        file.println(String(HEADER_STRING));
+        file.close();
+        file_started = 1;
+    }
 
 }
 
@@ -689,17 +742,20 @@ void loop() {
         }
     }
 
-    if(digitalRead(cellular_en)){
-        Serial.println("Cellular is enabled");
+    if(digitalRead(cellular_en) || serial_cellular_enabled){
+
+        //Serial.println("Cellular is enabled.");
       if (Particle.connected() == false) {
-          Serial.println("Connecting to cellular network");
+          if(debugging_enabled)
+            Serial.println("Connecting to cellular network");
           Cellular.on();
           Particle.connect();
       }
     }else{
-        Serial.println("Cellular is disabled");
+        //Serial.println("Cellular is disabled.");
       if (Particle.connected() == true) {
-          Serial.println("Disconnecting from cellular network");
+          if(debugging_enabled)
+            Serial.println("Disconnecting from cellular network");
           Cellular.off();
       }
     }
@@ -708,8 +764,11 @@ void loop() {
 
 void calculate_AQI(void){
     //Calculate humidity contribution to IAQ index
-    gas_reference = bme.gas_resistance;
-      float current_humidity = bme.readHumidity();
+        gas_reference = bme.gas_resistance/100;
+      float current_humidity = read_humidity();
+      if(debugging_enabled){
+          Serial.printf("gas resistance: %1.0f, humidity: %1.2f\n\r", gas_reference, current_humidity);
+      }
       if (current_humidity >= 38 && current_humidity <= 42)
         hum_score = 0.25*100; // Humidity +/-5% around optimum
       else
@@ -723,11 +782,16 @@ void calculate_AQI(void){
       }
 
       //Calculate gas contribution to IAQ index
-      int gas_lower_limit = 5000;   // Bad air quality limit
-      int gas_upper_limit = 50000;  // Good air quality limit
+
       if (gas_reference > gas_upper_limit) gas_reference = gas_upper_limit;
       if (gas_reference < gas_lower_limit) gas_reference = gas_lower_limit;
       gas_score = (0.75/(gas_upper_limit-gas_lower_limit)*gas_reference -(gas_lower_limit*(0.75/(gas_upper_limit-gas_lower_limit))))*100;
+      if(debugging_enabled){
+        Serial.print("Gas score: ");
+        Serial.println(gas_score);
+        Serial.print("Humidity score: ");
+        Serial.println(hum_score);
+    }
 
       //Combine results for the final IAQ index value (0-100% where 100% is good quality air)
       air_quality_score = hum_score + gas_score;
@@ -829,6 +893,15 @@ void read_gps_stream(void){
 
 float read_temperature(void){
     float temperature = bme.temperature;
+    temperature += temp_zero;       //user input zero offset
+    return temperature;
+    //temperature = temperature +
+}
+
+float read_humidity(void){
+    float humidity = bme.humidity;
+    humidity += rh_zero;       //user input zero offset
+    return humidity;
     //temperature = temperature +
 }
 //read sound from
@@ -927,13 +1000,13 @@ float read_alpha1(void){
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(bme.temperature <= 15){
+        if(read_temperature() <= 15){
           correctedCurrent = ((sensorCurrent) - (auxCurrent));
         }
-        else if(bme.temperature <= 25){
+        else if(read_temperature() <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
-        else if(bme.temperature > 25){
+        else if(read_temperature() > 25){
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
         alpha1_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -961,11 +1034,7 @@ float read_alpha1(void){
       return alpha1_ppmraw;
 }
 
-
-
-
-void outputDataToESP()
-{
+void outputDataToESP(void){
     //used for converting double to bytes for latitude and longitude
     union{
 	       double myDouble;
@@ -987,35 +1056,72 @@ void outputDataToESP()
     }wordBytes;
 
 
-    //************Fill the cloud output array *****************************/
+    //get a current time string
+    time_t time = Time.now();
+    Time.setFormat(TIME_FORMAT_ISO8601_FULL);
+
+    //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/
     //This is different than the ble packet in that we are putting all of the data that we have in one packet
     //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
-    String cloud_output_string = "";                               //create a clean string
+    String cloud_output_string = "";    //create a clean string
+    String csv_output_string = "";
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ":";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
+    csv_output_string += String(DEVICE_id) + ",";
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
+    csv_output_string += String(CO_float, 3) + ",";
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
+    csv_output_string += String(CO2_float, 0) + ",";
     cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
+    csv_output_string += String(air_quality_score, 1) + ",";
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
+    csv_output_string += String(PM01Value) + ",";
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM2_5Value);
+    csv_output_string += String(PM2_5Value) + ",";
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
-    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(bme.temperature, 1);
+    csv_output_string += String(PM10Value) + ",";
+    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(read_temperature(), 1);
+    csv_output_string += String(read_temperature(), 1) + ",";
     cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
-    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(bme.humidity, 1);
+    csv_output_string += String(bme.pressure / 100.0, 1) + ",";
+    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(read_humidity(), 1);
+    csv_output_string += String(read_humidity(), 1) + ",";
     cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
+    csv_output_string += String(O3_float, 1) + ",";
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
+    csv_output_string += String(fuel.getSoC(), 1) + ",";
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
+    csv_output_string += String(sound_average, 0) + ",";
     cloud_output_string += '&';
+    csv_output_string += String(Time.format(time, TIME_FORMAT_ISO8601_FULL));
+
 
     if(!esp_wifi_connection_status){
-        Serial.println("Attempting to output through LTE connection...");
+        if(debugging_enabled)
+            Serial.println("No wifi from esp so trying cellular...");
         output_to_cloud(cloud_output_string);
     }else{
-        Serial.println("Sending data to esp to upload via wifi...");
+        if(debugging_enabled)
+            Serial.println("Sending data to esp to upload via wifi...");
         Serial1.println(cloud_output_string);
     }
+    Serial.println(csv_output_string);
 
+    //write data to file
+    if (sd.begin(CS)){
+        if(debugging_enabled)
+            Serial.println("Writing row to file.");
+        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
+        if(file_started == 0){
+            file.println("File Start timestamp: ");
+            file.println(Time.timeStr());
+            file.println(String(HEADER_STRING));
+            file_started = 1;
+        }
+        file.println(csv_output_string);
+        file.close();
+    }
     delay(3000);
 
     //Serial.print("Successfully output Cloud string to ESP: ");
@@ -1084,13 +1190,13 @@ void outputDataToESP()
             floatBytes.myFloat = PM10Value;
         }else if(i == 6){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
-            floatBytes.myFloat = bme.temperature;
+            floatBytes.myFloat = read_temperature();
         }else if(i == 7){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
             floatBytes.myFloat = bme.pressure / 100.0;
         }else if(i == 8){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
-            floatBytes.myFloat = bme.humidity;
+            floatBytes.myFloat = read_humidity();
         }else if(i == 9){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
             floatBytes.myFloat = O3_float;
@@ -1175,15 +1281,16 @@ void getEspWifiStatus(void){
     while(!Serial1.available());
     //delay(1000);
     yes_or_no = Serial1.read();
-    Serial.print("ESP Wifi connection status is: ");
-
-    Serial.printf("Byte:%X\n\r", yes_or_no);
+    if(debugging_enabled)
+        Serial.print("ESP Wifi connection status is: ");
     //Serial.println(yes_or_no);
     if(yes_or_no == 'y'){
-        Serial.println("Connected!");
+        if(debugging_enabled)
+            Serial.println("Connected!");
         esp_wifi_connection_status = 1;
     }else{
-        Serial.println("No Connection");
+        if(debugging_enabled)
+            Serial.println("No Connection");
         esp_wifi_connection_status = 0;
     }
 }
@@ -1218,7 +1325,6 @@ void readPlantower(void){
         }
       }
 }
-
 char checkValue(char *thebuf, char leng)  {
     char receiveflag=0;
     int receiveSum=0;
@@ -1266,6 +1372,7 @@ void goToSleep(void){
 }
 
 /************************Serial menu stuff******************/
+
 void serialMenu(){
   incomingByte = '0';
   while(incomingByte!= 'x')
@@ -1283,27 +1390,75 @@ void serialMenu(){
     }else if(incomingByte == 'd'){
         serial_get_co_zero();
     }else if(incomingByte == 'e'){
+        serial_get_pm1_slope();
     }else if(incomingByte == 'f'){
+         serial_get_pm1_zero();
     }else if(incomingByte == 'g'){
-        echo_gps();
+        serial_get_pm25_slope();
     }else if(incomingByte == 'h'){
+        serial_get_pm25_zero();
     }else if(incomingByte == 'i'){
+        serial_get_pm10_slope();
     }else if(incomingByte == 'j'){
-        Serial.println("Getting wifi status from ESP\n\r");
-        getEspWifiStatus();
+        serial_get_pm10_zero();
+    }else if(incomingByte == 'k'){
+        serial_get_temperature_slope();
+    }else if(incomingByte == 'l'){
+        serial_get_temperature_zero();
+    }else if(incomingByte == 'm'){
+        serial_get_pressure_slope();
+    }else if(incomingByte == 'n'){
+        serial_get_pressure_zero();
+    }else if(incomingByte == 'o'){
+        serial_get_humidity_slope();
+    }else if(incomingByte == 'p'){
+        serial_get_humidity_zero();
+    }else if(incomingByte == 'q'){
+        Serial.println("Serial debugging enabled.");
+        debugging_enabled = 1;
+        EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
+    }else if(incomingByte == 'r'){
+        Serial.println("Serial debugging disabled.");
+        debugging_enabled = 0;
+        EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
+    }else if(incomingByte == 's'){
+        Serial.println(String(HEADER_STRING));
+    }else if(incomingByte == 't'){
+        serial_get_time_date();
+    }else if(incomingByte == 'u'){
+        serial_get_zone();
     }else if(incomingByte == 'v'){
         serial_get_device_id();
     }else if(incomingByte == 'w'){
         serial_get_wifi_credentials();
-
+    }else if(incomingByte == 'y'){
+        if(serial_cellular_enabled == 0){
+            Serial.println("Enabling Cellular.");
+        }else{
+            Serial.println("Cellular already enabled.");
+        }
+        serial_cellular_enabled = 1;
+        EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+    }else if(incomingByte == 'z'){
+        if(serial_cellular_enabled == 1){
+            Serial.println("Disabling Cellular");
+            Cellular.off();
+        }else{
+            Serial.println("Cellular already disabled.");
+        }
+        serial_cellular_enabled = 0;
+        EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+    }else if(incomingByte == '1'){
+        serial_get_lower_limit();
+    }else if(incomingByte == '2'){
+        serial_get_upper_limit();
     }else if(incomingByte == '?'){
         output_serial_menu_options();
     }
   }
-
+  Serial.println("Exiting serial menu...");
 
 }
-
 
 void serial_get_wifi_credentials(void){
     Serial.print("Current stored ssid: ");
@@ -1311,13 +1466,8 @@ void serial_get_wifi_credentials(void){
     Serial.print("Current stored password: ");
     Serial.println(password);
     Serial.println("Please enter password in order to make changes.\n\r");
-    for(int i=0;i<5;i++){
-      while(!Serial.available());
-      recieveStr[i] = Serial.read();
-    }
-    String tempString = String(recieveStr);
-
-
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
     if(tempString.equals("bould")){
         Serial.println("Password correct!");
         Serial.println("Enter new ssid:");
@@ -1355,21 +1505,14 @@ void serial_get_device_id(void){
     Serial.print("Current Device ID:");
     Serial.println(DEVICE_id);
     Serial.println("Please enter password in order to change the ID");
-    for(int i=0;i<5;i++){
-      while(!Serial.available());
-      recieveStr[i] = Serial.read();
-    }
-    String tempString = String(recieveStr);
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
 
 
     if(tempString == "bould"){
         Serial.println("Password correct!");
         Serial.println("Enter new Device ID:");
-        for(int i=0;i<5;i++){
-          while(!Serial.available());
-          recieveStr[i] = Serial.read();
-        }
-        String tempString = String(recieveStr);
+        String tempString = Serial.readStringUntil('\r');
         int tempValue = tempString.toInt();
         Serial.println("");
         if(tempValue > MIN_DEVICE_ID_NUMBER && tempValue < MAX_DEVICE_ID_NUMBER){
@@ -1385,6 +1528,36 @@ void serial_get_device_id(void){
     }
 }
 
+void serial_get_time_date(void){
+    Serial.println("Enter new Device time and date (10 digit epoch timestamp):");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+    Serial.println("");
+    if(tempValue > 966012661 && tempValue < 4121686261){       //min is the year 2000, max is the year 2100
+        Time.setTime(tempValue);
+        Serial.print("New Device Time:");
+        Serial.println(Time.timeStr());
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_zone(void){
+    Serial.println("Enter new Device time zone (-12.0 to 14.0)");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+    Serial.println("");
+    if(tempValue >= -12 && tempValue <= 14){       //min is the year 2000, max is the year 2100
+        Time.zone(tempValue);
+        Serial.print("New Device time zone:");
+        Serial.println(tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
 void serial_get_co2_slope(void){
 
     Serial.println();
@@ -1392,11 +1565,8 @@ void serial_get_co2_slope(void){
     Serial.print(String(CO2_slope, 2));
     Serial.println(" ppm");
     Serial.print("Enter new CO2 slope");
-    for(int i=0;i<5;i++){
-      while(!Serial.available());
-      recieveStr[i] = Serial.read();
-    }
-    String tempString = String(recieveStr);
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
     int tempValue;
 
@@ -1419,11 +1589,8 @@ void serial_get_co2_zero(void){
     Serial.print(CO2_zero);
     Serial.println(" ppm");
     Serial.print("Enter new CO2 Zero");
-    for(int i=0;i<5;i++){
-      while(!Serial.available());
-      recieveStr[i] = Serial.read();
-    }
-    String tempString = String(recieveStr);
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
     if(tempValue >= -1000 && tempValue < 1000){
@@ -1443,11 +1610,8 @@ void serial_get_co_slope(void){
     Serial.print(String(CO_slope, 2));
     Serial.println(" ppm");
     Serial.print("Enter new CO slope");
-    for(int i=0;i<5;i++){
-      while(!Serial.available());
-      recieveStr[i] = Serial.read();
-    }
-    String tempString = String(recieveStr);
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
     int tempValue;
 
@@ -1470,11 +1634,8 @@ void serial_get_co_zero(void){
     Serial.print(CO_zero);
     Serial.println(" ppm");
     Serial.print("Enter new CO Zero");
-    for(int i=0;i<5;i++){
-      while(!Serial.available());
-      recieveStr[i] = Serial.read();
-    }
-    String tempString = String(recieveStr);
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
     if(tempValue >= -1000 && tempValue < 1000){
@@ -1487,8 +1648,325 @@ void serial_get_co_zero(void){
     }
 }
 
-void output_serial_menu_options(void)
-{
+void serial_get_pm1_slope(void){
+    Serial.println();
+    Serial.print("Current PM1 slope:");
+    Serial.print(String(CO_slope, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new PM1 slope");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.5 && tempfloat < 1.5){
+        CO_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("New PM1 slope: ");
+        Serial.println(String(CO_slope,2));
+
+        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_pm1_zero(void){
+    Serial.println();
+    Serial.print("Current PM1 zero:");
+    Serial.print(CO_zero);
+    Serial.println(" ppm");
+    Serial.print("Enter new PM1 Zero");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -1000 && tempValue < 1000){
+        Serial.print("New PM1 zero: ");
+        Serial.println(tempValue);
+        CO_zero = tempValue;
+        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_pm25_slope(void){
+    Serial.println();
+    Serial.print("Current PM2.5 slope:");
+    Serial.print(String(CO_slope, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new PM2.5 slope");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.5 && tempfloat < 1.5){
+        CO_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("New PM2.5 slope: ");
+        Serial.println(String(CO_slope,2));
+
+        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_pm25_zero(void){
+    Serial.println();
+    Serial.print("Current PM2.5 zero:");
+    Serial.print(CO_zero);
+    Serial.println(" ppm");
+    Serial.print("Enter new PM2.5 Zero");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -1000 && tempValue < 1000){
+        Serial.print("New PM2.5 zero: ");
+        Serial.println(tempValue);
+        CO_zero = tempValue;
+        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_pm10_slope(void){
+    Serial.println();
+    Serial.print("Current PM10 slope:");
+    Serial.print(String(CO_slope, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new PM10 slope");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.5 && tempfloat < 1.5){
+        CO_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("New PM10 slope: ");
+        Serial.println(String(CO_slope,2));
+
+        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_pm10_zero(void){
+    Serial.println();
+    Serial.print("Current PM10 zero:");
+    Serial.print(CO_zero);
+    Serial.println(" ppm");
+    Serial.print("Enter new PM10 Zero");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -1000 && tempValue < 1000){
+        Serial.print("New PM10 zero: ");
+        Serial.println(tempValue);
+        CO_zero = tempValue;
+        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_temperature_slope(void){
+    Serial.println();
+    Serial.print("Current Temperature slope:");
+    Serial.print(String(temp_slope, 2));
+    Serial.println(" Degrees C");
+    Serial.print("Enter new Temperature slope");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.5 && tempfloat < 1.5){
+        temp_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("New Temperature slope: ");
+        Serial.println(String(temp_slope,2));
+
+        EEPROM.put(TEMP_SLOPE_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_temperature_zero(void){
+    Serial.println();
+    Serial.print("Current Temperature zero:");
+    Serial.print(temp_zero);
+    Serial.println(" Degrees C");
+    Serial.print("Enter new Temperature Zero");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -30 && tempValue < 30){
+        Serial.print("New Temperature zero: ");
+        Serial.println(tempValue);
+        temp_zero = tempValue;
+        EEPROM.put(TEMP_ZERO_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_pressure_slope(void){
+    Serial.println();
+    Serial.print("Current Pressure slope:");
+    Serial.print(String(CO_slope, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new Pressure slope");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.5 && tempfloat < 1.5){
+        CO_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("New Pressure slope: ");
+        Serial.println(String(CO_slope,2));
+
+        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_pressure_zero(void){
+    Serial.println();
+    Serial.print("Current Pressure zero:");
+    Serial.print(CO_zero);
+    Serial.println(" ppm");
+    Serial.print("Enter new Pressure Zero");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -1000 && tempValue < 1000){
+        Serial.print("New Pressure zero: ");
+        Serial.println(tempValue);
+        CO_zero = tempValue;
+        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_humidity_slope(void){
+    Serial.println();
+    Serial.print("Current RH slope:");
+    Serial.print(String(CO_slope, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new RH slope");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.5 && tempfloat < 1.5){
+        CO_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("New RH slope: ");
+        Serial.println(String(CO_slope,2));
+
+        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_humidity_zero(void){
+    Serial.println();
+    Serial.print("Current RH zero:");
+    Serial.print(rh_zero);
+    Serial.println(" %");
+    Serial.print("Enter new RH Zero");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -50 && tempValue < 50){
+        Serial.print("New RH zero: ");
+        Serial.println(tempValue);
+        rh_zero = tempValue;
+        EEPROM.put(RH_ZERO_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("Invalid value!");
+    }
+}
+
+void serial_get_lower_limit(void){
+    Serial.println();
+    Serial.print("Current lower limit:");
+    Serial.println(gas_lower_limit);
+    Serial.println("Please enter password in order to change the lower limit");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+
+
+    if(tempString == "bould"){
+        Serial.println("Password correct!");
+        Serial.println("Enter new lower limit:");
+        String tempString = Serial.readStringUntil('\r');
+        int tempValue = tempString.toInt();
+        Serial.println("");
+        if(tempValue > 0 && tempValue < 20000){
+            Serial.print("New lower limit:");
+            Serial.println(tempValue);
+            gas_lower_limit = tempValue;
+            EEPROM.put(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
+        }else{
+            Serial.println("Invalid value!");
+        }
+    }else{
+        Serial.println("Incorrect password!");
+    }
+}
+void serial_get_upper_limit(void){
+    Serial.println();
+    Serial.print("Current upper limit:");
+    Serial.println(gas_upper_limit);
+    Serial.println("Please enter password in order to change the upper limit");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+
+
+    if(tempString == "bould"){
+        Serial.println("Password correct!");
+        Serial.println("Enter new upper limit:");
+        String tempString = Serial.readStringUntil('\r');
+        int tempValue = tempString.toInt();
+        Serial.println("");
+        if(tempValue > 0 && tempValue < 50000){
+            Serial.print("New upper limit:");
+            Serial.println(tempValue);
+            gas_upper_limit = tempValue;
+            EEPROM.put(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
+        }else{
+            Serial.println("Invalid value!");
+        }
+    }else{
+        Serial.println("Incorrect password!");
+    }
+}
+void output_serial_menu_options(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");
     Serial.println("b:  Adjust CO2 zero");
@@ -1506,8 +1984,17 @@ void output_serial_menu_options(void)
     Serial.println("n:  Adjust Pressure zero");
     Serial.println("o:  Adjust Humidity slope");
     Serial.println("p:  Adjust Humidity zero");
+    Serial.println("q:  Enable serial debugging");
+    Serial.println("r:  Disable serial debugging");
+    Serial.println("s:  Output header string");
+    Serial.println("t:  Enter new time and date");
+    Serial.println("u:  Enter new time zone");
     Serial.println("v:  Adjust the Device ID");
-
     Serial.println("w:  Get wifi credentials");
+    Serial.println("y:  Enable cellular");
+    Serial.println("z:  Disable cellular");
+    Serial.println("1:  Adjust gas lower limit");
+    Serial.println("2:  Adjust gas upper limit");
     Serial.println("?:  Output this menu");
+    Serial.println("x:  Exits this menu");
   }
