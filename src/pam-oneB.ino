@@ -51,6 +51,12 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define PM_25_SLOPE_MEM_ADDRESS 32
 #define PM_10_ZERO_MEM_ADDRESS 36
 #define PM_10_SLOPE_MEM_ADDRESS 40
+#define TEMP_ZERO_MEM_ADDRESS 44
+#define TEMP_SLOPE_MEM_ADDRESS 48
+#define PRESSURE_ZERO_MEM_ADDRESS 52
+#define PRESSURE_SLOPE_MEM_ADDRESS 56
+#define RH_ZERO_MEM_ADDRESS 60
+#define RH_SLOPE_MEM_ADDRESS 64
 
 //max and min values
 #define MIN_DEVICE_ID_NUMBER 1
@@ -148,6 +154,7 @@ int sample_counter = 0;
 float tempfloat = 0;
 int tempValue;
 float air_quality_score = 0;
+int esp_wifi_connection_status = 0;
 
 
 //used for averaging
@@ -169,6 +176,12 @@ float PM_10_slope;
 int PM_1_zero;
 int PM_25_zero;
 int PM_10_zero;
+float temp_slope;
+int temp_zero;
+float pressure_slope;
+int pressure_zero;
+float rh_slope;
+int rh_zero;
 
 //serial menu variables
 int addr;
@@ -357,7 +370,7 @@ void output_to_cloud(String data){
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && digitalRead(cellular_en)){
-            Particle.publish("airdb-pamtest", webhook_data, PRIVATE);
+            Particle.publish("airdb-camconf", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             Serial.println("Published data!");
         }else{
@@ -659,8 +672,9 @@ void loop() {
     //sound_average = read_sound();
     //read PM values and apply calibration factors
     readPlantower();
+
     outputDataToESP();
-    output_to_cloud("Blah");
+
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
           sample_counter = 0;
@@ -694,6 +708,7 @@ void loop() {
 
 void calculate_AQI(void){
     //Calculate humidity contribution to IAQ index
+    gas_reference = bme.gas_resistance;
       float current_humidity = bme.readHumidity();
       if (current_humidity >= 38 && current_humidity <= 42)
         hum_score = 0.25*100; // Humidity +/-5% around optimum
@@ -812,6 +827,10 @@ void read_gps_stream(void){
 
 }
 
+float read_temperature(void){
+    float temperature = bme.temperature;
+    //temperature = temperature +
+}
 //read sound from
 double read_sound(void){
     int val;
@@ -943,74 +962,7 @@ float read_alpha1(void){
 }
 
 
-void outputToBLE()
-{
 
-    String ble_data = "";
-    String start = "$";
-    String delim = "|";
-    String delim1 = "#";
-    String end = "X";
-    //Phantower PM measurements Designators
-    String pm1_measurement = "PM1";
-    String pm25_measurement = "PM25";
-    String pm10_measurement = "PM10";
-    //Alphasense Electrochemical Sensors Designators
-    String CO_measurement = "CO";
-
-    String voc_measurement = "VOC";
-    //Analog-in Designator
-    String analog_jack = "A-in";
-    //ELT CO2 Sensor Designator
-    String co2_measurement = "CO2";
-
-    //Ozone measurement from analog input connected to 106-L
-    String o3_measurement = "O3";
-
-    //BME 280 Temperature, Pressure, Humidity Designators
-    String temp_measurement = "Temp";
-    String pres_measurement = "Pres";
-    String hum_measurement = "rhum";
-    //Date and Time Designators
-    String date_measurement = "Date";
-    String time_measurement = "Time";
-    String batteryVoltage_measurement = "Batt";
-    //units
-    String ppb = "ppb";
-    String ppm = "ppm";
-    String degC = "C";
-    String rh = "%";
-    String mbar = "hPa";
-    String ugm3 = "ug";
-    String chargePercent = "%";
-    String resistance = "AQI";
-
-
-        ble_data = start;
-        ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO_float, 3) + CO_measurement + delim1;  //Alpha 4
-        ble_data += String(DEVICE_id) + delim + sample_counter + ppm + String(CO2_float, 0) + co2_measurement + delim1; //ELT CO2
-        ble_data += String(DEVICE_id) + delim + sample_counter + resistance + String(air_quality_score, 1) + voc_measurement + delim1;
-        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM01Value + pm1_measurement + delim1; //PM 1
-        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 + PM2_5Value + pm25_measurement + delim1; //PM 2.5
-        ble_data += String(DEVICE_id) + delim + sample_counter + ugm3 +  PM10Value + pm10_measurement + delim1; //PM 10
-        ble_data += String(DEVICE_id) + delim + sample_counter + degC + String(bme.temperature, 1) + temp_measurement + delim1; //temperature
-        ble_data += String(DEVICE_id) + delim + sample_counter + mbar + String(bme.pressure / 100.0, 1) + pres_measurement + delim1; //pressure
-        ble_data += String(DEVICE_id) + delim + sample_counter + rh + String(bme.humidity, 1) + hum_measurement + delim1; //humidity
-        ble_data += String(DEVICE_id) + delim + sample_counter + ppb + String(O3_float, 1) + o3_measurement + delim1;
-        ble_data += String(DEVICE_id) + delim + sample_counter + chargePercent + String(fuel.getSoC(), 1) + batteryVoltage_measurement + delim1; //Battery Voltage
-        ble_data += String(DEVICE_id) + delim + sample_counter + "DBs" + String(sound_average, 0) + "Snd" + delim1;
-        ble_data += String(DEVICE_id) + delim + sample_counter + String("D") + String(gps.get_longitude(), 5) + String("F") + delim1;
-        ble_data += String(DEVICE_id) + delim + sample_counter + String("D") + String(gps.get_latitude(), 5) + String("L") + delim1;
-
-        ble_data += end;
-        //Serial1.print(ble_data);
-        Serial.println(ble_data);
-        delay(1000);
-
-
-
-
-}
 
 void outputDataToESP()
 {
@@ -1056,7 +1008,14 @@ void outputDataToESP()
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
     cloud_output_string += '&';
 
-    //Serial1.println(cloud_output_string);
+    //if(!esp_wifi_connection_status){
+        Serial.println("Attempting to output through LTE connection...");
+        output_to_cloud(cloud_output_string);
+    //}else{
+        Serial.println("Sending data to esp to upload via wifi...");
+        Serial1.println(cloud_output_string);
+    //}
+
     delay(3000);
 
     //Serial.print("Successfully output Cloud string to ESP: ");
@@ -1194,16 +1153,40 @@ void outputDataToESP()
     //send ending delimeter
     Serial1.print("&");
 
-    Serial.println("Successfully output BLE string to ESP");
+    /*Serial.println("Successfully output BLE string to ESP");
     for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
         Serial.printf("array[%d]:%X ", i, ble_output_array[i]);
         if(ble_output_array[i]=='#')
             Serial.printf("\n\r");
     }
-    Serial.println("End of array");
+    Serial.println("End of array");*/
 
 }
 
+//ask the ESP if it has a wifi connection
+void getEspWifiStatus(void){
+    //command to ask esp for wifi status
+    String doYouHaveWifi = "!&";
+    char yes_or_no = ' ';
+    //if esp doesn't answer, keep going
+    //Serial1.setTimeout(5000);
+
+    Serial1.print(doYouHaveWifi);
+    //while(!Serial1.available());
+    delay(1000);
+    yes_or_no = Serial1.read();
+    Serial.print("ESP Wifi connection status is: ");
+
+    Serial.printf("Byte:%X\n\r", yes_or_no);
+    //Serial.println(yes_or_no);
+    if(yes_or_no == 'y'){
+        Serial.println("Connected!");
+        esp_wifi_connection_status = 1;
+    }else{
+        Serial.println("No Connection");
+        esp_wifi_connection_status = 0;
+    }
+}
 //send wifi information to the ESP
 void sendWifiInfo(void){
     String wifiCredentials = "@" + String(ssid) + "," + String(password) + "&";
@@ -1305,10 +1288,14 @@ void serialMenu(){
         echo_gps();
     }else if(incomingByte == 'h'){
     }else if(incomingByte == 'i'){
+    }else if(incomingByte == 'j'){
+        Serial.println("Getting wifi status from ESP\n\r");
+        getEspWifiStatus();
     }else if(incomingByte == 'v'){
         serial_get_device_id();
     }else if(incomingByte == 'w'){
         serial_get_wifi_credentials();
+
     }else if(incomingByte == '?'){
         output_serial_menu_options();
     }
