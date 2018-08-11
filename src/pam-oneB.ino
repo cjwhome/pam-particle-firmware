@@ -541,7 +541,7 @@ void setup()
     //read all stored variables (calibration parameters)
     readStoredVars();
     //initialize serial1 for communication with BLE nano from redbear labs
-    Serial1.begin(9600, SERIAL_8N1);
+    Serial1.begin(9600);
     //init serial4 to communicate with Plantower PMS5003
     Serial4.begin(9600);
     Serial5.begin(9600);        //gps is connected to this serial port
@@ -672,7 +672,7 @@ void loop() {
     //sound_average = read_sound();
     //read PM values and apply calibration factors
     readPlantower();
-
+    getEspWifiStatus();
     outputDataToESP();
 
     sample_counter = ++sample_counter;
@@ -1008,13 +1008,13 @@ void outputDataToESP()
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
     cloud_output_string += '&';
 
-    //if(!esp_wifi_connection_status){
+    if(!esp_wifi_connection_status){
         Serial.println("Attempting to output through LTE connection...");
         output_to_cloud(cloud_output_string);
-    //}else{
+    }else{
         Serial.println("Sending data to esp to upload via wifi...");
         Serial1.println(cloud_output_string);
-    //}
+    }
 
     delay(3000);
 
@@ -1172,8 +1172,8 @@ void getEspWifiStatus(void){
     //Serial1.setTimeout(5000);
 
     Serial1.print(doYouHaveWifi);
-    //while(!Serial1.available());
-    delay(1000);
+    while(!Serial1.available());
+    //delay(1000);
     yes_or_no = Serial1.read();
     Serial.print("ESP Wifi connection status is: ");
 
