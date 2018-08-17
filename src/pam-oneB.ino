@@ -33,6 +33,8 @@
 #define HIGH_PRESSURE_LIMIT (1500)
 #define VOLTS_PER_UNIT (0.0008)   //3.3V/4096  3.3 is the adc reference voltage and the adc is 12 bits or 4096
 #define VOLTS_PER_PPB (0.0125)  //2.5V/200 ppb this is what you divide the voltage reading by to get ppb in ozone if the ozone monitor is set to 2.5V=200ppb
+#define PM_25_CONSTANT_A (1.19)
+#define PM_25_CONSTANT_B (0.119)
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
 
@@ -100,9 +102,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define LONGITUDE_PACKET_CONSTANT 'o'       //Longitude as DEGREES
 #define PARTICLE_TIME_PACKET_CONSTANT 'Y'   //result of now()
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
-#define BATTERY_PACKET_CONSTANT 'B'         //Battery in percentage
+#define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Date/Time"
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
@@ -195,6 +197,7 @@ float rh_slope;
 int rh_zero;
 int gas_lower_limit = 1200;   // Bad air quality limit
 int gas_upper_limit = 50000;  // Good air quality limit
+float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according to Zheng et. al 2018
 
 //serial menu variables
 int addr;
@@ -205,6 +208,7 @@ char recieveStr[5];
 int PM01Value=0;
 int PM2_5Value=0;
 int PM10Value=0;
+float corrected_PM_25 = 0;
 #define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
 char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
 char incomingByte;  //serial connection from user
@@ -379,19 +383,20 @@ void output_to_cloud(String data){
         O3_sum /= MEASUREMENTS_TO_AVERAGE;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + PM2_5Value + ", PM10: " + PM10Value + ",Temp: " + String(read_temperature(), 1) + ",Press: ";
+        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(read_temperature(), 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
-        if(Particle.connected() && (digitalRead(cellular_en) || serial_cellular_enabled)){
+        if(Particle.connected() && serial_cellular_enabled){
             Particle.publish("airdb-camconf", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             Serial.println("Published data!");
         }else{
-            if(digitalRead(cellular_en) == 0 && serial_cellular_enabled == 0){
+            if(serial_cellular_enabled == 0){
                 if(debugging_enabled)
                     Serial.println("Cellular is disabled.");
             }else{
-                Serial.println("Couldn't connect to particle.");
+                if(debugging_enabled)
+                    Serial.println("Couldn't connect to particle.");
             }
         }
         CO_sum = 0;
@@ -401,8 +406,7 @@ void output_to_cloud(String data){
 }
 
 //read all eeprom stored variables
-void readStoredVars(void)
-{
+void readStoredVars(void){
     int tempValue;
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
     if(DEVICE_id == -1){
@@ -472,8 +476,7 @@ void readStoredVars(void)
     }
 }
 
-void check_cal_file(void)
-{
+void check_cal_file(void){
 
 }
 
@@ -494,8 +497,7 @@ size_t readField(File* file, char* str, size_t size, const char* delim) {
   return n;
 }
 
-void check_wifi_file(void)
-{
+void check_wifi_file(void){
     file1 = sd.open("wifi.txt", O_READ);
     size_t n;      // Length of returned field with delimiter.
     char str[50];  // Must hold longest field with delimiter and zero byte.
@@ -552,6 +554,7 @@ void check_wifi_file(void)
     file1.close();
 
 }
+
 void setup()
 {
     String init_log; //intialization error log
@@ -661,14 +664,14 @@ void setup()
     if(!t6713.begin()){
       Serial.println("Could not find a valid T6713 sensor, check wiring!");
     }
-
+  //Serial.println("before bme setup");
     // Set up oversampling and filter initialization
     bme.setTemperatureOversampling(BME680_OS_8X);
     bme.setHumidityOversampling(BME680_OS_2X);
     bme.setPressureOversampling(BME680_OS_4X);
     bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
     bme.setGasHeater(320, 150); // 320*C for 150 ms
-
+//Serial.println("After bme setup");
     //output current time
 
     //Serial.printf("Time now: %u\n\r", Time.now());
@@ -691,8 +694,11 @@ void loop() {
     if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
       return;
+    }else{
+      if(debugging_enabled)
+        Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure, bme.humidity);
     }
-    //read_gps();
+
     read_gps_stream();
 
     //read CO values and apply calibration factors
@@ -725,7 +731,13 @@ void loop() {
     //sound_average = read_sound();
     //read PM values and apply calibration factors
     readPlantower();
-    getEspWifiStatus();
+
+    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(read_humidity()/100))/(1 - (read_humidity()/100));
+    if(debugging_enabled)
+        Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, read_humidity()/100);
+    corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
+
+    //getEspWifiStatus();
     outputDataToESP();
 
     sample_counter = ++sample_counter;
@@ -742,7 +754,7 @@ void loop() {
         }
     }
 
-    if(digitalRead(cellular_en) || serial_cellular_enabled){
+    if(serial_cellular_enabled){
 
         //Serial.println("Cellular is enabled.");
       if (Particle.connected() == false) {
@@ -819,7 +831,8 @@ void read_gps_stream(void){
         gps_sentence = Serial5.readStringUntil('\r');
         String prefix_string = gps_sentence.substring(4,7);
         if(prefix_string.equals("GGA")){
-            //Serial.println("Found gngga!");
+
+            //
             //Serial.print("prefix string: ");
             //Serial.println(prefix_string);
             //Serial.print("String:");
@@ -849,6 +862,10 @@ void read_gps_stream(void){
                     if(gps_sentence.charAt(a+1)!=','){
                         String utc_string = gps_sentence.substring(a+1,a+11);
                         //Serial.print("GPS utc string: ");
+                        if(debugging_enabled){
+                            Serial.print("GPS utc string: ");
+                            Serial.println(utc_string);
+                        }
                         //Serial.println(utc_string);
                     }
                 }else if(comma_counter == LATITUDE_FIELD_INDEX){
@@ -1077,8 +1094,8 @@ void outputDataToESP(void){
     csv_output_string += String(air_quality_score, 1) + ",";
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
     csv_output_string += String(PM01Value) + ",";
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM2_5Value);
-    csv_output_string += String(PM2_5Value) + ",";
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
+    csv_output_string += String(corrected_PM_25, 0) + ",";
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
     csv_output_string += String(PM10Value) + ",";
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(read_temperature(), 1);
@@ -1093,9 +1110,16 @@ void outputDataToESP(void){
     csv_output_string += String(fuel.getSoC(), 1) + ",";
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
     csv_output_string += String(sound_average, 0) + ",";
-    cloud_output_string += '&';
+    if(gps.get_nsIndicator() == 0){
+        csv_output_string += "-1";
+    }
+    csv_output_string += String(gps.get_latitude()) + ",";
+    if(gps.get_ewIndicator() == 0){
+        csv_output_string += "-1";
+    }
+    csv_output_string += String(gps.get_longitude()) + ",";
     csv_output_string += String(Time.format(time, TIME_FORMAT_ISO8601_FULL));
-
+    cloud_output_string += '&';
 
     if(!esp_wifi_connection_status){
         if(debugging_enabled)
@@ -1122,7 +1146,7 @@ void outputDataToESP(void){
         file.println(csv_output_string);
         file.close();
     }
-    delay(3000);
+    delay(5000);
 
     //Serial.print("Successfully output Cloud string to ESP: ");
     //Serial.println(cloud_output_string);
@@ -1184,7 +1208,7 @@ void outputDataToESP(void){
             floatBytes.myFloat = PM01Value;
         }else if(i == 4){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-            floatBytes.myFloat = PM10Value;
+            floatBytes.myFloat = corrected_PM_25;
         }else if(i == 5){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
             floatBytes.myFloat = PM10Value;
@@ -1306,6 +1330,7 @@ void sendWifiInfo(void){
 //read from plantower pms 5500
 void readPlantower(void){
     if(Serial4.find("B")){    //start to read when detect 0x42
+        //if(debugging_enabled)
           //Serial.println("Found a B when reading plantower");
           Serial4.readBytes(buf,LENG);
           if(buf[0] == 0x4d){
