@@ -1118,7 +1118,7 @@ void outputDataToESP(void){
         csv_output_string += "-1";
     }
     csv_output_string += String(gps.get_longitude()) + ",";
-    csv_output_string += String(Time.format(time, TIME_FORMAT_ISO8601_FULL));
+    csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += '&';
 
     if(!esp_wifi_connection_status){
