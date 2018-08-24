@@ -27,6 +27,9 @@
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
+#define APP_VERSION 2
+#define BUILD_VERSION 1
+
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
 #define LOW_PRESSURE_LIMIT (100)
@@ -708,12 +711,18 @@ void loop() {
 
     //read CO2 values and apply calibration factors
     CO2_float = t6713.readPPM();
+    if(debugging_enabled)
+        Serial.printf("CO2 raw reading:%1.0f\n\r", CO2_float);
     CO2_float += CO2_zero;
     CO2_float *= CO2_slope;
     //correct for altitude
     float pressure_correction = bme.pressure/100;
     if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
-        CO2_float *= pressure_correction/SEALEVELPRESSURE_HPA;
+        pressure_correction /= SEALEVELPRESSURE_HPA;
+        if(debugging_enabled){
+            Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
+        }
+        CO2_float *= pressure_correction;
     }else{
         Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
         Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
@@ -737,7 +746,7 @@ void loop() {
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, read_humidity()/100);
     corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
-    //getEspWifiStatus();
+    getEspWifiStatus();
     outputDataToESP();
 
     sample_counter = ++sample_counter;
@@ -977,7 +986,8 @@ float read_alpha1(void){
     }
 
     if(lmp91000.read(LMP91000_STATUS_REG) == 0){
-        Serial.println("Status == 0 from LMP91000 status reg");
+        if(debugging_enabled)
+            Serial.println("Status == 0 from LMP91000 status reg");
         //operation_log += "AFE1,";
       //  digitalWrite(red_status_led, HIGH);
         //delay(200);
@@ -1109,16 +1119,25 @@ void outputDataToESP(void){
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     csv_output_string += String(fuel.getSoC(), 1) + ",";
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
+
     csv_output_string += String(sound_average, 0) + ",";
+    cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
     if(gps.get_nsIndicator() == 0){
-        csv_output_string += "-1";
+        csv_output_string += "-";
+        cloud_output_string += "-";
     }
     csv_output_string += String(gps.get_latitude()) + ",";
+    cloud_output_string += String(gps.get_latitude());
+
+    cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
     if(gps.get_ewIndicator() == 0){
-        csv_output_string += "-1";
+        csv_output_string += "-";
+        cloud_output_string += "-";
     }
     csv_output_string += String(gps.get_longitude()) + ",";
+    cloud_output_string += String(gps.get_latitude());
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
+    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
 
     if(!esp_wifi_connection_status){
@@ -1320,7 +1339,7 @@ void getEspWifiStatus(void){
 }
 //send wifi information to the ESP
 void sendWifiInfo(void){
-    String wifiCredentials = "@" + String(ssid) + "," + String(password) + "&";
+    String wifiCredentials = "@!" + String(ssid) + "," + String(password) + "&";
     Serial.println("Sending new wifi credentials to ESP");
     Serial1.println(wifiCredentials);
     Serial.println("Success!");
@@ -1477,6 +1496,11 @@ void serialMenu(){
         serial_get_lower_limit();
     }else if(incomingByte == '2'){
         serial_get_upper_limit();
+    }else if(incomingByte == '3'){
+        Serial.print("APP Version: ");
+        Serial.println(APP_VERSION);
+        Serial.print("Build: ");
+        Serial.println(BUILD_VERSION);
     }else if(incomingByte == '?'){
         output_serial_menu_options();
     }
@@ -2020,6 +2044,7 @@ void output_serial_menu_options(void){
     Serial.println("z:  Disable cellular");
     Serial.println("1:  Adjust gas lower limit");
     Serial.println("2:  Adjust gas upper limit");
+    Serial.println("3:  Get build version");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
