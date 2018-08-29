@@ -662,7 +662,9 @@ void setup()
     if (!bme.begin()) {
       Serial.println("Could not find a valid BME680 sensor, check wiring!");
       //while (1);
-    }
+  }else{
+      Serial.println("Initialized BME Sensor");
+  }
 
     if(!t6713.begin()){
       Serial.println("Could not find a valid T6713 sensor, check wiring!");
@@ -1139,7 +1141,10 @@ void outputDataToESP(void){
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
-
+    if(debugging_enabled){
+        Serial.println("Line to write to cloud:");
+        Serial.println(cloud_output_string);
+    }
     if(!esp_wifi_connection_status){
         if(debugging_enabled)
             Serial.println("No wifi from esp so trying cellular...");
@@ -1163,6 +1168,7 @@ void outputDataToESP(void){
             file_started = 1;
         }
         file.println(csv_output_string);
+
         file.close();
     }
     delay(5000);
