@@ -24,6 +24,10 @@
 #include "LMP91000.h"
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
+#include "SparkFunMicroOLED.h"  // Include MicroOLED library
+#include "math.h"
+
+
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
@@ -146,6 +150,9 @@ LMP91000 lmp91000;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
 FuelGauge fuel;
 
+//MicroOLED
+MicroOLED oled(MODE_I2C, B3, 1);  //1 is that the address is open
+
 //sdcard
 SdFat sd;
 SdFile file;
@@ -223,6 +230,8 @@ float gas_weighting = 0.75; // so gas effect is 75% of the total air quality sco
 float hum_score, gas_score;
 float gas_reference = 250000;
 float hum_reference = 40;
+
+String wifiIpAddress;
 
 
 //function declarations
@@ -600,6 +609,9 @@ void setup()
     //initialize main serial port for debug output
     Serial.begin(9600);
 
+    oled.begin();    // Initialize the OLED
+    oled.clear(ALL); // Clear the display's internal memory
+    oled.display();  // Display what's in the buffer (splashscreen)
 
     #if sd_en
      fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
@@ -666,17 +678,17 @@ void setup()
       Serial.println("Initialized BME Sensor");
   }
 
-    if(!t6713.begin()){
-      Serial.println("Could not find a valid T6713 sensor, check wiring!");
-    }
-  //Serial.println("before bme setup");
+    //if(!t6713.begin()){
+    //  Serial.println("Could not find a valid T6713 sensor, check wiring!");
+    //}
+
     // Set up oversampling and filter initialization
     bme.setTemperatureOversampling(BME680_OS_8X);
     bme.setHumidityOversampling(BME680_OS_2X);
     bme.setPressureOversampling(BME680_OS_4X);
     bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
     bme.setGasHeater(320, 150); // 320*C for 150 ms
-//Serial.println("After bme setup");
+
     //output current time
 
     //Serial.printf("Time now: %u\n\r", Time.now());
@@ -704,7 +716,7 @@ void loop() {
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure, bme.humidity);
     }
 
-    read_gps_stream();
+    /*read_gps_stream();
 
     //read CO values and apply calibration factors
     CO_float = read_alpha1();
@@ -748,8 +760,12 @@ void loop() {
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, read_humidity()/100);
     corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
+    */
+
     getEspWifiStatus();
     outputDataToESP();
+    Serial.println("outputting to OLED");
+    outputDataToOLED();
 
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
@@ -1318,6 +1334,34 @@ void outputDataToESP(void){
 
 }
 
+void outputDataToOLED(void){
+    // Demonstrate font 3. 12x48. Stopwatch demo.
+    oled.setFontType(0);
+
+    oled.clear(PAGE);     // Clear the display
+    oled.setCursor(0, 0); // Set cursor to top-left
+    oled.print("T:");
+    oled.print(bme.temperature, 1);
+    oled.print(" C");
+    oled.setCursor(0, 8);
+    oled.print("RH:");
+    oled.print(bme.humidity, 1);
+    oled.print(" %");
+    oled.setCursor(0, 16);
+    oled.print("P:");
+    oled.print(bme.pressure/100, 1);
+    oled.print(" m");
+
+    oled.setCursor(0,32);
+    oled.print("IP Address:");
+      oled.setCursor(0, 40);
+      //oled.print("IP:");
+      oled.print(wifiIpAddress);
+
+
+    oled.display();       // Draw on the screen
+
+}
 //ask the ESP if it has a wifi connection
 void getEspWifiStatus(void){
     //command to ask esp for wifi status
@@ -1327,9 +1371,19 @@ void getEspWifiStatus(void){
     //Serial1.setTimeout(5000);
 
     Serial1.print(doYouHaveWifi);
-    while(!Serial1.available());
+    //while(!Serial1.available());
+    Serial1.setTimeout(5000);
+    wifiIpAddress = Serial1.readStringUntil('\r');
+    Serial.print("String from Esp:");
+    Serial.println(wifiIpAddress);
+    if(wifiIpAddress.equals("n")){
+      esp_wifi_connection_status = 0;
+    }else{
+      esp_wifi_connection_status = 1;
+
+    }
     //delay(1000);
-    yes_or_no = Serial1.read();
+    /*yes_or_no = Serial1.read();
     if(debugging_enabled)
         Serial.print("ESP Wifi connection status is: ");
     //Serial.println(yes_or_no);
@@ -1341,7 +1395,7 @@ void getEspWifiStatus(void){
         if(debugging_enabled)
             Serial.println("No Connection");
         esp_wifi_connection_status = 0;
-    }
+    }*/
 }
 //send wifi information to the ESP
 void sendWifiInfo(void){
