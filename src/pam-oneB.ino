@@ -111,7 +111,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,Date/Time"
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),HDillution,Latitude,Longitude,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
@@ -310,26 +310,32 @@ void GPS::set_lat_decimal(String latString, char nsString){
 void GPS::set_long_decimal(String longString, char ewString){
     String whole_str = longString.substring(0,3);
     String frac_str = longString.substring(3,10);
+    if(whole_str.length() > 0){
 
-    longWhole = whole_str.toInt();
-    longFrac = frac_str.toInt();
-    int whole_part = whole_str.toInt();
-    //Serial.print("Whole string: ");
-    //Serial.println(whole_str);
-    //Serial.print("Whole part:");
-    //Serial.println(whole_part);
+        longWhole = whole_str.toInt();
+        longFrac = frac_str.toInt();
+        int whole_part = whole_str.toInt();
+        //Serial.print("Whole string: ");
+        //Serial.println(whole_str);
+        //Serial.print("Whole part:");
+        //Serial.println(whole_part);
 
-    double frac_part = frac_str.toFloat();
-    //Serial.print("Frac part:");
-    //Serial.println(frac_part, 5);
+        double frac_part = frac_str.toFloat();
+        //Serial.print("Frac part:");
+        //Serial.println(frac_part, 5);
 
 
-    longitude = whole_part;
-    longitude += (frac_part)/60;
-    if(ewString == 'E'){
-      ew_indicator = 0;
+        longitude = whole_part;
+        longitude += (frac_part)/60;
+        if(ewString == 'E'){
+          ew_indicator = 0;
+        }else{
+          ew_indicator = 0x01;
+        }
     }else{
-      ew_indicator = 0x01;
+        if(debugging_enabled)
+            Serial.println("gps longitude is null");
+        longitude = NULL;
     }
 }
 
@@ -716,8 +722,8 @@ void loop() {
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure, bme.humidity);
     }
 
-    /*read_gps_stream();
-
+    //read_gps_stream();
+/*
     //read CO values and apply calibration factors
     CO_float = read_alpha1();
     CO_float += CO_zero;
@@ -755,16 +761,17 @@ void loop() {
     //read PM values and apply calibration factors
     readPlantower();
 
+
+
+    */
+    readPlantower();
     pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(read_humidity()/100))/(1 - (read_humidity()/100));
     if(debugging_enabled)
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, read_humidity()/100);
     corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
-
-    */
-
     getEspWifiStatus();
     outputDataToESP();
-    Serial.println("outputting to OLED");
+
     outputDataToOLED();
 
     sample_counter = ++sample_counter;
@@ -840,6 +847,7 @@ void calculate_AQI(void){
 
 void echo_gps(){
     char gps_byte = 0;
+    Serial.println("Outputting gps");
     while(!Serial.available()){
         if(Serial5.available() > 0){
             gps_byte = Serial5.read();
@@ -847,6 +855,7 @@ void echo_gps(){
         }
 
     }
+    Serial.println("Done Outputting gps");
 }
 
 void read_gps_stream(void){
@@ -1139,6 +1148,7 @@ void outputDataToESP(void){
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
 
     csv_output_string += String(sound_average, 0) + ",";
+    csv_output_string += gps.get_horizontalDillution() + ",";        //accuracy of gps
     cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
     if(gps.get_nsIndicator() == 0){
         csv_output_string += "-";
@@ -1153,7 +1163,7 @@ void outputDataToESP(void){
         cloud_output_string += "-";
     }
     csv_output_string += String(gps.get_longitude()) + ",";
-    cloud_output_string += String(gps.get_latitude());
+    cloud_output_string += String(gps.get_longitude());
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
@@ -1187,7 +1197,7 @@ void outputDataToESP(void){
 
         file.close();
     }
-    delay(5000);
+    //delay(5000);
 
     //Serial.print("Successfully output Cloud string to ESP: ");
     //Serial.println(cloud_output_string);
@@ -1374,8 +1384,10 @@ void getEspWifiStatus(void){
     //while(!Serial1.available());
     Serial1.setTimeout(5000);
     wifiIpAddress = Serial1.readStringUntil('\r');
-    Serial.print("String from Esp:");
-    Serial.println(wifiIpAddress);
+    if(debugging_enabled){
+        Serial.print("Wifi ip:");
+        Serial.println(wifiIpAddress);
+    }
     if(wifiIpAddress.equals("n")){
       esp_wifi_connection_status = 0;
     }else{
@@ -1406,28 +1418,54 @@ void sendWifiInfo(void){
 }
 
 /***start of all plantower functions***/
+
+void readPlantowerRaw(void){
+    while(!Serial.available()){
+        while(Serial4.available()){
+            char inData = Serial4.read();
+            if(inData == 'B'){
+                Serial4.readBytes(buf,LENG);
+                if(buf[0] == 0x4d){
+                    if(checkValue(buf,LENG)){ //All units are ug/m^3
+                        //Serial.println("Value is good from pm buff");
+                        PM01Value=transmitPM01(buf); //count PM1.0 value of the air detector module
+                        PM2_5Value=transmitPM2_5(buf);//count PM2.5 value of the air detector module
+                        PM10Value=transmitPM10(buf); //count PM10 value of the air detector module
+                        if(debugging_enabled)
+                        Serial.printf("pm1:%d,pm2.5:%d,pm10:%d\n\r", PM01Value, PM2_5Value, PM10Value);
+                    }
+                }
+            }
+            //Serial.print(inData);
+        }
+    }
+}
 //read from plantower pms 5500
 void readPlantower(void){
-    if(Serial4.find("B")){    //start to read when detect 0x42
-        //if(debugging_enabled)
-          //Serial.println("Found a B when reading plantower");
-          Serial4.readBytes(buf,LENG);
-          if(buf[0] == 0x4d){
-              if(checkValue(buf,LENG)){ //All units are ug/m^3
-                  //Serial.println("Value is good from pm buff");
-                  PM01Value=transmitPM01(buf); //count PM1.0 value of the air detector module
-                  PM2_5Value=transmitPM2_5(buf);//count PM2.5 value of the air detector module
-                  PM10Value=transmitPM10(buf); //count PM10 value of the air detector module
-              }
-          }
-      }
-      else{
-        //Serial.println("Clearing serial buffer from PM measurement");
-        while(Serial4.available()){
-            char clearBuffer = Serial4.read();
-            //Serial.print(clearBuffer);
+    int found_serial = 0;
+    Serial4.setTimeout(5000);
+    while(Serial4.available()){
+        char inData = Serial4.read();
+        if(inData == 'B'){
+            Serial4.readBytes(buf,LENG);
+            if(buf[0] == 0x4d){
+                if(checkValue(buf,LENG)){ //All units are ug/m^3
+                    //Serial.println("Value is good from pm buff");
+                    PM01Value=transmitPM01(buf); //count PM1.0 value of the air detector module
+                    PM2_5Value=transmitPM2_5(buf);//count PM2.5 value of the air detector module
+                    PM10Value=transmitPM10(buf); //count PM10 value of the air detector module
+                    if(debugging_enabled)
+                    Serial.printf("pm1:%d,pm2.5:%d,pm10:%d\n\r", PM01Value, PM2_5Value, PM10Value);
+                    found_serial = 1;
+                }
+            }
         }
-      }
+        //Serial.print(inData);
+    }
+    if(!found_serial){
+        if(debugging_enabled)
+            Serial.println("Couldn't find plantower serial data.");
+    }
 }
 char checkValue(char *thebuf, char leng)  {
     char receiveflag=0;
@@ -1561,7 +1599,13 @@ void serialMenu(){
         Serial.println(APP_VERSION);
         Serial.print("Build: ");
         Serial.println(BUILD_VERSION);
-    }else if(incomingByte == '?'){
+    }else if(incomingByte == '4'){
+        Serial.println("Outputting raw plantower data");
+        readPlantowerRaw();
+    }else if(incomingByte == '5'){
+        echo_gps();
+    }
+    else if(incomingByte == '?'){
         output_serial_menu_options();
     }
   }
@@ -1724,7 +1768,7 @@ void serial_get_co_slope(void){
     float tempfloat = tempString.toFloat();
     int tempValue;
 
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
+    if(tempfloat >= 0.1 && tempfloat < 2){
         CO_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
@@ -1741,13 +1785,13 @@ void serial_get_co_zero(void){
     Serial.println();
     Serial.print("Current CO zero:");
     Serial.print(CO_zero);
-    Serial.println(" ppm");
+    Serial.println(" ppb");
     Serial.print("Enter new CO Zero");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
-    if(tempValue >= -1000 && tempValue < 1000){
+    if(tempValue >= -5000 && tempValue < 5000){
         Serial.print("New CO zero: ");
         Serial.println(tempValue);
         CO_zero = tempValue;
@@ -1760,8 +1804,8 @@ void serial_get_co_zero(void){
 void serial_get_pm1_slope(void){
     Serial.println();
     Serial.print("Current PM1 slope:");
-    Serial.print(String(CO_slope, 2));
-    Serial.println(" ppm");
+    Serial.print(String(PM_1_slope, 2));
+    Serial.println(" ug/m3");
     Serial.print("Enter new PM1 slope");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -1769,13 +1813,13 @@ void serial_get_pm1_slope(void){
     int tempValue;
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
-        CO_slope = tempfloat;
+        PM_1_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
         Serial.print("New PM1 slope: ");
-        Serial.println(String(CO_slope,2));
+        Serial.println(String(PM_1_slope,2));
 
-        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("Invalid value!");
     }
@@ -1784,18 +1828,18 @@ void serial_get_pm1_slope(void){
 void serial_get_pm1_zero(void){
     Serial.println();
     Serial.print("Current PM1 zero:");
-    Serial.print(CO_zero);
-    Serial.println(" ppm");
+    Serial.print(PM_1_zero);
+    Serial.println(" ug/m3");
     Serial.print("Enter new PM1 Zero");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
-    if(tempValue >= -1000 && tempValue < 1000){
+    if(tempValue >= -10 && tempValue < 10){
         Serial.print("New PM1 zero: ");
         Serial.println(tempValue);
-        CO_zero = tempValue;
-        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+        PM_1_zero = tempValue;
+        EEPROM.put(PM_1_ZERO_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("Invalid value!");
     }
@@ -2105,6 +2149,8 @@ void output_serial_menu_options(void){
     Serial.println("1:  Adjust gas lower limit");
     Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");
+    Serial.println("4:  Just output plantower data as fast as possible");
+    Serial.println("5:  Echo GPS output only");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
