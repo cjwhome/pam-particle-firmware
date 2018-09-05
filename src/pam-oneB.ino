@@ -390,7 +390,7 @@ void output_to_cloud(String data){
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
-            Particle.publish("airdb-camconf", data, PRIVATE);
+            Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             Serial.println("Published data!");
         }else{
@@ -732,6 +732,11 @@ void loop() {
 
 
     tempValue = analogRead(A0);  // read the analogPin for ozone voltage
+    if(debugging_enabled){
+        Serial.print("Analog input:");
+        Serial.println(tempValue);
+
+    }
     O3_float = tempValue;
     O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
     O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
@@ -1095,7 +1100,7 @@ void outputDataToESP(void){
     String cloud_output_string = "";    //create a clean string
     String csv_output_string = "";
     cloud_output_string += '^';         //start delimeter
-    cloud_output_string += String(1) + ":";           //header
+    cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
     csv_output_string += String(DEVICE_id) + ",";
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
