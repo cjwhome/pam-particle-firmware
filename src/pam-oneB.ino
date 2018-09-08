@@ -585,6 +585,7 @@ void setup()
 
     //read all stored variables (calibration parameters)
     readStoredVars();
+    debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
     //init serial4 to communicate with Plantower PMS5003
@@ -703,8 +704,11 @@ void loop() {
       if(debugging_enabled)
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure, bme.humidity);
     }
-
-    read_gps_stream();
+    if(debugging_enabled)
+        Serial.println("Before reading gps");
+    //read_gps_stream();
+    if(debugging_enabled)
+        Serial.println("After reading gps");
 
     //read CO values and apply calibration factors
     CO_float = read_alpha1();
@@ -967,7 +971,9 @@ float read_alpha1(void){
     float correctedCurrent;
     float alpha1_ppmraw;
     String alpha1_ppmRounded;
-
+    if(debugging_enabled){
+        Serial.println("Start of alpha read");
+    }
     digitalWrite(lmp91000_1_en, LOW);   //enable
 
     if(Wire.requestFrom(0x49,1) == 0){
