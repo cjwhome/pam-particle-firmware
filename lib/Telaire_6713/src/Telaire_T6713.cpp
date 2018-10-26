@@ -121,7 +121,7 @@ int Telaire_T6713::readPPM()
   #ifdef T6713_DEBUG
   Serial.println("reading gas ppm");
   #endif
-  
+
   queryPPM();
   Wire.requestFrom(ADDR_6713, 4);    // request 6 bytes from slave device
 
