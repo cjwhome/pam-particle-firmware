@@ -239,6 +239,7 @@ void serial_get_co_zero(void);
 void output_serial_menu_options(void);
 void output_to_cloud(void);
 void echo_gps();
+void getEspOzoneData(void);
 
 class GPS {
     double utc_time;
@@ -562,6 +563,7 @@ void setup()
 {
     String init_log; //intialization error log
 
+    setADCSampleTime(ADC_SampleTime_480Cycles);
     //setup i/o
     pinMode(lmp91000_1_en, OUTPUT);
     pinMode(cellular_en, INPUT);
@@ -735,15 +737,12 @@ void loop() {
     }
 
 
-    tempValue = analogRead(A0);  // read the analogPin for ozone voltage
-    if(debugging_enabled){
-        Serial.print("Analog input:");
-        Serial.println(tempValue);
 
-    }
-    O3_float = tempValue;
-    O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-    O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
+    //O3_float = tempValue;
+    //O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
+    //O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
+
+    getEspOzoneData();
 
 
     sound_average = 0;
@@ -930,7 +929,11 @@ void read_gps_stream(void){
 
 float read_temperature(void){
     //float temperature = bme.temperature;
-    float temperature = analogRead(A0);
+    float temperature = analogRead(A1);
+    if(debugging_enabled)
+        Serial.printf("temp raw:%1.0f\n\r", temperature);
+    temperature *= VOLTS_PER_UNIT;
+    temperature *= 100;
     temperature += temp_zero;       //user input zero offset
     temperature *= temp_slope;
     return temperature;
@@ -1367,6 +1370,24 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
+void getEspOzoneData(void){
+    String getOzoneData = "Z&";
+    String recievedData = " ";
+    //if esp doesn't answer, keep going
+    Serial1.setTimeout(5000);
+    if(debugging_enabled)
+        Serial.println("Getting ozone data from esp");
+    Serial1.print(getOzoneData);
+    while(!Serial1.available());
+    //delay(1000);
+    recievedData = Serial1.readStringUntil('\n');
+    if(debugging_enabled)
+    {
+        Serial.print("RECIEVED DATA FROM ESP: ");
+        Serial.println(recievedData);
+    }
+    //Serial.println(yes_or_no);
+}
 /***start of all plantower functions***/
 //read from plantower pms 5500
 void readPlantower(void){
@@ -1523,6 +1544,9 @@ void serialMenu(){
         Serial.println(APP_VERSION);
         Serial.print("Build: ");
         Serial.println(BUILD_VERSION);
+    }else if(incomingByte == '4'){
+        Serial.println("Menu call to get ozone data");
+        getEspOzoneData();
     }else if(incomingByte == '?'){
         output_serial_menu_options();
     }
