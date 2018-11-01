@@ -599,7 +599,7 @@ void setup()
       goToSleep();
     }
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
-    delay(5000);
+    delay(10000);
     //initialize main serial port for debug output
     Serial.begin(9600);
 
@@ -1374,18 +1374,19 @@ void getEspOzoneData(void){
     String getOzoneData = "Z&";
     String recievedData = " ";
     //if esp doesn't answer, keep going
-    Serial1.setTimeout(5000);
+    Serial1.setTimeout(4000);
     if(debugging_enabled)
         Serial.println("Getting ozone data from esp");
     Serial1.print(getOzoneData);
     while(!Serial1.available());
-    //delay(1000);
+    //Serial.println("after while");
+    delay(1000);
     recievedData = Serial1.readStringUntil('\n');
-    if(debugging_enabled)
-    {
+    //if(debugging_enabled)
+    //{
         Serial.print("RECIEVED DATA FROM ESP: ");
         Serial.println(recievedData);
-    }
+    //}
     //Serial.println(yes_or_no);
 }
 /***start of all plantower functions***/
