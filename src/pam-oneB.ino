@@ -122,6 +122,10 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CS A2               //Chip select for SPI/uSD card
 #define SLEEP_EN D3
 
+//constants for parsing ozone string from ozone monitor
+#define NUMBER_OF_FEILDS 7
+
+
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
 int cellular_en = D5;
 int plantower_en = B4;
@@ -1373,22 +1377,60 @@ void sendWifiInfo(void){
 void getEspOzoneData(void){
     String getOzoneData = "Z&";
     String recievedData = " ";
+
     //if esp doesn't answer, keep going
-    Serial1.setTimeout(4000);
+    Serial1.setTimeout(3000);
     if(debugging_enabled)
         Serial.println("Getting ozone data from esp");
     Serial1.print(getOzoneData);
     while(!Serial1.available());
-    //Serial.println("after while");
-    delay(1000);
-    recievedData = Serial1.readStringUntil('\n');
+
+    delay(10);
+
+    recievedData = Serial1.readString();
+
     //if(debugging_enabled)
     //{
         Serial.print("RECIEVED DATA FROM ESP: ");
         Serial.println(recievedData);
     //}
-    //Serial.println(yes_or_no);
+    //parse data if not null
+    int comma_count = 0;
+    int from_index = 0;
+    int to_index = 0;
+    bool still_searching_for_commas = true;
+    String stringArray[NUMBER_OF_FEILDS];
+    if(debugging_enabled)
+        Serial.println("Parsing string!");
+    while(still_searching_for_commas){
+        Serial.printf("From index: %d\n\r", from_index);
+
+        to_index = recievedData.indexOf(',', from_index);
+        Serial.print("To index: ");
+        Serial.println(to_index);
+        if(to_index){
+            stringArray[comma_count] = recievedData.substring(from_index, (from_index + to_index));
+            Serial.printf("String[%d]:", comma_count);
+            Serial.println(stringArray[comma_count]);
+            comma_count++;
+            from_index = to_index;
+            from_index += 1;
+        }else{
+            still_searching_for_commas = false;
+        }
+    }
+
+    //parseOzoneString(recievedData);
 }
+
+/*void parseOzoneString(String ozoneString){
+    int index = 0;
+    if(debugging_enabled)
+        Serial.println("parsing ozone string");
+    index = ozoneString.indexOf(',');
+
+}*/
+
 /***start of all plantower functions***/
 //read from plantower pms 5500
 void readPlantower(void){
