@@ -1388,32 +1388,32 @@ void getEspOzoneData(void){
     delay(10);
 
     recievedData = Serial1.readString();
-
-    //if(debugging_enabled)
-    //{
+    //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
+    if(debugging_enabled)
+    {
         Serial.print("RECIEVED DATA FROM ESP: ");
         Serial.println(recievedData);
-    //}
+    }
     //parse data if not null
     int comma_count = 0;
     int from_index = 0;
-    int to_index = 0;
+    int index_of_comma = 0;
     bool still_searching_for_commas = true;
     String stringArray[NUMBER_OF_FEILDS];
     if(debugging_enabled)
         Serial.println("Parsing string!");
-    while(still_searching_for_commas){
-        Serial.printf("From index: %d\n\r", from_index);
+    while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
+        //Serial.printf("From index: %d\n\r", from_index);
 
-        to_index = recievedData.indexOf(',', from_index);
-        Serial.print("To index: ");
-        Serial.println(to_index);
-        if(to_index){
-            stringArray[comma_count] = recievedData.substring(from_index, (from_index + to_index));
+        index_of_comma = recievedData.indexOf(',', from_index);
+        //Serial.print("comma index: ");
+        Serial.println(index_of_comma);
+        if(index_of_comma > 0){
+            stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
             Serial.printf("String[%d]:", comma_count);
             Serial.println(stringArray[comma_count]);
             comma_count++;
-            from_index = to_index;
+            from_index = index_of_comma;
             from_index += 1;
         }else{
             still_searching_for_commas = false;
