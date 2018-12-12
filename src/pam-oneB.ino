@@ -24,11 +24,12 @@
 #include "LMP91000.h"
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
+#include "gps.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
-#define APP_VERSION 2
-#define BUILD_VERSION 2
+#define APP_VERSION 3
+#define BUILD_VERSION 0
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -38,11 +39,18 @@
 #define VOLTS_PER_PPB (0.0125)  //2.5V/200 ppb this is what you divide the voltage reading by to get ppb in ozone if the ozone monitor is set to 2.5V=200ppb
 #define PM_25_CONSTANT_A (1.19)
 #define PM_25_CONSTANT_B (0.119)
+#define CELCIUS 1
+#define FARENHEIT 0
+#define TMP36_OFFSET 0.5
+#define TMP36_VPDC 0.01 //10mV per degree C
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
 #define sd_en 1
+
+//enable AFE 2 (just for testing now using a second CO sensor connected to it)
+#define AFE2_en 0
 
 //define addresses of eeprom stored variables
 #define DEVICE_ID_MEM_ADDRESS 0
@@ -66,6 +74,10 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define DEBUGGING_ENABLED_MEM_ADDRESS  72
 #define GAS_LOWER_LIMIT_MEM_ADDRESS 76
 #define GAS_UPPER_LIMIT_MEM_ADDRESS 80
+#define TIME_ZONE_MEM_ADDRESS 84
+#define OZONE_EN_MEM_ADDRESS 88
+#define VOC_EN_MEM_ADDRESS 92
+#define TEMPERATURE_UNITS_MEM_ADDRESS 96
 
 
 //max and min values
@@ -74,16 +86,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 #define MEASUREMENTS_TO_AVERAGE 75       //change to 30 for 3 minute uploads
 
-//gps sentence
-#define TIME_FIELD_INDEX 0
-#define LATITUDE_FIELD_INDEX 1
-#define NORTH_SOUTH_FIELD_INDEX 2
-#define LONGITUDE_FIELD_INDEX 3
-#define EAST_WEST_FIELD_INDEX 4
-#define GPS_QUALITY_FIELD_INDEX 5
-#define NUMBER_OF_SATELLITES_INDEX 6
-#define HORZONTAL_DILLUTION_INDEX 7
-#define ALTITUDE_FIELD_INDEX 8
+
 
 //ble data output
 
@@ -98,6 +101,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define PM2PT5_PACKET_CONSTANT 'R'          //PM2.5 as UG/M3
 #define PM10_PACKET_CONSTANT 'q'            //PM10 as UG/M3
 #define TEMPERATURE_PACKET_CONSTANT 't'     //temperature as DEGREES CELSIUS
+#define TEMPERATURE_FAHRENHEIT_PACKET_CONSTANT 'f'
 #define PRESSURE_PACKET_CONSTANT 'P'        //pressure as MILLIBARS
 #define HUMIDITY_PACKET_CONSTANT 'h'        //humidity as PERCENTAGE
 #define SOUND_PACKET_CONSTANT 's'           //sound as DECIBELS
@@ -110,7 +114,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,Date/Time"
 
 
-#define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
+#define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
 
 
 //define pin functions
@@ -127,6 +131,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
+int lmp91000_2_en = B2;
 int cellular_en = D5;
 int plantower_en = B4;
 int power_led_en = D6;
@@ -148,7 +153,9 @@ Adafruit_BME680 bme; // I2C
 Telaire_T6713 t6713;  //CO2 sensor
 LMP91000 lmp91000;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
+Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
+GPS gps;
 
 //sdcard
 SdFat sd;
@@ -164,6 +171,7 @@ String password; //wifi network password
 //global variables
 int counter = 0;
 float CO_float = 0;
+float CO_float_2 = 0;
 float CO2_float = 0;
 int CO2_value = 0;
 float O3_float = 0;
@@ -175,6 +183,9 @@ float air_quality_score = 0;
 int esp_wifi_connection_status = 0;
 int serial_cellular_enabled = 0;
 int debugging_enabled = 0;
+int ozone_enabled = 0;
+int voc_enabled = 0;
+int temperature_units = 0;
 
 
 //used for averaging
@@ -245,138 +256,8 @@ void output_to_cloud(void);
 void echo_gps();
 void getEspOzoneData(void);
 
-class GPS {
-    double utc_time;
-    double latitude;
-    double longitude;
-    float altitude;
-    int16_t latWhole;
-    int16_t latFrac;
-    int16_t longWhole;
-    int16_t longFrac;
-    int8_t ns_indicator;              //north south
-    int8_t ew_indicator;              //'E' = east, 'W' = west
-    int quality_indicator;          //0-2
-    int satellites_used;            //0-24
-    float horizontal_dillution;     //00.0-99.9
-
-public:
-    //(d)dd + (mm.mmmm/60) (* -1 for W and S)
-    void set_lat_decimal(String latString, char nsString);
-    void set_long_decimal(String longString, char ewString);
-    double get_latitude(void);
-    double get_longitude(void);
-    void set_satellites(String satString);
-    void set_horizontalDillution(String hdString);
-    int get_satellites(void);
-    int get_horizontalDillution(void);
-    int16_t get_latitudeWhole(void);
-    int16_t get_latitudeFrac(void);
-    int16_t get_longitudeWhole(void);
-    int16_t get_longitudeFrac(void);
-    int8_t get_nsIndicator(void);
-    int8_t get_ewIndicator(void);
-};
-
-//set decimal value of latitude from NMEA string
-void GPS::set_lat_decimal(String latString, char nsString){
-    String whole_str = latString.substring(0,2);
-    String frac_str = latString.substring(2,10);
-    latWhole = whole_str.toInt();
-    latFrac = frac_str.toInt();
-
-    int whole_part = whole_str.toInt();
-    //Serial.print("Whole part:");
-    //Serial.println(whole_part);
-
-    double frac_part = frac_str.toFloat();
-    //Serial.print("Frac part:");
-    //Serial.println(frac_part, 5);
 
 
-    latitude = whole_part;
-    latitude += (frac_part)/60;
-    if(nsString == 'S'){
-        ns_indicator = 0;
-    }else{
-        ns_indicator = 0x80;
-    }
-}
-
-void GPS::set_long_decimal(String longString, char ewString){
-    String whole_str = longString.substring(0,3);
-    String frac_str = longString.substring(3,10);
-
-    longWhole = whole_str.toInt();
-    longFrac = frac_str.toInt();
-    int whole_part = whole_str.toInt();
-    //Serial.print("Whole string: ");
-    //Serial.println(whole_str);
-    //Serial.print("Whole part:");
-    //Serial.println(whole_part);
-
-    double frac_part = frac_str.toFloat();
-    //Serial.print("Frac part:");
-    //Serial.println(frac_part, 5);
-
-
-    longitude = whole_part;
-    longitude += (frac_part)/60;
-    if(ewString == 'E'){
-      ew_indicator = 0;
-    }else{
-      ew_indicator = 0x01;
-    }
-}
-
-void GPS::set_satellites(String satString){
-    satellites_used = satString.toInt();
-}
-
-void GPS::set_horizontalDillution(String hdString){
-    float temp_float = hdString.toFloat();
-    temp_float *= 10;
-
-    horizontal_dillution = temp_float;
-}
-
-double GPS::get_latitude(void){
-    return latitude;
-}
-
-double GPS::get_longitude(void){
-    return longitude;
-}
-
-int GPS::get_satellites(void){
-    return satellites_used;
-}
-
-int GPS::get_horizontalDillution(void){
-    return horizontal_dillution;
-}
-
-int16_t GPS::get_latitudeWhole(void){
-    return latWhole;
-}
-int16_t GPS::get_latitudeFrac(void){
-    return latFrac;
-}
-int16_t GPS::get_longitudeWhole(void){
-    return longWhole;
-}
-int16_t GPS::get_longitudeFrac(void){
-    return longFrac;
-}
-
-int8_t GPS::get_nsIndicator(void){
-    return ns_indicator;
-}
-
-int8_t GPS::get_ewIndicator(void){
-    return ew_indicator;
-}
-GPS gps;
 
 void output_to_cloud(String data){
     String webhook_data = " ";
@@ -457,8 +338,14 @@ void readStoredVars(void){
 
     EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
     EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
+    EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
+    EEPROM.get(VOC_EN_MEM_ADDRESS, voc_enabled);
     EEPROM.get(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
     EEPROM.get(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
+    EEPROM.get(TIME_ZONE_MEM_ADDRESS, tempValue);
+    Time.zone(tempValue);
+    EEPROM.get(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
+
 
 
     //check all values to make sure are within limits
@@ -484,9 +371,7 @@ void readStoredVars(void){
     }
 }
 
-void check_cal_file(void){
 
-}
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
   char ch;
@@ -570,6 +455,7 @@ void setup()
     setADCSampleTime(ADC_SampleTime_480Cycles);
     //setup i/o
     pinMode(lmp91000_1_en, OUTPUT);
+    pinMode(lmp91000_2_en, OUTPUT);
     pinMode(cellular_en, INPUT);
     pinMode(plantower_en, OUTPUT);
     pinMode(power_led_en, OUTPUT);
@@ -583,6 +469,7 @@ void setup()
 
 
     digitalWrite(lmp91000_1_en, HIGH);
+    digitalWrite(lmp91000_2_en, HIGH);
     digitalWrite(power_led_en, HIGH);
     digitalWrite(plantower_en, HIGH);
     digitalWrite(esp_wroom_en, HIGH);
@@ -634,15 +521,15 @@ void setup()
 
 
     //setup the AFE
-    Serial.println("Starting LMP91000 initialization");
+    Serial.println("Starting LMP91000 CO initialization");
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_1_en, LOW); //enable the chip
 
     if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
-          Serial.println("Couldn't communicate with LMP91000");
+          Serial.println("Couldn't communicate with LMP91000 for CO");
     }else{
-          Serial.println("Initialized LMP91000");
+          Serial.println("Initialized LMP91000 for CO");
           /*Serial.print("STATUS: ");
           Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
           Serial.print("TIACN: ");
@@ -660,18 +547,53 @@ void setup()
       //delay(200);
       //digitalWrite(red_status_led, LOW);
       //delay(200);
-      Serial.println("Could not communicate with Adafruit_ADS1115");
+      Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
     }
     else{
       ads1.setGain(GAIN_TWOTHIRDS);
     }
 
+    //AFE 2 setup
+    #if AFE2_en
+    Serial.println("Starting LMP91000 2 initialization");
+    Wire.begin();   //this must be done for the LMP91000
+    digitalWrite(lmp91000_2_en, LOW); //enable the chip
+
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    {
+          Serial.println("Couldn't communicate with LMP91000 for 2");
+    }else{
+          Serial.println("Initialized LMP91000 for 2");
+          /*Serial.print("STATUS: ");
+          Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
+          Serial.print("TIACN: ");
+          Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
+          Serial.print("REFCN: ");
+          Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
+          Serial.print("MODECN: ");
+          Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
+          digitalWrite(lmp91000_2_en, HIGH);  //disable
+    }
+    ads2.begin();
+    if(Wire.requestFrom(0x4A,1) == 0) { //if can't get 1 byte from ADC1, add it to the init error log
+      //init_log += "AD1,";
+      //digitalWrite(red_status_led, HIGH);
+      //delay(200);
+      //digitalWrite(red_status_led, LOW);
+      //delay(200);
+      Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
+    }
+    else{
+      ads2.setGain(GAIN_TWOTHIRDS);
+    }
+    #endif
+
     if (!bme.begin()) {
       Serial.println("Could not find a valid BME680 sensor, check wiring!");
       //while (1);
-  }else{
+    }else{
       Serial.println("Initialized BME Sensor");
-  }
+    }
 
     if(!t6713.begin()){
       Serial.println("Could not find a valid T6713 sensor, check wiring!");
@@ -688,7 +610,7 @@ void setup()
 
     //Serial.printf("Time now: %u\n\r", Time.now());
     //Serial.println(Time.timeStr());
-    Serial.println(String(HEADER_STRING));
+    /*Serial.println(String(HEADER_STRING));
     if (sd.begin(CS)){
         file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
         file.println("File Start timestamp: ");
@@ -696,7 +618,7 @@ void setup()
         file.println(String(HEADER_STRING));
         file.close();
         file_started = 1;
-    }
+    }*/
 
 }
 
@@ -721,6 +643,13 @@ void loop() {
     CO_float += CO_zero;
     CO_float *= CO_slope;
 
+    #if AFE2_en
+        CO_float_2 = read_alpha2();
+    #endif
+
+    //CO_float_2 += CO_zero_2;
+    //CO_float_2 *= CO_slope_2;
+
     //read CO2 values and apply calibration factors
     CO2_float = t6713.readPPM();
     if(debugging_enabled)
@@ -741,17 +670,14 @@ void loop() {
     }
 
 
-
-    //O3_float = tempValue;
-    //O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-    //O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
-
-    getEspOzoneData();
+    if(ozone_enabled){
+        getEspOzoneData();
+    }
 
 
-    sound_average = 0;
+    //sound_average = 0;
     calculate_AQI();
-    //sound_average = read_sound();
+    sound_average = read_sound();
     //read PM values and apply calibration factors
     readPlantower();
 
@@ -771,6 +697,10 @@ void loop() {
     if (Serial.available() > 0) {
         // read the incoming byte:
         incomingByte = Serial.read();
+        if(debugging_enabled){
+            Serial.print("incomming byte:");
+            Serial.println(incomingByte);
+        }
         Serial.println(incomingByte);
         if(incomingByte == 'm'){
           serialMenu();
@@ -934,12 +864,17 @@ void read_gps_stream(void){
 float read_temperature(void){
     //float temperature = bme.temperature;
     float temperature = analogRead(A1);
-    if(debugging_enabled)
-        Serial.printf("temp raw:%1.0f\n\r", temperature);
+
+
     temperature *= VOLTS_PER_UNIT;
-    temperature *= 100;
+
+    temperature -= TMP36_OFFSET;
+    temperature /= TMP36_VPDC;
+
+    //temperature *= 100;
     temperature += temp_zero;       //user input zero offset
     temperature *= temp_slope;
+
     return temperature;
     //temperature = temperature +
 }
@@ -965,6 +900,8 @@ double read_sound(void){
         //Serial.println(val);
     }
     sum = sum/10;
+    sum /= 4095;
+    sum *= 100;
     return sum;
 }
 //read Carbon monoxide alphasense sensor
@@ -1086,8 +1023,127 @@ float read_alpha1(void){
       return alpha1_ppmraw;
 }
 
+float read_alpha2(void){
+    //read from CO sensor
+    int32_t A0_gas; //gas
+    int32_t A1_aux; //aux out
+    int32_t A2_temperature; //temperature
+    int32_t half_Vref; //half of Vref
+    float volt0_gas;
+    float volt1_aux;
+    float volt2_temperature; //need to code to be able to ensure correct sigfigs..
+    float volt_half_Vref;
+    float sensorCurrent; // Working Electrode current in microamps (millivolts / Kohms)
+    float auxCurrent;
+    float correctedCurrent;
+    float alpha2_ppmraw;
+    String alpha2_ppmRounded;
+    if(debugging_enabled){
+        Serial.println("Start of alpha 2 read");
+    }
+    digitalWrite(lmp91000_2_en, LOW);   //enable
+
+    if(Wire.requestFrom(0x4A,1) == 0){
+        Serial.println("Couldn't communicate with LMP91000 2");
+        //operation_log += "AD1,";
+        //digitalWrite(red_status_led, HIGH);
+        //delay(200);
+        //digitalWrite(red_status_led, LOW);
+        //delay(200);
+    }else{
+        half_Vref = ads2.readADC_SingleEnded(3); //half of Vref
+        volt_half_Vref = half_Vref * ads_bitmv;
+        if(abs((volt_half_Vref)/1000 - 1.25) > 0.5){
+          //operation_log += "AD1_VREF2,";
+          //digitalWrite(red_status_led, HIGH);
+          //delay(200);
+          //digitalWrite(red_status_led, LOW);
+          //delay(200);
+          Serial.print("half vref2 ads1");
+          Serial.println(volt_half_Vref/1000);
+
+        }
+    }
+
+    if(lmp91000.read(LMP91000_STATUS_REG) == 0){
+        if(debugging_enabled)
+            Serial.println("Status == 0 from LMP91000 2 status reg");
+        //operation_log += "AFE1,";
+      //  digitalWrite(red_status_led, HIGH);
+        //delay(200);
+        //digitalWrite(red_status_led, LOW);
+        //delay(200);
+    }
+
+    if(Wire.requestFrom(0x4A,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0 || (abs((volt_half_Vref)/1000 - 1.25) > 0.5)){
+        alpha2_ppmRounded = "-99";
+        volt0_gas = -99;
+        volt1_aux = -99;
+        volt_half_Vref = -99;
+        sensorCurrent = -99;
+        auxCurrent = -99;
+    }else{
+        A0_gas = 0;
+        A1_aux = 0;
+        A2_temperature = 0;
+        half_Vref = 0;
+        for(int i=0; i<100; i++){
+          A0_gas += ads2.readADC_SingleEnded(0); //gas
+          A1_aux += ads2.readADC_SingleEnded(1); //aux out
+          A2_temperature += ads2.readADC_SingleEnded(2); //temperature
+          half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
+        }
+
+        A0_gas = A0_gas / 100;
+        A1_aux = A1_aux / 100;
+        A2_temperature = A2_temperature / 100;
+        half_Vref = half_Vref / 100;
+
+        volt0_gas = A0_gas * ads_bitmv;
+        volt1_aux = A1_aux * ads_bitmv;
+        volt2_temperature = A2_temperature * ads_bitmv;
+        volt_half_Vref = half_Vref * ads_bitmv;
+
+        sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
+        auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
+        //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
+        if(read_temperature() <= 15){
+          correctedCurrent = ((sensorCurrent) - (auxCurrent));
+        }
+        else if(read_temperature() <= 25){
+          correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
+        }
+        else if(read_temperature() > 25){
+          correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
+        }
+        alpha2_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        alpha2_ppmRounded = String(alpha2_ppmraw, 2);
+      }
+
+      digitalWrite(lmp91000_2_en, HIGH);  //disable
+
+
+      /*Serial.print("CO:  ");
+      Serial.print(volt0_gas);
+      Serial.print(", ");
+      Serial.print(volt2_temperature);
+      Serial.print(", ");
+      Serial.print(volt3_half_Vref);
+      Serial.print(", ");
+      Serial.print(sensorCurrent);
+      Serial.print(", ");
+      Serial.println(alpha4_ppmraw);
+      Serial.println();
+
+      Serial.print("Volt1 Aux:");
+      Serial.print(volt1_aux);
+      Serial.println("Volts");*/
+      return alpha2_ppmraw;
+}
+
 void outputDataToESP(void){
     //used for converting double to bytes for latitude and longitude
+
     union{
 	       double myDouble;
 	       unsigned char bytes[sizeof(double)];
@@ -1112,6 +1168,8 @@ void outputDataToESP(void){
     time_t time = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
+
+
     //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/
     //This is different than the ble packet in that we are putting all of the data that we have in one packet
     //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
@@ -1123,10 +1181,16 @@ void outputDataToESP(void){
     csv_output_string += String(DEVICE_id) + ",";
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
     csv_output_string += String(CO_float, 3) + ",";
+    #if AFE2_en
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_2, 3);
+    csv_output_string += String(CO_float_2, 3) + ",";
+    #endif
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
-    cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
-    csv_output_string += String(air_quality_score, 1) + ",";
+    if(voc_enabled){
+        cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
+        csv_output_string += String(air_quality_score, 1) + ",";
+    }
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
     csv_output_string += String(PM01Value) + ",";
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
@@ -1139,8 +1203,10 @@ void outputDataToESP(void){
     csv_output_string += String(bme.pressure / 100.0, 1) + ",";
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(read_humidity(), 1);
     csv_output_string += String(read_humidity(), 1) + ",";
-    cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
-    csv_output_string += String(O3_float, 1) + ",";
+    if(ozone_enabled){
+        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
+        csv_output_string += String(O3_float, 1) + ",";
+    }
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     csv_output_string += String(fuel.getSoC(), 1) + ",";
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
@@ -1249,8 +1315,8 @@ void outputDataToESP(void){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
             floatBytes.myFloat = CO2_float;
         }else if(i == 2){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-            floatBytes.myFloat = air_quality_score;
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
+            floatBytes.myFloat = fuel.getSoC();
         }else if(i == 3){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
             floatBytes.myFloat = PM01Value;
@@ -1270,15 +1336,15 @@ void outputDataToESP(void){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
             floatBytes.myFloat = read_humidity();
         }else if(i == 9){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
-            floatBytes.myFloat = O3_float;
-        }else if(i == 10){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
-            floatBytes.myFloat = fuel.getSoC();
-        }else if(i == 11){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
             floatBytes.myFloat = sound_average;
-        }
+        }else if(i == 10){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+            floatBytes.myFloat = air_quality_score;
+        }/*else if(i == 11){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
+            floatBytes.myFloat = O3_float;
+        }*/
 
         //bytes 5,6,7,8 - Measurement Value
         ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
@@ -1316,10 +1382,6 @@ void outputDataToESP(void){
         ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
 
         ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
-
-
-
-
 
     }
 
@@ -1401,21 +1463,31 @@ void getEspOzoneData(void){
     bool still_searching_for_commas = true;
     String stringArray[NUMBER_OF_FEILDS];
     if(debugging_enabled)
-        Serial.println("Parsing string!");
+        Serial.println("Parsing string3!");
     while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
         //Serial.printf("From index: %d\n\r", from_index);
 
         index_of_comma = recievedData.indexOf(',', from_index);
         //Serial.print("comma index: ");
-        Serial.println(index_of_comma);
+        //Serial.println(index_of_comma);
         if(index_of_comma > 0){
             stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
-            Serial.printf("String[%d]:", comma_count);
-            Serial.println(stringArray[comma_count]);
+            if(debugging_enabled){
+                Serial.printf("String[%d]:", comma_count);
+                Serial.println(stringArray[comma_count]);
+            }
             comma_count++;
             from_index = index_of_comma;
             from_index += 1;
         }else{
+            int index_of_cr = recievedData.indexOf('\r', from_index);
+            if(index_of_cr > 0){
+                stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
+                if(debugging_enabled){
+                    Serial.printf("String[%d]:", comma_count);
+                    Serial.println(stringArray[comma_count]);
+                }
+            }
             still_searching_for_commas = false;
         }
     }
@@ -1423,13 +1495,7 @@ void getEspOzoneData(void){
     //parseOzoneString(recievedData);
 }
 
-/*void parseOzoneString(String ozoneString){
-    int index = 0;
-    if(debugging_enabled)
-        Serial.println("parsing ozone string");
-    index = ozoneString.indexOf(',');
 
-}*/
 
 /***start of all plantower functions***/
 //read from plantower pms 5500
@@ -1578,6 +1644,25 @@ void serialMenu(){
         }
         serial_cellular_enabled = 0;
         EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+    }else if(incomingByte == 'F'){
+        if(temperature_units == CELCIUS){
+            temperature_units = FARENHEIT;
+
+        }else{
+            Serial.println("Temperature units already set to Fareneit.");
+        }
+
+        EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
+
+    }else if(incomingByte == 'C'){
+        if(temperature_units == FARENHEIT){
+            temperature_units = CELCIUS;
+
+        }else{
+            Serial.println("Temperature units already set to Celcius.");
+        }
+
+        EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
     }else if(incomingByte == '1'){
         serial_get_lower_limit();
     }else if(incomingByte == '2'){
@@ -1588,8 +1673,56 @@ void serialMenu(){
         Serial.print("Build: ");
         Serial.println(BUILD_VERSION);
     }else if(incomingByte == '4'){
-        Serial.println("Menu call to get ozone data");
-        getEspOzoneData();
+        if(ozone_enabled == 0){
+            Serial.println("Enabling Ozone");
+        }else{
+            Serial.println("Ozone already enabled");
+        }
+        ozone_enabled = 1;
+        EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
+    }else if(incomingByte == '5'){
+        if(ozone_enabled == 1){
+            Serial.println("Disabling Ozone");
+        }else{
+            Serial.println("Ozone already disabled");
+        }
+        ozone_enabled = 0;
+        EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
+    }else if(incomingByte == '6'){
+        if(ozone_enabled == 0){
+            Serial.println("Enabling VOC's");
+        }else{
+            Serial.println("VOC's already enabled");
+        }
+        ozone_enabled = 1;
+        EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+    }else if(incomingByte == '7'){
+        if(ozone_enabled == 1){
+            Serial.println("Disabling VOC's");
+        }else{
+            Serial.println("VOC's already disabled");
+        }
+        ozone_enabled = 0;
+        EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+    }else if(incomingByte == '8'){
+        Serial.print("Fault: ");
+        byte fault = getFault();
+        Serial.println(fault);
+        Serial.print("System status: ");
+        byte systemStatus = getSystemStatus();
+        Serial.println(systemStatus);
+    }else if(incomingByte == '!'){
+
+        Serial.println("Outputting VOCs continuously!  Press any button to exit...");
+        while(!Serial.available()){
+            if (! bme.performReading()) {
+              Serial.println("Failed to read BME680");
+              return;
+            }else{
+                Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
+            }
+        }
+
     }else if(incomingByte == '?'){
         output_serial_menu_options();
     }
@@ -1691,6 +1824,7 @@ void serial_get_zone(void){
         Time.zone(tempValue);
         Serial.print("\n\rNew Device time zone:");
         Serial.println(tempValue);
+        EEPROM.put(TIME_ZONE_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -2134,6 +2268,13 @@ void output_serial_menu_options(void){
     Serial.println("1:  Adjust gas lower limit");
     Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");
+    Serial.println("4:  Enable Ozone");
+    Serial.println("5:  Disable Ozone");
+    Serial.println("6:  Enable VOC's");
+    Serial.println("7:  Disable VOC's");
+    Serial.println("F:  Change temperature units to Farenheit");
+    Serial.println("C:  Change temperature units to Celcius");
+    Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
