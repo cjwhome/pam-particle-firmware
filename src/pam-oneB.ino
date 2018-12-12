@@ -156,6 +156,7 @@ Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
 Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
 GPS gps;
+PMIC pmic;
 
 //sdcard
 SdFat sd;
@@ -1706,11 +1707,18 @@ void serialMenu(){
         EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
     }else if(incomingByte == '8'){
         Serial.print("Fault: ");
-        byte fault = getFault();
+        byte fault = pmic.getFault();
         Serial.println(fault);
         Serial.print("System status: ");
-        byte systemStatus = getSystemStatus();
+        byte systemStatus = pmic.getSystemStatus();
         Serial.println(systemStatus);
+        byte chargCurrent = pmic.getChargeCurrent();
+        Serial.print("Charge current: ");
+        Serial.println(chargCurrent);
+        Serial.println("Setting charge current");
+        pmic.setChargeCurrent(0,0,0,1,1,1);
+        pmic.enableCharging();
+
     }else if(incomingByte == '!'){
 
         Serial.println("Outputting VOCs continuously!  Press any button to exit...");
