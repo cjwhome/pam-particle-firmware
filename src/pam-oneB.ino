@@ -45,6 +45,7 @@
 #define TMP36_VPDC 0.01 //10mV per degree C
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
+//float ads_bitmv = 0.1920;
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
 #define sd_en 1
@@ -78,6 +79,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_EN_MEM_ADDRESS 88
 #define VOC_EN_MEM_ADDRESS 92
 #define TEMPERATURE_UNITS_MEM_ADDRESS 96
+#define OUTPUT_PARTICLES_MEM_ADDRESS 100
 
 
 //max and min values
@@ -156,6 +158,7 @@ Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
 Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
 GPS gps;
+PMIC pmic;
 
 //sdcard
 SdFat sd;
@@ -186,6 +189,7 @@ int debugging_enabled = 0;
 int ozone_enabled = 0;
 int voc_enabled = 0;
 int temperature_units = 0;
+int output_only_particles = 0;
 
 
 //used for averaging
@@ -256,8 +260,15 @@ void output_to_cloud(void);
 void echo_gps();
 void getEspOzoneData(void);
 
+//test for setting up PMIC manually
+void writeRegister(uint8_t reg, uint8_t value) {
+    // This would be easier if pmic.writeRegister wasn't private
+    Wire3.beginTransmission(PMIC_ADDRESS);
+    Wire3.write(reg);
+    Wire3.write(value);
+    Wire3.endTransmission(true);
 
-
+}
 
 void output_to_cloud(String data){
     String webhook_data = " ";
@@ -345,7 +356,7 @@ void readStoredVars(void){
     EEPROM.get(TIME_ZONE_MEM_ADDRESS, tempValue);
     Time.zone(tempValue);
     EEPROM.get(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-
+    EEPROM.get(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
 
 
     //check all values to make sure are within limits
@@ -494,6 +505,30 @@ void setup()
     //initialize main serial port for debug output
     Serial.begin(9600);
 
+    // Setup the PMIC manually (resets the BQ24195 charge controller)
+    // REG00 Input Source Control Register  (disabled)
+    writeRegister(0, 0b00110000);  //0x30
+
+    // REG01 Power-On Configuration Register (charge battery, 3.5 V)
+    writeRegister(1, 0b00011011);   //0x1B
+
+    // REG02 Charge Current Control Register (1024 + 512 mA)
+    writeRegister(2, 0b01100000);   //0x60
+
+    // REG03 Pre-Charge/Termination Current Control Register (128mA pre charge, 128mA termination current)
+    writeRegister(3, 0b00010001);   //0x11
+
+    // REG04 Charge Voltage Control Register Format
+    writeRegister(4, 0b10110010);   //0xB2
+
+    // REG05 Charge Termination/Timer Control Register
+    writeRegister(5, 0b10011010);   //0x9A
+    // REG06 Thermal Regulation Control Register
+    writeRegister(6, 0b00000011);   //0x03
+    // REG07 Misc Operation Control Register Format
+    writeRegister(7, 0b01001011);   //0x4B
+
+
 
     #if sd_en
      fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
@@ -623,7 +658,9 @@ void setup()
 }
 
 void loop() {
-
+    if(output_only_particles == 1){
+        output_particles();
+    }
     //read temp, press, humidity, and TVOCs
     if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
@@ -957,7 +994,8 @@ float read_alpha1(void){
         //delay(200);
     }
 
-    if(Wire.requestFrom(0x49,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0 || (abs((volt_half_Vref)/1000 - 1.25) > 0.5)){
+    //if(Wire.requestFrom(0x49,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0 || (abs((volt_half_Vref)/1000 - 1.25) > 0.5)){
+    if(Wire.requestFrom(0x49,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0){
         alpha1_ppmRounded = "-99";
         volt0_gas = -99;
         volt1_aux = -99;
@@ -1004,22 +1042,23 @@ float read_alpha1(void){
 
       digitalWrite(lmp91000_1_en, HIGH);  //disable
 
+      if(debugging_enabled){
+          Serial.print("CO:  ");
+          Serial.print(volt0_gas);
+          Serial.print(", ");
+          Serial.print(volt2_temperature);
+          Serial.print(", ");
+          Serial.print(volt_half_Vref);
+          Serial.print(", ");
+          Serial.print(sensorCurrent);
+          Serial.print(", ");
+          Serial.println(alpha1_ppmraw);
+          Serial.println();
 
-      /*Serial.print("CO:  ");
-      Serial.print(volt0_gas);
-      Serial.print(", ");
-      Serial.print(volt2_temperature);
-      Serial.print(", ");
-      Serial.print(volt3_half_Vref);
-      Serial.print(", ");
-      Serial.print(sensorCurrent);
-      Serial.print(", ");
-      Serial.println(alpha4_ppmraw);
-      Serial.println();
-
-      Serial.print("Volt1 Aux:");
-      Serial.print(volt1_aux);
-      Serial.println("Volts");*/
+          Serial.print("Volt1 Aux:");
+          Serial.print(volt1_aux);
+          Serial.println("Volts");
+      }
       return alpha1_ppmraw;
 }
 
@@ -1498,6 +1537,144 @@ void getEspOzoneData(void){
 
 
 /***start of all plantower functions***/
+
+void output_particles(){
+    union{
+	       double myDouble;
+	       unsigned char bytes[sizeof(double)];
+    } doubleBytes;
+    //doubleBytes.myDouble = double;
+    //
+
+    //used for converting float to bytes for measurement value
+    union {
+        float myFloat;
+        unsigned char bytes[4];
+    } floatBytes;
+
+    //used for converting word to bytes for lat and longitude
+    union {
+        int16_t myWord;
+        unsigned char bytes[2];
+    }wordBytes;
+
+    while(!Serial.available()){
+        if (! bme.performReading()) {
+          Serial.println("Failed to read BME680");
+
+        }
+        readPlantower();
+        read_gps_stream();
+        CO2_float = t6713.readPPM();
+
+        CO2_float += CO2_zero;
+        CO2_float *= CO2_slope;
+        //correct for altitude
+        float pressure_correction = bme.pressure/100;
+        if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
+            pressure_correction /= SEALEVELPRESSURE_HPA;
+            CO2_float *= pressure_correction;
+        }
+        pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(read_humidity()/100))/(1 - (read_humidity()/100));
+        corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
+
+        byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
+
+
+        for(int i=0; i<5; i++){
+
+            //************Fill the ble output array**********************//
+            //Serial.printf("making array[%d]\n", i);
+            //byte 0 - version
+            ble_output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
+
+            //bytes 1,2 - Device ID
+            //DEVICE_id = 555;
+            wordBytes.myWord = DEVICE_id;
+            ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+            ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+
+            //byte 3 - Measurement number
+            ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
+
+            //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
+            //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
+            //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
+            /*
+            0-battery
+            1-PM01Value
+            2-PM2_5Value
+            3-PM10Value
+
+
+            */
+
+            if(i == 0){
+                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
+                floatBytes.myFloat = fuel.getSoC();
+            }else if(i == 1){
+                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
+                floatBytes.myFloat = PM01Value;
+            }else if(i == 2){
+                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
+                floatBytes.myFloat = corrected_PM_25;
+            }else if(i == 3){
+                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
+                floatBytes.myFloat = PM10Value;
+            }else if(i == 4){
+                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
+                floatBytes.myFloat = CO2_float;
+            }
+
+            //bytes 5,6,7,8 - Measurement Value
+            ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
+            ble_output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
+            ble_output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
+            ble_output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
+
+
+            //bytes 9-12 - latitude
+            wordBytes.myWord = gps.get_latitudeWhole();
+            ble_output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+            ble_output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+
+            wordBytes.myWord = gps.get_latitudeFrac();
+            ble_output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+            ble_output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+
+            //bytes 14-17 - longitude
+            wordBytes.myWord = gps.get_longitudeWhole();
+            ble_output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+            ble_output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+
+            wordBytes.myWord = gps.get_longitudeFrac();
+            ble_output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+            ble_output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+
+
+            //byte 18 - east west and north south indicator
+            //  LSB 0 = East, LSB 1 = West
+            //  MSB 0 = South, MSB 1 = North
+            int northSouth = gps.get_nsIndicator();
+            int eastWest = gps.get_ewIndicator();
+
+            ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
+            ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
+
+            ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
+
+        }
+
+        //send start delimeter to ESP
+        Serial1.print("$");
+        //send the packaged data with # delimeters in between packets
+        Serial1.write(ble_output_array, 5*BLE_PAYLOAD_SIZE);
+
+        //send ending delimeter
+        Serial1.print("&");
+        sample_counter += 1;
+    }
+}
 //read from plantower pms 5500
 void readPlantower(void){
     if(Serial4.find("B")){    //start to read when detect 0x42
@@ -1706,11 +1883,26 @@ void serialMenu(){
         EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
     }else if(incomingByte == '8'){
         Serial.print("Fault: ");
-        byte fault = getFault();
+        byte fault = pmic.getFault();
         Serial.println(fault);
         Serial.print("System status: ");
-        byte systemStatus = getSystemStatus();
+        byte systemStatus = pmic.getSystemStatus();
         Serial.println(systemStatus);
+
+    }else if(incomingByte == '9'){
+        serial_increase_charge_current();
+    }else if(incomingByte == 'A'){
+        read_alpha1_constantly();
+    }else if(incomingByte == 'B'){
+        if(output_only_particles == 1){
+            output_only_particles = 0;
+            Serial.println("Outputting normally");
+        }else{
+            output_only_particles = 1;
+            Serial.println("Outputting only PM");
+        }
+        EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
+
     }else if(incomingByte == '!'){
 
         Serial.println("Outputting VOCs continuously!  Press any button to exit...");
@@ -1729,6 +1921,79 @@ void serialMenu(){
   }
   Serial.println("Exiting serial menu...");
 
+}
+
+void serial_increase_charge_current(void){
+    int total_current = 0;
+    bool bit7 = 0;
+    bool bit6 = 0;
+    bool bit5 = 0;
+    bool bit4 = 0;
+    bool bit3 = 0;
+    bool bit2 = 0;
+
+    byte chargeCurrent = pmic.getChargeCurrent();
+    //bit 7
+    if(chargeCurrent & 0x80){
+        total_current += 2048;
+    }
+    //bit 6
+    if(chargeCurrent & 0x40){
+        total_current += 1024;
+    }
+    //bit 5
+    if(chargeCurrent & 0x20){
+        total_current += 512;
+    }
+    //bit 4
+    if(chargeCurrent & 0x10){
+        total_current += 256;
+    }
+    //bit 3
+    if(chargeCurrent & 0x08){
+        total_current += 128;
+    }
+    //bit 2
+    if(chargeCurrent & 0x04){
+        total_current += 64;
+    }
+    Serial.printf("Increasing Charge current from %d mA to ", total_current);
+    chargeCurrent += 4;
+    total_current = 0;
+
+    if(chargeCurrent & 0x80){
+        total_current += 2048;
+        bit7 = 1;
+    }
+    //bit 6
+    if(chargeCurrent & 0x40){
+        total_current += 1024;
+        bit6 = 1;
+    }
+    //bit 5
+    if(chargeCurrent & 0x20){
+        total_current += 512;
+        bit5 = 1;
+    }
+    //bit 4
+    if(chargeCurrent & 0x10){
+        total_current += 256;
+        bit4 = 1;
+    }
+    //bit 3
+    if(chargeCurrent & 0x08){
+        total_current += 128;
+        bit3 = 1;
+    }
+    //bit 2
+    if(chargeCurrent & 0x04){
+        total_current += 64;
+        bit2 = 1;
+    }
+
+    pmic.setChargeCurrent(bit7, bit6, bit5, bit4, bit3, bit2);
+    chargeCurrent = pmic.getChargeCurrent();
+    Serial.printf("new charge current of %d mA\n\r", total_current);
 }
 
 void serial_get_wifi_credentials(void){
@@ -2238,6 +2503,13 @@ void serial_get_upper_limit(void){
         Serial.println("\n\rIncorrect password!");
     }
 }
+
+void read_alpha1_constantly(void){
+    while(!Serial.available()){
+        CO_float = read_alpha1();
+        Serial.printf("CO: %1.3f ppm\n\r", CO_float);
+    }
+}
 void output_serial_menu_options(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");
@@ -2272,6 +2544,10 @@ void output_serial_menu_options(void){
     Serial.println("5:  Disable Ozone");
     Serial.println("6:  Enable VOC's");
     Serial.println("7:  Disable VOC's");
+    Serial.println("8:  Output the PMIC system configuration");
+    Serial.println("9:  Increase the charge current by 64 mA");
+    Serial.println("A:  Ouptput CO constantly and rapidly");
+    Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("C:  Change temperature units to Celcius");
     Serial.println("!:  Continuous serial output of VOC's");
