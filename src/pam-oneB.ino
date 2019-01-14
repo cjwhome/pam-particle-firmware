@@ -2613,10 +2613,12 @@ void output_serial_menu_options(void){
     Serial.println("9:  Increase the charge current by 64 mA");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
-    Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("C:  Change temperature units to Celcius");
     Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
+    Serial.println("F:  Change temperature units to Farenheit");
+    Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
+    Serial.println("H:  Read ozone digitally (not through analog input - board dependent)")
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
