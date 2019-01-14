@@ -25,6 +25,7 @@
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
 #include "gps.h"
+#include "inttypes.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
@@ -80,6 +81,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define VOC_EN_MEM_ADDRESS 92
 #define TEMPERATURE_UNITS_MEM_ADDRESS 96
 #define OUTPUT_PARTICLES_MEM_ADDRESS 100
+#define TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS 104
+#define OZONE_A_OR_D_MEM_ADDRESS 108
 
 
 //max and min values
@@ -190,6 +193,8 @@ int ozone_enabled = 0;
 int voc_enabled = 0;
 int temperature_units = 0;
 int output_only_particles = 0;
+int new_temperature_sensor_enabled = 0;
+int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 
 
 //used for averaging
@@ -255,9 +260,11 @@ void serial_get_co2_zero(void);
 void serial_get_co2_zero(void);
 void serial_get_co_zero(void);
 void serial_get_co_zero(void);
+
 void output_serial_menu_options(void);
 void output_to_cloud(void);
 void echo_gps();
+void read_ozone(void);
 void getEspOzoneData(void);
 
 //test for setting up PMIC manually
@@ -357,6 +364,8 @@ void readStoredVars(void){
     Time.zone(tempValue);
     EEPROM.get(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
     EEPROM.get(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
+    EEPROM.get(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
+    EEPROM.get(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
 
 
     //check all values to make sure are within limits
@@ -708,7 +717,8 @@ void loop() {
 
 
     if(ozone_enabled){
-        getEspOzoneData();
+        read_ozone();
+        //getEspOzoneData();
     }
 
 
@@ -723,7 +733,7 @@ void loop() {
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, read_humidity()/100);
     corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
-    getEspWifiStatus();
+    //getEspWifiStatus();
     outputDataToESP();
 
     sample_counter = ++sample_counter;
@@ -899,15 +909,20 @@ void read_gps_stream(void){
 }
 
 float read_temperature(void){
-    //float temperature = bme.temperature;
-    float temperature = analogRead(A1);
+    float temperature = 0;
+    if(new_temperature_sensor_enabled){
+        temperature = analogRead(A1);
 
 
-    temperature *= VOLTS_PER_UNIT;
+        temperature *= VOLTS_PER_UNIT;
 
-    temperature -= TMP36_OFFSET;
-    temperature /= TMP36_VPDC;
-
+        temperature -= TMP36_OFFSET;
+        temperature /= TMP36_VPDC;
+    }else{
+        if(debugging_enabled)
+            Serial.println("Temperature reading from BME for Alphasense");
+        temperature = bme.temperature;
+    }
     //temperature *= 100;
     temperature += temp_zero;       //user input zero offset
     temperature *= temp_slope;
@@ -1033,7 +1048,7 @@ float read_alpha1(void){
         else if(read_temperature() <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
-        else if(read_temperature() > 25){
+        else{
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
         alpha1_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -1043,7 +1058,12 @@ float read_alpha1(void){
       digitalWrite(lmp91000_1_en, HIGH);  //disable
 
       if(debugging_enabled){
-          Serial.print("CO:  ");
+          Serial.print("CO measurements:  \n\r");
+          Serial.printf("A0_gas: %d\n\r", A0_gas);
+          Serial.printf("A1_aux: %d\n\r", A1_aux);
+          Serial.printf("A2_temp: %d\n\r", A2_temperature);
+          Serial.printf("half_vref: %d\n\r", half_Vref);
+          /*Serial.print("CO:  ");
           Serial.print(volt0_gas);
           Serial.print(", ");
           Serial.print(volt2_temperature);
@@ -1057,7 +1077,7 @@ float read_alpha1(void){
 
           Serial.print("Volt1 Aux:");
           Serial.print(volt1_aux);
-          Serial.println("Volts");
+          Serial.println("Volts");*/
       }
       return alpha1_ppmraw;
 }
@@ -1180,6 +1200,14 @@ float read_alpha2(void){
       return alpha2_ppmraw;
 }
 
+void read_ozone(void){
+    if(ozone_analog_enabled){
+
+    }else{
+        getEspOzoneData();
+    }
+}
+
 void outputDataToESP(void){
     //used for converting double to bytes for latitude and longitude
 
@@ -1299,7 +1327,7 @@ void outputDataToESP(void){
 
         file.close();
     }
-    delay(5000);
+    //delay(5000);
 
     //Serial.print("Successfully output Cloud string to ESP: ");
     //Serial.println(cloud_output_string);
@@ -1840,6 +1868,43 @@ void serialMenu(){
         }
 
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
+    }else if(incomingByte == 'D'){
+        if(new_temperature_sensor_enabled == 1){
+            new_temperature_sensor_enabled = 0;
+            Serial.println("Disabling new temperature sensor");
+        }else{
+
+            Serial.println("Temperature sensor already disabled");
+        }
+        EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
+
+    }else if(incomingByte == 'E'){
+        if(new_temperature_sensor_enabled == 1){
+            Serial.println("Temperature sensor already enabled");
+        }else{
+            new_temperature_sensor_enabled = 1;
+            Serial.println("Temperatue sensor now enabled");
+        }
+        EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled );
+
+    }else if(incomingByte == 'G'){      //enable analog reading of ozone and disable esp reading of ozone
+        if(ozone_analog_enabled == 1){
+            Serial.println("Analog reading of ozone already enabled");
+        }else{
+            ozone_analog_enabled = 1;
+            Serial.println("Analog reading of ozone now enabled");
+        }
+        EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled );
+
+    }else if(incomingByte == 'H'){      //disable analog reading of ozone and read from esp
+        if(ozone_analog_enabled == 0){
+            Serial.println("Digital reading of ozone already enabled");
+        }else{
+            ozone_analog_enabled = 0;
+            Serial.println("Digital reading of ozone now enabled");
+        }
+        EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
+
     }else if(incomingByte == '1'){
         serial_get_lower_limit();
     }else if(incomingByte == '2'){
@@ -2550,6 +2615,8 @@ void output_serial_menu_options(void){
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("C:  Change temperature units to Celcius");
+    Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
+    Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
