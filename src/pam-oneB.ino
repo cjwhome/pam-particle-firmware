@@ -29,7 +29,7 @@
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
-#define APP_VERSION 3
+#define APP_VERSION 4
 #define BUILD_VERSION 0
 
 //define constants
@@ -83,13 +83,15 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OUTPUT_PARTICLES_MEM_ADDRESS 100
 #define TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS 104
 #define OZONE_A_OR_D_MEM_ADDRESS 108
+#define OZONE_OFFSET_MEM_ADDRESS 112
+#define MEASUREMENTS_TO_AVG_MEM_ADDRESS 116
 
 
 //max and min values
 #define MIN_DEVICE_ID_NUMBER 1
 #define MAX_DEVICE_ID_NUMBER 9999
 
-#define MEASUREMENTS_TO_AVERAGE 75       //change to 30 for 3 minute uploads
+//#define MEASUREMENTS_TO_AVERAGE 1       //change to 30 for 3 minute uploads
 
 
 
@@ -131,8 +133,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CS A2               //Chip select for SPI/uSD card
 #define SLEEP_EN D3
 
-//constants for parsing ozone string from ozone monitor
+//constants for parsing ozone string from ozone monitor Model 106
 #define NUMBER_OF_FEILDS 7
+#define NUMBER_OF_FIELDS_LOGGING 7
 
 
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
@@ -216,6 +219,7 @@ float PM_10_slope;
 int PM_1_zero;
 int PM_25_zero;
 int PM_10_zero;
+int ozone_offset;
 float temp_slope;
 int temp_zero;
 float pressure_slope;
@@ -225,6 +229,7 @@ int rh_zero;
 int gas_lower_limit = 1200;   // Bad air quality limit
 int gas_upper_limit = 50000;  // Good air quality limit
 float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according to Zheng et. al 2018
+int measurements_to_average = 0;
 
 //serial menu variables
 int addr;
@@ -260,12 +265,14 @@ void serial_get_co2_zero(void);
 void serial_get_co2_zero(void);
 void serial_get_co_zero(void);
 void serial_get_co_zero(void);
+void serial_get_ozone_offset(void);
 
 void output_serial_menu_options(void);
 void output_to_cloud(void);
 void echo_gps();
 void read_ozone(void);
-void getEspOzoneData(void);
+float read_CO(void);
+float getEspOzoneData(void);
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -284,10 +291,10 @@ void output_to_cloud(String data){
     O3_sum += O3_float;
     measurement_count++;
 
-    if(measurement_count == MEASUREMENTS_TO_AVERAGE){
-        CO_sum /= MEASUREMENTS_TO_AVERAGE;
-        CO2_sum /= MEASUREMENTS_TO_AVERAGE;
-        O3_sum /= MEASUREMENTS_TO_AVERAGE;
+    if(measurement_count == measurements_to_average){
+        CO_sum /= measurements_to_average;
+        CO2_sum /= measurements_to_average;
+        O3_sum /= measurements_to_average;
 
         measurement_count = 0;
         String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(read_temperature(), 1) + ",Press: ";
@@ -366,6 +373,8 @@ void readStoredVars(void){
     EEPROM.get(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
     EEPROM.get(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
     EEPROM.get(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
+    EEPROM.get(OZONE_OFFSET_MEM_ADDRESS, ozone_offset);
+    EEPROM.get(MEASUREMENTS_TO_AVG_MEM_ADDRESS, measurements_to_average);
 
 
     //check all values to make sure are within limits
@@ -678,16 +687,13 @@ void loop() {
       if(debugging_enabled)
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure, bme.humidity);
     }
-    if(debugging_enabled)
-        Serial.println("Before reading gps");
+
     read_gps_stream();
-    if(debugging_enabled)
-        Serial.println("After reading gps");
+
 
     //read CO values and apply calibration factors
-    CO_float = read_alpha1();
-    CO_float += CO_zero;
-    CO_float *= CO_slope;
+    CO_float = read_CO();
+
 
     #if AFE2_en
         CO_float_2 = read_alpha2();
@@ -696,12 +702,8 @@ void loop() {
     //CO_float_2 += CO_zero_2;
     //CO_float_2 *= CO_slope_2;
 
-    //read CO2 values and apply calibration factors
-    CO2_float = t6713.readPPM();
-    if(debugging_enabled)
-        Serial.printf("CO2 raw reading:%1.0f\n\r", CO2_float);
-    CO2_float += CO2_zero;
-    CO2_float *= CO2_slope;
+    CO2_float = read_CO2();
+
     //correct for altitude
     float pressure_correction = bme.pressure/100;
     if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
@@ -718,7 +720,6 @@ void loop() {
 
     if(ozone_enabled){
         read_ozone();
-        //getEspOzoneData();
     }
 
 
@@ -957,6 +958,26 @@ double read_sound(void){
     return sum;
 }
 //read Carbon monoxide alphasense sensor
+float read_CO(void){
+    float float_offset;
+
+    CO_float = read_alpha1();
+    float_offset = CO_zero;
+    float_offset /= 1000;
+
+    CO_float += float_offset;
+    CO_float *= CO_slope;
+
+    return CO_float;
+}
+
+float read_CO2(void){
+    //read CO2 values and apply calibration factors
+    CO2_float = t6713.readPPM();
+    CO2_float += CO2_zero;
+    CO2_float *= CO2_slope;
+    return CO2_float;
+}
 float read_alpha1(void){
     //read from CO sensor
     int32_t A0_gas; //gas
@@ -1201,10 +1222,19 @@ float read_alpha2(void){
 }
 
 void read_ozone(void){
+    int tempValue = 0;
     if(ozone_analog_enabled){
-
+        tempValue = analogRead(A0);  // read the analogPin for ozone voltage
+        if(debugging_enabled){
+            Serial.print("Ozone Raw analog in:");
+            Serial.println(tempValue);
+        }
+        O3_float = tempValue;
+        O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
+        O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
+        O3_float += ozone_offset;
     }else{
-        getEspOzoneData();
+        O3_float = getEspOzoneData();
     }
 }
 
@@ -1503,7 +1533,8 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
-void getEspOzoneData(void){
+float getEspOzoneData(void){
+    float ozone_value = 0.0;
     String getOzoneData = "Z&";
     String recievedData = " ";
 
@@ -1558,7 +1589,16 @@ void getEspOzoneData(void){
             still_searching_for_commas = false;
         }
     }
-
+    if(comma_count == NUMBER_OF_FIELDS_LOGGING){
+        ozone_value = stringArray[1].toFloat();
+        if(debugging_enabled)
+            Serial.println("using string array index 1 due to logging");
+    }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
+        ozone_value = stringArray[0].toFloat();
+        if(debugging_enabled)
+            Serial.println("using string array index 0, not logging");
+    }
+    return ozone_value;
     //parseOzoneString(recievedData);
 }
 
@@ -1894,7 +1934,7 @@ void serialMenu(){
             ozone_analog_enabled = 1;
             Serial.println("Analog reading of ozone now enabled");
         }
-        EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled );
+        EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
 
     }else if(incomingByte == 'H'){      //disable analog reading of ozone and read from esp
         if(ozone_analog_enabled == 0){
@@ -1905,6 +1945,8 @@ void serialMenu(){
         }
         EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
 
+    }else if(incomingByte == 'I'){      //disable analog reading of ozone and read from esp
+        serial_get_average_time();
     }else if(incomingByte == '1'){
         serial_get_lower_limit();
     }else if(incomingByte == '2'){
@@ -1931,20 +1973,20 @@ void serialMenu(){
         ozone_enabled = 0;
         EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     }else if(incomingByte == '6'){
-        if(ozone_enabled == 0){
+        if(voc_enabled == 0){
             Serial.println("Enabling VOC's");
         }else{
             Serial.println("VOC's already enabled");
         }
-        ozone_enabled = 1;
+        voc_enabled = 1;
         EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
     }else if(incomingByte == '7'){
-        if(ozone_enabled == 1){
+        if(voc_enabled == 1){
             Serial.println("Disabling VOC's");
         }else{
             Serial.println("VOC's already disabled");
         }
-        ozone_enabled = 0;
+        voc_enabled = 0;
         EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
     }else if(incomingByte == '8'){
         Serial.print("Fault: ");
@@ -2160,6 +2202,27 @@ void serial_get_zone(void){
     }
 }
 
+void serial_get_average_time(void){
+    Serial.println();
+    Serial.print("Current Average: ");
+    Serial.print(measurements_to_average);
+    Serial.println(" 5 second measurements");
+    Serial.print("Enter new amount\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= 1 && tempValue < 1000){
+        Serial.print("\n\rNew average time: ");
+        Serial.println(tempValue);
+        Serial.println(" 5 second measurements");
+        measurements_to_average = tempValue;
+        EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
 void serial_get_co2_slope(void){
 
     Serial.println();
@@ -2234,13 +2297,13 @@ void serial_get_co_zero(void){
     Serial.println();
     Serial.print("Current CO zero:");
     Serial.print(CO_zero);
-    Serial.println(" ppm");
+    Serial.println(" ppp");
     Serial.print("Enter new CO Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
-    if(tempValue >= -1000 && tempValue < 1000){
+    if(tempValue >= -5000 && tempValue < 5000){
         Serial.print("\n\rNew CO zero: ");
         Serial.println(tempValue);
         CO_zero = tempValue;
@@ -2253,8 +2316,8 @@ void serial_get_co_zero(void){
 void serial_get_pm1_slope(void){
     Serial.println();
     Serial.print("Current PM1 slope:");
-    Serial.print(String(CO_slope, 2));
-    Serial.println(" ppm");
+    Serial.print(String(PM_1_slope, 2));
+    Serial.println(" ");
     Serial.print("Enter new PM1 slope\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -2262,13 +2325,13 @@ void serial_get_pm1_slope(void){
     int tempValue;
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
-        CO_slope = tempfloat;
+        PM_1_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
         Serial.print("\n\rNew PM1 slope: ");
-        Serial.println(String(CO_slope,2));
+        Serial.println(String(PM_1_slope, 2));
 
-        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -2277,8 +2340,8 @@ void serial_get_pm1_slope(void){
 void serial_get_pm1_zero(void){
     Serial.println();
     Serial.print("Current PM1 zero:");
-    Serial.print(CO_zero);
-    Serial.println(" ppm");
+    Serial.print(PM_1_zero);
+    Serial.println(" ug/m3");
     Serial.print("Enter new PM1 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -2287,8 +2350,8 @@ void serial_get_pm1_zero(void){
     if(tempValue >= -1000 && tempValue < 1000){
         Serial.print("\n\rNew PM1 zero: ");
         Serial.println(tempValue);
-        CO_zero = tempValue;
-        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+        PM_1_zero = tempValue;
+        EEPROM.put(PM_1_ZERO_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -2297,8 +2360,8 @@ void serial_get_pm1_zero(void){
 void serial_get_pm25_slope(void){
     Serial.println();
     Serial.print("Current PM2.5 slope:");
-    Serial.print(String(CO_slope, 2));
-    Serial.println(" ppm");
+    Serial.print(String(PM_25_slope, 2));
+    Serial.println(" ");
     Serial.print("Enter new PM2.5 slope\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -2306,13 +2369,13 @@ void serial_get_pm25_slope(void){
     int tempValue;
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
-        CO_slope = tempfloat;
+        PM_25_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
         Serial.print("\n\rNew PM2.5 slope: ");
-        Serial.println(String(CO_slope,2));
+        Serial.println(String(PM_25_slope,2));
 
-        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -2321,8 +2384,8 @@ void serial_get_pm25_slope(void){
 void serial_get_pm25_zero(void){
     Serial.println();
     Serial.print("Current PM2.5 zero:");
-    Serial.print(CO_zero);
-    Serial.println(" ppm");
+    Serial.print(PM_25_zero);
+    Serial.println(" ug/m3");
     Serial.print("Enter new PM2.5 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -2331,8 +2394,8 @@ void serial_get_pm25_zero(void){
     if(tempValue >= -1000 && tempValue < 1000){
         Serial.print("\n\rNew PM2.5 zero: ");
         Serial.println(tempValue);
-        CO_zero = tempValue;
-        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+        PM_25_zero = tempValue;
+        EEPROM.put(PM_25_ZERO_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -2341,8 +2404,8 @@ void serial_get_pm25_zero(void){
 void serial_get_pm10_slope(void){
     Serial.println();
     Serial.print("Current PM10 slope:");
-    Serial.print(String(CO_slope, 2));
-    Serial.println(" ppm");
+    Serial.print(String(PM_10_slope, 2));
+    Serial.println(" ");
     Serial.print("Enter new PM10 slope\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -2350,13 +2413,13 @@ void serial_get_pm10_slope(void){
     int tempValue;
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
-        CO_slope = tempfloat;
+        PM_10_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
         Serial.print("\n\rNew PM10 slope: ");
-        Serial.println(String(CO_slope,2));
+        Serial.println(String(PM_10_slope,2));
 
-        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -2365,8 +2428,8 @@ void serial_get_pm10_slope(void){
 void serial_get_pm10_zero(void){
     Serial.println();
     Serial.print("Current PM10 zero:");
-    Serial.print(CO_zero);
-    Serial.println(" ppm");
+    Serial.print(PM_10_zero);
+    Serial.println(" um/m3");
     Serial.print("Enter new PM10 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -2375,8 +2438,8 @@ void serial_get_pm10_zero(void){
     if(tempValue >= -1000 && tempValue < 1000){
         Serial.print("\n\rNew PM10 zero: ");
         Serial.println(tempValue);
-        CO_zero = tempValue;
-        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+        PM_10_zero = tempValue;
+        EEPROM.put(PM_10_ZERO_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -2514,6 +2577,26 @@ void serial_get_humidity_zero(void){
     }
 }
 
+void serial_get_ozone_offset(void){
+    Serial.println();
+    Serial.print("Current O3 analog offset:");
+    Serial.print(ozone_offset);
+    Serial.println(" ppb");
+    Serial.print("Enter new ozone offset\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -50 && tempValue < 50){
+        Serial.print("\n\rNew ozone offset: ");
+        Serial.println(tempValue);
+        ozone_offset = tempValue;
+        EEPROM.put(OZONE_OFFSET_MEM_ADDRESS, ozone_offset);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
 void serial_get_lower_limit(void){
     Serial.println();
     Serial.print("Current lower limit:");
@@ -2571,7 +2654,7 @@ void serial_get_upper_limit(void){
 
 void read_alpha1_constantly(void){
     while(!Serial.available()){
-        CO_float = read_alpha1();
+        CO_float = read_CO();
         Serial.printf("CO: %1.3f ppm\n\r", CO_float);
     }
 }
@@ -2618,7 +2701,8 @@ void output_serial_menu_options(void){
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
     Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
-    Serial.println("H:  Read ozone digitally (not through analog input - board dependent)")
+    Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
+    Serial.println("I:  Adjust average time for uploading");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
