@@ -303,7 +303,8 @@ void output_to_cloud(String data){
         if(Particle.connected() && serial_cellular_enabled){
             Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
-            Serial.println("Published data!");
+            if(debugging_enabled)
+              Serial.println("Published data!");
         }else{
             if(serial_cellular_enabled == 0){
                 if(debugging_enabled)
@@ -2297,7 +2298,7 @@ void serial_get_co_zero(void){
     Serial.println();
     Serial.print("Current CO zero:");
     Serial.print(CO_zero);
-    Serial.println(" ppp");
+    Serial.println(" ppb");
     Serial.print("Enter new CO Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
