@@ -1268,15 +1268,15 @@ void read_ozone(void){
 void writeLogFile(String data){
   if (sd.begin(CS)){
       Serial.println("Writing data to log file.");
-      file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
+      log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
       if(log_file_started == 0){
-          file.println("File Start timestamp: ");
-          file.println(Time.timeStr());
+          log_file.println("File Start timestamp: ");
+          log_file.println(Time.timeStr());
           log_file_started = 1;
       }
-      file.println(data);
+      log_file.println(data);
 
-      file.close();
+      log_file.close();
   }else{
     Serial.println("Unable to write to log file");
   }
@@ -1608,7 +1608,7 @@ float getEspOzoneData(void){
     {
         Serial.print("RECIEVED DATA FROM ESP: ");
         Serial.println(recievedData);
-
+        writeLogFile("Recieved data from ESP");
     }
     //parse data if not null
     int comma_count = 0;
@@ -1624,10 +1624,11 @@ float getEspOzoneData(void){
         if(debugging_enabled){
           Serial.print("comma index: ");
           Serial.println(index_of_comma);
-          
+          writeLogFile("got a comma");
 
         }
 
+        //if the index of the comma is not zero, then there is data.
         if(index_of_comma > 0){
             stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
             if(debugging_enabled){
