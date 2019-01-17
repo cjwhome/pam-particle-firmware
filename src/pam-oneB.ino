@@ -201,7 +201,7 @@ int temperature_units = 0;
 int output_only_particles = 0;
 int new_temperature_sensor_enabled = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
-
+bool tried_cellular_connect = false;
 
 //used for averaging
 float CO_sum = 0;
@@ -704,13 +704,17 @@ void loop() {
         output_particles();
     }
     //read temp, press, humidity, and TVOCs
+    if(debugging_enabled){
+      Serial.println("Before reading bme");
+      writeLogFile("before reading bme");
+    }
     if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
       writeLogFile("Failed to read BME680");
       return;
     }else{
       if(debugging_enabled){
-        Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure, bme.humidity);
+        Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
       }
     }
 
@@ -788,13 +792,27 @@ void loop() {
     if(serial_cellular_enabled){
 
         //Serial.println("Cellular is enabled.");
-      if (Particle.connected() == false) {
+      if (Particle.connected() == false && tried_cellular_connect == false) {
+        tried_cellular_connect = true;
           if(debugging_enabled){
             Serial.println("Connecting to cellular network");
             writeLogFile("Connecting to cellular network");
           }
           Cellular.on();
+          if(debugging_enabled){
+            Serial.println("after cellularOn");
+            writeLogFile("After cellularOn");
+          }
           Particle.connect();
+          if(debugging_enabled){
+            Serial.println("After particle connect");
+            writeLogFile("After particle connect");
+          }
+      }else if(Particle.connected() == true){  //this means that it is already connected
+        if(debugging_enabled){
+          Serial.println("setting tried_cellular_connect to false");
+        }
+        tried_cellular_connect = false;
       }
     }else{
         //Serial.println("Cellular is disabled.");
