@@ -1562,8 +1562,11 @@ float getEspOzoneData(void){
         //Serial.printf("From index: %d\n\r", from_index);
 
         index_of_comma = recievedData.indexOf(',', from_index);
-        //Serial.print("comma index: ");
-        //Serial.println(index_of_comma);
+        if(debugging_enabled){
+          Serial.print("comma index: ");
+          Serial.println(index_of_comma);
+        }
+
         if(index_of_comma > 0){
             stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
             if(debugging_enabled){
