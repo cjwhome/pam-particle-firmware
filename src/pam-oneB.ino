@@ -1010,14 +1010,9 @@ float read_alpha1(void){
         half_Vref = ads1.readADC_SingleEnded(3); //half of Vref
         volt_half_Vref = half_Vref * ads_bitmv;
         if(abs((volt_half_Vref)/1000 - 1.25) > 0.5){
-          //operation_log += "AD1_VREF2,";
-          //digitalWrite(red_status_led, HIGH);
-          //delay(200);
-          //digitalWrite(red_status_led, LOW);
-          //delay(200);
-          Serial.print("half vref2 ads1");
-          Serial.println(volt_half_Vref/1000);
-
+          if(debugging_enabled){
+            Serial.printf("Half of Vref Low: %1.2f Volts", volt_half_Vref/1000);
+          }
         }
     }
 
