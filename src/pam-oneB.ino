@@ -169,9 +169,12 @@ PMIC pmic;
 //sdcard
 SdFat sd;
 SdFile file;
+SdFile log_file;
 File file1;
 String fileName;
+String logFileName;
 int file_started = 0;
+int log_file_started = 0;
 
 //wifi
 String ssid; //wifi network name
@@ -266,6 +269,7 @@ void serial_get_co2_zero(void);
 void serial_get_co_zero(void);
 void serial_get_co_zero(void);
 void serial_get_ozone_offset(void);
+void writeLogFile(String data);
 
 void output_serial_menu_options(void);
 void output_to_cloud(void);
@@ -303,15 +307,22 @@ void output_to_cloud(String data){
         if(Particle.connected() && serial_cellular_enabled){
             Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
-            if(debugging_enabled)
+            if(debugging_enabled){
               Serial.println("Published data!");
+              writeLogFile("Published data!");
+            }
         }else{
             if(serial_cellular_enabled == 0){
-                if(debugging_enabled)
+                if(debugging_enabled){
                     Serial.println("Cellular is disabled.");
+                    writeLogFile("Cellular is disabled.");
+
+                  }
             }else{
-                if(debugging_enabled)
+                if(debugging_enabled){
                     Serial.println("Couldn't connect to particle.");
+                    writeLogFile("Couldn't connect to particle.");
+                  }
             }
         }
         CO_sum = 0;
@@ -552,6 +563,7 @@ void setup()
     #if sd_en
      fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
      Serial.println("Checking for sd card");
+     logFileName = "log_" + fileName;
 
     if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
       /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
@@ -576,14 +588,17 @@ void setup()
 
     //setup the AFE
     Serial.println("Starting LMP91000 CO initialization");
+    writeLogFile("Starting LMP91000 CO initialization");
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_1_en, LOW); //enable the chip
 
     if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for CO");
+          writeLogFile("Couldn't communicate with LMP91000 for CO");
     }else{
           Serial.println("Initialized LMP91000 for CO");
+          writeLogFile("Initialized LMP91000 for CO");
           /*Serial.print("STATUS: ");
           Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
           Serial.print("TIACN: ");
@@ -602,6 +617,7 @@ void setup()
       //digitalWrite(red_status_led, LOW);
       //delay(200);
       Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
+      writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
     }
     else{
       ads1.setGain(GAIN_TWOTHIRDS);
@@ -610,14 +626,17 @@ void setup()
     //AFE 2 setup
     #if AFE2_en
     Serial.println("Starting LMP91000 2 initialization");
+    writeLogFile("Starting LMP91000 2 initialization");
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_2_en, LOW); //enable the chip
 
     if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for 2");
+          writeLogFile("Couldn't communicate with LMP91000 for 2");
     }else{
           Serial.println("Initialized LMP91000 for 2");
+          writeLogFile("Initialized LMP91000 for 2");
           /*Serial.print("STATUS: ");
           Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
           Serial.print("TIACN: ");
@@ -636,6 +655,7 @@ void setup()
       //digitalWrite(red_status_led, LOW);
       //delay(200);
       Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
+      writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
     }
     else{
       ads2.setGain(GAIN_TWOTHIRDS);
@@ -644,13 +664,16 @@ void setup()
 
     if (!bme.begin()) {
       Serial.println("Could not find a valid BME680 sensor, check wiring!");
+      writeLogFile("Could not find a valid BME680 sensor, check wiring!");
       //while (1);
     }else{
       Serial.println("Initialized BME Sensor");
+      writeLogFile("Initialized BME Sensor");
     }
 
     if(!t6713.begin()){
       Serial.println("Could not find a valid T6713 sensor, check wiring!");
+      writeLogFile("Could not find a valid T6713");
     }
   //Serial.println("before bme setup");
     // Set up oversampling and filter initialization
@@ -683,10 +706,12 @@ void loop() {
     //read temp, press, humidity, and TVOCs
     if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
+      writeLogFile("Failed to read BME680");
       return;
     }else{
-      if(debugging_enabled)
+      if(debugging_enabled){
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure, bme.humidity);
+      }
     }
 
     read_gps_stream();
@@ -711,11 +736,13 @@ void loop() {
         pressure_correction /= SEALEVELPRESSURE_HPA;
         if(debugging_enabled){
             Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
+
         }
         CO2_float *= pressure_correction;
     }else{
         Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
         Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
+
     }
 
 
@@ -731,8 +758,9 @@ void loop() {
     readPlantower();
 
     pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(read_humidity()/100))/(1 - (read_humidity()/100));
-    if(debugging_enabled)
+    if(debugging_enabled){
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, read_humidity()/100);
+    }
     corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
     //getEspWifiStatus();
@@ -749,6 +777,7 @@ void loop() {
         if(debugging_enabled){
             Serial.print("incomming byte:");
             Serial.println(incomingByte);
+
         }
         Serial.println(incomingByte);
         if(incomingByte == 'm'){
@@ -760,16 +789,20 @@ void loop() {
 
         //Serial.println("Cellular is enabled.");
       if (Particle.connected() == false) {
-          if(debugging_enabled)
+          if(debugging_enabled){
             Serial.println("Connecting to cellular network");
+            writeLogFile("Connecting to cellular network");
+          }
           Cellular.on();
           Particle.connect();
       }
     }else{
         //Serial.println("Cellular is disabled.");
       if (Particle.connected() == true) {
-          if(debugging_enabled)
+          if(debugging_enabled){
             Serial.println("Disconnecting from cellular network");
+            writeLogFile("Disconnecting from cellular network");
+          }
           Cellular.off();
       }
     }
@@ -782,6 +815,7 @@ void calculate_AQI(void){
       float current_humidity = read_humidity();
       if(debugging_enabled){
           Serial.printf("gas resistance: %1.0f, humidity: %1.2f\n\r", gas_reference, current_humidity);
+
       }
       if (current_humidity >= 38 && current_humidity <= 42)
         hum_score = 0.25*100; // Humidity +/-5% around optimum
@@ -843,6 +877,7 @@ void read_gps_stream(void){
         }else if(gps_sentence.equals("init")){
             error = 1;
             Serial.println("Error reading GPS");
+            writeLogFile("Error reading GPS");
         }
     }
     if(stringFound){
@@ -867,6 +902,7 @@ void read_gps_stream(void){
                         if(debugging_enabled){
                             Serial.print("GPS utc string: ");
                             Serial.println(utc_string);
+
                         }
                         //Serial.println(utc_string);
                     }
@@ -921,8 +957,10 @@ float read_temperature(void){
         temperature -= TMP36_OFFSET;
         temperature /= TMP36_VPDC;
     }else{
-        if(debugging_enabled)
+        if(debugging_enabled){
             Serial.println("Temperature reading from BME for Alphasense");
+
+          }
         temperature = bme.temperature;
     }
     //temperature *= 100;
@@ -1000,7 +1038,10 @@ float read_alpha1(void){
     digitalWrite(lmp91000_1_en, LOW);   //enable
 
     if(Wire.requestFrom(0x49,1) == 0){
+      if(debugging_enabled){
         Serial.println("Couldn't communicate with LMP91000");
+        writeLogFile("Couldn't communicate with LMP91000");
+      }
         //operation_log += "AD1,";
         //digitalWrite(red_status_led, HIGH);
         //delay(200);
@@ -1011,14 +1052,17 @@ float read_alpha1(void){
         volt_half_Vref = half_Vref * ads_bitmv;
         if(abs((volt_half_Vref)/1000 - 1.25) > 0.5){
           if(debugging_enabled){
-            Serial.printf("Half of Vref Low: %1.2f Volts", volt_half_Vref/1000);
+            Serial.printf("Halfvolt: %1.2f\n\r", volt_half_Vref/1000);
+            writeLogFile("Halfvolt higher than 0.5");
           }
         }
     }
 
     if(lmp91000.read(LMP91000_STATUS_REG) == 0){
-        if(debugging_enabled)
-            Serial.println("Status == 0 from LMP91000 status reg");
+        if(debugging_enabled){
+            Serial.println("Status = 0 from LMP91000 status reg");
+            writeLogFile("LMP1000 status = 0");
+          }
         //operation_log += "AFE1,";
       //  digitalWrite(red_status_led, HIGH);
         //delay(200);
@@ -1080,21 +1124,7 @@ float read_alpha1(void){
           Serial.printf("A1_aux: %d\n\r", A1_aux);
           Serial.printf("A2_temp: %d\n\r", A2_temperature);
           Serial.printf("half_vref: %d\n\r", half_Vref);
-          /*Serial.print("CO:  ");
-          Serial.print(volt0_gas);
-          Serial.print(", ");
-          Serial.print(volt2_temperature);
-          Serial.print(", ");
-          Serial.print(volt_half_Vref);
-          Serial.print(", ");
-          Serial.print(sensorCurrent);
-          Serial.print(", ");
-          Serial.println(alpha1_ppmraw);
-          Serial.println();
 
-          Serial.print("Volt1 Aux:");
-          Serial.print(volt1_aux);
-          Serial.println("Volts");*/
       }
       return alpha1_ppmraw;
 }
@@ -1224,6 +1254,7 @@ void read_ozone(void){
         if(debugging_enabled){
             Serial.print("Ozone Raw analog in:");
             Serial.println(tempValue);
+
         }
         O3_float = tempValue;
         O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
@@ -1232,6 +1263,23 @@ void read_ozone(void){
     }else{
         O3_float = getEspOzoneData();
     }
+}
+
+void writeLogFile(String data){
+  if (sd.begin(CS)){
+      Serial.println("Writing data to log file.");
+      file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
+      if(log_file_started == 0){
+          file.println("File Start timestamp: ");
+          file.println(Time.timeStr());
+          log_file_started = 1;
+      }
+      file.println(data);
+
+      file.close();
+  }else{
+    Serial.println("Unable to write to log file");
+  }
 }
 
 void outputDataToESP(void){
@@ -1328,12 +1376,15 @@ void outputDataToESP(void){
         Serial.println(cloud_output_string);
     }
     if(!esp_wifi_connection_status){
-        if(debugging_enabled)
-            Serial.println("No wifi from esp so trying cellular...");
+        if(debugging_enabled){
+            Serial.println("No wifi from esp so trying cellular function...");
+          }
         output_to_cloud(cloud_output_string);
     }else{
-        if(debugging_enabled)
+        if(debugging_enabled){
             Serial.println("Sending data to esp to upload via wifi...");
+            writeLogFile("Sending data to esp to upload via wifi");
+          }
         Serial1.println(cloud_output_string);
     }
     Serial.println(csv_output_string);
@@ -1508,16 +1559,22 @@ void getEspWifiStatus(void){
     while(!Serial1.available());
     //delay(1000);
     yes_or_no = Serial1.read();
-    if(debugging_enabled)
+    if(debugging_enabled){
         Serial.print("ESP Wifi connection status is: ");
+
+      }
     //Serial.println(yes_or_no);
     if(yes_or_no == 'y'){
-        if(debugging_enabled)
+        if(debugging_enabled){
             Serial.println("Connected!");
+            writeLogFile("ESP wifi connected");
+          }
         esp_wifi_connection_status = 1;
     }else{
-        if(debugging_enabled)
+        if(debugging_enabled){
             Serial.println("No Connection");
+            writeLogFile("ESP wifi not connected");
+          }
         esp_wifi_connection_status = 0;
     }
 }
@@ -1536,8 +1593,10 @@ float getEspOzoneData(void){
 
     //if esp doesn't answer, keep going
     Serial1.setTimeout(3000);
-    if(debugging_enabled)
+    if(debugging_enabled){
         Serial.println("Getting ozone data from esp");
+        writeLogFile("Getting ozone data from esp");
+      }
     Serial1.print(getOzoneData);
     while(!Serial1.available());
 
@@ -1549,6 +1608,7 @@ float getEspOzoneData(void){
     {
         Serial.print("RECIEVED DATA FROM ESP: ");
         Serial.println(recievedData);
+
     }
     //parse data if not null
     int comma_count = 0;
@@ -1556,8 +1616,7 @@ float getEspOzoneData(void){
     int index_of_comma = 0;
     bool still_searching_for_commas = true;
     String stringArray[NUMBER_OF_FEILDS];
-    if(debugging_enabled)
-        Serial.println("Parsing string3!");
+
     while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
         //Serial.printf("From index: %d\n\r", from_index);
 
@@ -1565,6 +1624,8 @@ float getEspOzoneData(void){
         if(debugging_enabled){
           Serial.print("comma index: ");
           Serial.println(index_of_comma);
+          
+
         }
 
         if(index_of_comma > 0){
@@ -1572,6 +1633,7 @@ float getEspOzoneData(void){
             if(debugging_enabled){
                 Serial.printf("String[%d]:", comma_count);
                 Serial.println(stringArray[comma_count]);
+                writeLogFile(stringArray[comma_count]);
             }
             comma_count++;
             from_index = index_of_comma;
@@ -1590,12 +1652,16 @@ float getEspOzoneData(void){
     }
     if(comma_count == NUMBER_OF_FIELDS_LOGGING){
         ozone_value = stringArray[1].toFloat();
-        if(debugging_enabled)
+        if(debugging_enabled){
             Serial.println("using string array index 1 due to logging");
+            writeLogFile("using string array index 1 due to logging");
+          }
     }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
         ozone_value = stringArray[0].toFloat();
-        if(debugging_enabled)
+        if(debugging_enabled){
             Serial.println("using string array index 0, not logging");
+            writeLogFile("using string array index 0, not logging");
+          }
     }
     return ozone_value;
     //parseOzoneString(recievedData);
