@@ -277,6 +277,7 @@ void echo_gps();
 void read_ozone(void);
 float read_CO(void);
 float getEspOzoneData(void);
+void resetESP(void);
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -696,6 +697,8 @@ void setup()
         file.close();
         file_started = 1;
     }*/
+    resetESP();
+    Serial.println("ESP reset!");
 
 }
 
@@ -1896,6 +1899,19 @@ void goToSleep(void){
   //detachInterrupt(D3);
 }
 
+void resetESP(void){
+  digitalWrite(esp_wroom_en, LOW);
+  digitalWrite(plantower_en, LOW);
+  digitalWrite(blower_en, LOW);
+  digitalWrite(co2_en, LOW);
+  delay(1000);
+  digitalWrite(esp_wroom_en, HIGH);
+  digitalWrite(plantower_en, HIGH);
+  digitalWrite(blower_en, HIGH);
+  digitalWrite(co2_en, HIGH);
+  delay(1000);
+}
+
 /************************Serial menu stuff******************/
 
 void serialMenu(){
@@ -2031,6 +2047,9 @@ void serialMenu(){
 
     }else if(incomingByte == 'I'){      //disable analog reading of ozone and read from esp
         serial_get_average_time();
+    }else if(incomingByte == 'J'){
+        resetESP();
+        Serial.println("ESP reset!");
     }else if(incomingByte == '1'){
         serial_get_lower_limit();
     }else if(incomingByte == '2'){
