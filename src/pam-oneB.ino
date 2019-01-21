@@ -123,6 +123,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
 
+#define MAX_COUNTER_INDEX 15000
 
 //define pin functions
 //fix these so they are more consistent!
@@ -930,6 +931,10 @@ void read_gps_stream(void){
                 }else if(comma_counter == LATITUDE_FIELD_INDEX){
                     if(gps_sentence.charAt(a+1)!=','){
                         String latitudeString = gps_sentence.substring(a+1,a+10);
+                        if(debugging_enabled){
+                          Serial.print("Latitude string: ");
+                          Serial.print(latitudeString);
+                        }
                         //Serial.print("Latitude string: ");
                         //Serial.print(latitudeString);
                         //Serial.print(" ");
@@ -941,8 +946,10 @@ void read_gps_stream(void){
                 }else if(comma_counter == LONGITUDE_FIELD_INDEX){
                     if(gps_sentence.charAt(a+1)!=','){
                         String longitudeString = gps_sentence.substring(a+1,a+11);
-                        //Serial.print("Longitude string: ");
-                        //Serial.print(longitudeString);
+                        if(debugging_enabled){
+                          Serial.print("longitude string: ");
+                          Serial.print(longitudeString);
+                        }
                         //Serial.print(" ");
                         //Serial.println(gps_sentence.charAt(a+13));
                         gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
@@ -1388,7 +1395,7 @@ void outputDataToESP(void){
         cloud_output_string += "-";
     }
     csv_output_string += String(gps.get_longitude()) + ",";
-    cloud_output_string += String(gps.get_latitude());
+    cloud_output_string += String(gps.get_longitude());
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
@@ -1611,7 +1618,8 @@ float getEspOzoneData(void){
     float ozone_value = 0.0;
     String getOzoneData = "Z&";
     String recievedData = " ";
-
+    bool timeOut = false;
+    double counterIndex = 0;
     //if esp doesn't answer, keep going
     Serial1.setTimeout(3000);
     if(debugging_enabled){
@@ -1619,7 +1627,17 @@ float getEspOzoneData(void){
         writeLogFile("Getting ozone data from esp");
       }
     Serial1.print(getOzoneData);
-    while(!Serial1.available());
+    while(!Serial1.available() && timeOut == false){
+      //delay(1);
+      counterIndex++;
+      if(counterIndex > MAX_COUNTER_INDEX){
+        if(debugging_enabled){
+          Serial.printf("Unable to get ozone data from ESP, counter index: %1.1f\n\r", counterIndex);
+        }
+        timeOut = true;
+      }
+    }
+
 
     delay(10);
 
@@ -1645,7 +1663,7 @@ float getEspOzoneData(void){
         if(debugging_enabled){
           Serial.print("comma index: ");
           Serial.println(index_of_comma);
-          writeLogFile("got a comma");
+          //writeLogFile("got a comma");
 
         }
 
@@ -1655,7 +1673,7 @@ float getEspOzoneData(void){
             if(debugging_enabled){
                 Serial.printf("String[%d]:", comma_count);
                 Serial.println(stringArray[comma_count]);
-                writeLogFile(stringArray[comma_count]);
+                //writeLogFile(stringArray[comma_count]);
             }
             comma_count++;
             from_index = index_of_comma;
@@ -1676,13 +1694,13 @@ float getEspOzoneData(void){
         ozone_value = stringArray[1].toFloat();
         if(debugging_enabled){
             Serial.println("using string array index 1 due to logging");
-            writeLogFile("using string array index 1 due to logging");
+            //writeLogFile("using string array index 1 due to logging");
           }
     }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
         ozone_value = stringArray[0].toFloat();
         if(debugging_enabled){
             Serial.println("using string array index 0, not logging");
-            writeLogFile("using string array index 0, not logging");
+            //writeLogFile("using string array index 0, not logging");
           }
     }
     return ozone_value;
@@ -2050,6 +2068,9 @@ void serialMenu(){
     }else if(incomingByte == 'J'){
         resetESP();
         Serial.println("ESP reset!");
+    }else if(incomingByte == 'K'){
+      Serial.println("Outputting GPS continuously");
+      echo_gps();
     }else if(incomingByte == '1'){
         serial_get_lower_limit();
     }else if(incomingByte == '2'){
@@ -2806,6 +2827,8 @@ void output_serial_menu_options(void){
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
     Serial.println("I:  Adjust average time for uploading");
+    Serial.println("J:  Reset ESP, CO2, Plantower");
+    Serial.println("K:  Continuous serial output of GPS");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
