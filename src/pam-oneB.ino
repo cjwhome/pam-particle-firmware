@@ -260,25 +260,26 @@ float hum_reference = 40;
 
 //function declarations
 void readStoredVars(void);
-void check_cal_file(void);
+void checkCalFile(void);
 size_t readField(File* file, char* str, size_t size, const char* delim);
-void check_wifi_file(void);
+void checkWifiFile(void);
 void serialMenu();
-void serial_get_device_id(void);
-void serial_get_co2_zero(void);
-void serial_get_co2_zero(void);
-void serial_get_co_zero(void);
-void serial_get_co_zero(void);
-void serial_get_ozone_offset(void);
+void serialGetDeviceId(void);
+void serialGetCo2Zero(void);
+void serialGetCo2Zero(void);
+void serialGetCoZero(void);
+void serialGetCoZero(void);
+void serialGetOzoneOffset(void);
 void writeLogFile(String data);
 
-void output_serial_menu_options(void);
-void output_to_cloud(void);
-void echo_gps();
-void read_ozone(void);
-float read_CO(void);
+void outputSerialMenuOptions(void);
+void outputToCloud(void);
+void echoGps();
+void readOzone(void);
+float readCO(void);
 float getEspOzoneData(void);
-void resetESP(void);
+void resetEsp(void);
+void sendEspSerialCom(char *serial_command);
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -290,7 +291,7 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 }
 
-void output_to_cloud(String data){
+void outputToCloud(String data){
     String webhook_data = " ";
     CO_sum += CO_float;
     CO2_sum += CO2_float;
@@ -303,7 +304,7 @@ void output_to_cloud(String data){
         O3_sum /= measurements_to_average;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(read_temperature(), 1) + ",Press: ";
+        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
@@ -705,7 +706,7 @@ void setup()
 
 void loop() {
     if(output_only_particles == 1){
-        output_particles();
+        outputParticles();
     }
     //read temp, press, humidity, and TVOCs
     if(debugging_enabled){
@@ -722,21 +723,21 @@ void loop() {
       }
     }
 
-    read_gps_stream();
+    readGpsStream();
 
 
     //read CO values and apply calibration factors
-    CO_float = read_CO();
+    CO_float = readCO();
 
 
     #if AFE2_en
-        CO_float_2 = read_alpha2();
+        CO_float_2 = readAlpha2();
     #endif
 
     //CO_float_2 += CO_zero_2;
     //CO_float_2 *= CO_slope_2;
 
-    CO2_float = read_CO2();
+    CO2_float = readCO2();
 
     //correct for altitude
     float pressure_correction = bme.pressure/100;
@@ -755,19 +756,19 @@ void loop() {
 
 
     if(ozone_enabled){
-        read_ozone();
+        readOzone();
     }
 
 
     //sound_average = 0;
-    calculate_AQI();
-    sound_average = read_sound();
+    calculateAQI();
+    sound_average = readSound();
     //read PM values and apply calibration factors
     readPlantower();
 
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(read_humidity()/100))/(1 - (read_humidity()/100));
+    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
     if(debugging_enabled){
-        Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, read_humidity()/100);
+        Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
     }
     corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
@@ -831,10 +832,10 @@ void loop() {
 
 }
 
-void calculate_AQI(void){
+void calculateAQI(void){
     //Calculate humidity contribution to IAQ index
         gas_reference = bme.gas_resistance/100;
-      float current_humidity = read_humidity();
+      float current_humidity = readHumidity();
       if(debugging_enabled){
           Serial.printf("gas resistance: %1.0f, humidity: %1.2f\n\r", gas_reference, current_humidity);
 
@@ -869,7 +870,7 @@ void calculate_AQI(void){
 
 }
 
-void echo_gps(){
+void echoGps(){
     char gps_byte = 0;
     while(!Serial.available()){
         if(Serial5.available() > 0){
@@ -880,7 +881,7 @@ void echo_gps(){
     }
 }
 
-void read_gps_stream(void){
+void readGpsStream(void){
     String gps_sentence = "init";
     int stringFound = 0;
     int error = 0;
@@ -974,7 +975,7 @@ void read_gps_stream(void){
 
 }
 
-float read_temperature(void){
+float readTemperature(void){
     float temperature = 0;
     if(new_temperature_sensor_enabled){
         temperature = analogRead(A1);
@@ -999,7 +1000,7 @@ float read_temperature(void){
     //temperature = temperature +
 }
 
-float read_humidity(void){
+float readHumidity(void){
     float humidity = bme.humidity;
     humidity += rh_zero;       //user input zero offset
     humidity *= rh_slope;
@@ -1009,7 +1010,7 @@ float read_humidity(void){
     //temperature = temperature +
 }
 //read sound from
-double read_sound(void){
+double readSound(void){
     int val;
     double sum = 0;
     float average = 0;
@@ -1025,10 +1026,10 @@ double read_sound(void){
     return sum;
 }
 //read Carbon monoxide alphasense sensor
-float read_CO(void){
+float readCO(void){
     float float_offset;
 
-    CO_float = read_alpha1();
+    CO_float = readAlpha1();
     float_offset = CO_zero;
     float_offset /= 1000;
 
@@ -1038,14 +1039,14 @@ float read_CO(void){
     return CO_float;
 }
 
-float read_CO2(void){
+float readCO2(void){
     //read CO2 values and apply calibration factors
     CO2_float = t6713.readPPM();
     CO2_float += CO2_zero;
     CO2_float *= CO2_slope;
     return CO2_float;
 }
-float read_alpha1(void){
+float readAlpha1(void){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -1131,10 +1132,10 @@ float read_alpha1(void){
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(read_temperature() <= 15){
+        if(readTemperature() <= 15){
           correctedCurrent = ((sensorCurrent) - (auxCurrent));
         }
-        else if(read_temperature() <= 25){
+        else if(readTemperature() <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
         else{
@@ -1157,7 +1158,7 @@ float read_alpha1(void){
       return alpha1_ppmraw;
 }
 
-float read_alpha2(void){
+float readAlpha2(void){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -1241,13 +1242,13 @@ float read_alpha2(void){
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(read_temperature() <= 15){
+        if(readTemperature() <= 15){
           correctedCurrent = ((sensorCurrent) - (auxCurrent));
         }
-        else if(read_temperature() <= 25){
+        else if(readTemperature() <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
-        else if(read_temperature() > 25){
+        else if(readTemperature() > 25){
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
         alpha2_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -1275,7 +1276,7 @@ float read_alpha2(void){
       return alpha2_ppmraw;
 }
 
-void read_ozone(void){
+void readOzone(void){
     int tempValue = 0;
     if(ozone_analog_enabled){
         tempValue = analogRead(A0);  // read the analogPin for ozone voltage
@@ -1366,12 +1367,12 @@ void outputDataToESP(void){
     csv_output_string += String(corrected_PM_25, 0) + ",";
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
     csv_output_string += String(PM10Value) + ",";
-    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(read_temperature(), 1);
-    csv_output_string += String(read_temperature(), 1) + ",";
+    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
+    csv_output_string += String(readTemperature(), 1) + ",";
     cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
     csv_output_string += String(bme.pressure / 100.0, 1) + ",";
-    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(read_humidity(), 1);
-    csv_output_string += String(read_humidity(), 1) + ",";
+    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
+    csv_output_string += String(readHumidity(), 1) + ",";
     if(ozone_enabled){
         cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
         csv_output_string += String(O3_float, 1) + ",";
@@ -1407,7 +1408,7 @@ void outputDataToESP(void){
         if(debugging_enabled){
             Serial.println("No wifi from esp so trying cellular function...");
           }
-        output_to_cloud(cloud_output_string);
+        outputToCloud(cloud_output_string);
     }else{
         if(debugging_enabled){
             Serial.println("Sending data to esp to upload via wifi...");
@@ -1500,13 +1501,13 @@ void outputDataToESP(void){
             floatBytes.myFloat = PM10Value;
         }else if(i == 6){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
-            floatBytes.myFloat = read_temperature();
+            floatBytes.myFloat = readTemperature();
         }else if(i == 7){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
             floatBytes.myFloat = bme.pressure / 100.0;
         }else if(i == 8){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
-            floatBytes.myFloat = read_humidity();
+            floatBytes.myFloat = readHumidity();
         }else if(i == 9){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
             floatBytes.myFloat = sound_average;
@@ -1711,7 +1712,7 @@ float getEspOzoneData(void){
 
 /***start of all plantower functions***/
 
-void output_particles(){
+void outputParticles(){
     union{
 	       double myDouble;
 	       unsigned char bytes[sizeof(double)];
@@ -1737,7 +1738,7 @@ void output_particles(){
 
         }
         readPlantower();
-        read_gps_stream();
+        readGpsStream();
         CO2_float = t6713.readPPM();
 
         CO2_float += CO2_zero;
@@ -1748,7 +1749,7 @@ void output_particles(){
             pressure_correction /= SEALEVELPRESSURE_HPA;
             CO2_float *= pressure_correction;
         }
-        pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(read_humidity()/100))/(1 - (read_humidity()/100));
+        pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
         corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
         byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
@@ -1941,37 +1942,37 @@ void serialMenu(){
     while(!Serial.available());
     incomingByte = Serial.read();
     if(incomingByte == 'a'){
-        serial_get_co2_slope();
+        serialGetCo2Slope();
     }else if(incomingByte == 'b'){
-        serial_get_co2_zero();
+        serialGetCo2Zero();
     }else if(incomingByte == 'c'){
-        serial_get_co_slope();
+        serialGetCoSlope();
     }else if(incomingByte == 'd'){
-        serial_get_co_zero();
+        serialGetCoZero();
     }else if(incomingByte == 'e'){
-        serial_get_pm1_slope();
+        serialGetPm1Slope();
     }else if(incomingByte == 'f'){
-         serial_get_pm1_zero();
+         serialGetPm1Zero();
     }else if(incomingByte == 'g'){
-        serial_get_pm25_slope();
+        serialGetPm25Slope();
     }else if(incomingByte == 'h'){
-        serial_get_pm25_zero();
+        serialGetPm25Zero();
     }else if(incomingByte == 'i'){
-        serial_get_pm10_slope();
+        serialGetPm10Slope();
     }else if(incomingByte == 'j'){
-        serial_get_pm10_zero();
+        serialGetPm10Zero();
     }else if(incomingByte == 'k'){
-        serial_get_temperature_slope();
+        serialGetTemperatureSlope();
     }else if(incomingByte == 'l'){
-        serial_get_temperature_zero();
+        serialGetTemperatureZero();
     }else if(incomingByte == 'm'){
-        serial_get_pressure_slope();
+        serialGetPressureSlope();
     }else if(incomingByte == 'n'){
-        serial_get_pressure_zero();
+        serialGetPressureZero();
     }else if(incomingByte == 'o'){
-        serial_get_humidity_slope();
+        serialGetHumiditySlope();
     }else if(incomingByte == 'p'){
-        serial_get_humidity_zero();
+        serialGetHumidityZero();
     }else if(incomingByte == 'q'){
         Serial.println("Serial debugging enabled.");
         debugging_enabled = 1;
@@ -1983,13 +1984,13 @@ void serialMenu(){
     }else if(incomingByte == 's'){
         Serial.println(String(HEADER_STRING));
     }else if(incomingByte == 't'){
-        serial_get_time_date();
+        serialGetTimeDate();
     }else if(incomingByte == 'u'){
-        serial_get_zone();
+        serialGetZone();
     }else if(incomingByte == 'v'){
-        serial_get_device_id();
+        serialGetDeviceId();
     }else if(incomingByte == 'w'){
-        serial_get_wifi_credentials();
+        serialGetWifiCredentials();
     }else if(incomingByte == 'y'){
         if(serial_cellular_enabled == 0){
             Serial.println("Enabling Cellular.");
@@ -2064,17 +2065,17 @@ void serialMenu(){
         EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
 
     }else if(incomingByte == 'I'){      //disable analog reading of ozone and read from esp
-        serial_get_average_time();
+        serialGetAverageTime();
     }else if(incomingByte == 'J'){
         resetESP();
         Serial.println("ESP reset!");
     }else if(incomingByte == 'K'){
       Serial.println("Outputting GPS continuously");
-      echo_gps();
+      echoGps();
     }else if(incomingByte == '1'){
-        serial_get_lower_limit();
+        serialGetLowerLimit();
     }else if(incomingByte == '2'){
-        serial_get_upper_limit();
+        serialGetUpperLimit();
     }else if(incomingByte == '3'){
         Serial.print("APP Version: ");
         Serial.println(APP_VERSION);
@@ -2121,9 +2122,9 @@ void serialMenu(){
         Serial.println(systemStatus);
 
     }else if(incomingByte == '9'){
-        serial_increase_charge_current();
+        serialIncreaseChargeCurrent();
     }else if(incomingByte == 'A'){
-        read_alpha1_constantly();
+        readAlpha1Constantly();
     }else if(incomingByte == 'B'){
         if(output_only_particles == 1){
             output_only_particles = 0;
@@ -2147,14 +2148,14 @@ void serialMenu(){
         }
 
     }else if(incomingByte == '?'){
-        output_serial_menu_options();
+        outputSerialMenuOptions();
     }
   }
   Serial.println("Exiting serial menu...");
 
 }
 
-void serial_increase_charge_current(void){
+void serialIncreaseChargeCurrent(void){
     int total_current = 0;
     bool bit7 = 0;
     bool bit6 = 0;
@@ -2227,7 +2228,7 @@ void serial_increase_charge_current(void){
     Serial.printf("new charge current of %d mA\n\r", total_current);
 }
 
-void serial_get_wifi_credentials(void){
+void serialGetWifiCredentials(void){
     Serial.print("Current stored ssid: ");
     Serial.println(ssid);
     Serial.print("Current stored password: ");
@@ -2266,7 +2267,7 @@ void serial_get_wifi_credentials(void){
     }
 }
 
-void serial_get_device_id(void){
+void serialGetDeviceId(void){
 
     Serial.println();
     Serial.print("Current Device ID:");
@@ -2295,7 +2296,7 @@ void serial_get_device_id(void){
     }
 }
 
-void serial_get_time_date(void){
+void serialGetTimeDate(void){
     Serial.println("Enter new Device time and date (10 digit epoch timestamp):");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -2310,7 +2311,7 @@ void serial_get_time_date(void){
     }
 }
 
-void serial_get_zone(void){
+void serialGetZone(void){
     Serial.println("Enter new Device time zone (-12.0 to 14.0)");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
@@ -2326,7 +2327,7 @@ void serial_get_zone(void){
     }
 }
 
-void serial_get_average_time(void){
+void serialGetAverageTime(void){
     Serial.println();
     Serial.print("Current Average: ");
     Serial.print(measurements_to_average);
@@ -2347,7 +2348,7 @@ void serial_get_average_time(void){
     }
 }
 
-void serial_get_co2_slope(void){
+void serialGetCo2Slope(void){
 
     Serial.println();
     Serial.print("Current CO2 slope:");
@@ -2372,7 +2373,7 @@ void serial_get_co2_slope(void){
     }
 }
 
-void serial_get_co2_zero(void){
+void serialGetCo2Zero(void){
     Serial.println();
     Serial.print("Current CO2 zero:");
     Serial.print(CO2_zero);
@@ -2392,7 +2393,7 @@ void serial_get_co2_zero(void){
     }
 }
 
-void serial_get_co_slope(void){
+void serialGetCoSlope(void){
 
     Serial.println();
     Serial.print("Current CO slope:");
@@ -2417,7 +2418,7 @@ void serial_get_co_slope(void){
     }
 }
 
-void serial_get_co_zero(void){
+void serialGetCoZero(void){
     Serial.println();
     Serial.print("Current CO zero:");
     Serial.print(CO_zero);
@@ -2437,7 +2438,7 @@ void serial_get_co_zero(void){
     }
 }
 
-void serial_get_pm1_slope(void){
+void serialGetPm1Slope(void){
     Serial.println();
     Serial.print("Current PM1 slope:");
     Serial.print(String(PM_1_slope, 2));
@@ -2461,7 +2462,7 @@ void serial_get_pm1_slope(void){
     }
 }
 
-void serial_get_pm1_zero(void){
+void serialGetPm1Zero(void){
     Serial.println();
     Serial.print("Current PM1 zero:");
     Serial.print(PM_1_zero);
@@ -2481,7 +2482,7 @@ void serial_get_pm1_zero(void){
     }
 }
 
-void serial_get_pm25_slope(void){
+void serialGetPm25Slope(void){
     Serial.println();
     Serial.print("Current PM2.5 slope:");
     Serial.print(String(PM_25_slope, 2));
@@ -2505,7 +2506,7 @@ void serial_get_pm25_slope(void){
     }
 }
 
-void serial_get_pm25_zero(void){
+void serialGetPm25Zero(void){
     Serial.println();
     Serial.print("Current PM2.5 zero:");
     Serial.print(PM_25_zero);
@@ -2525,7 +2526,7 @@ void serial_get_pm25_zero(void){
     }
 }
 
-void serial_get_pm10_slope(void){
+void serialGetPm10Slope(void){
     Serial.println();
     Serial.print("Current PM10 slope:");
     Serial.print(String(PM_10_slope, 2));
@@ -2549,7 +2550,7 @@ void serial_get_pm10_slope(void){
     }
 }
 
-void serial_get_pm10_zero(void){
+void serialGetPm10Zero(void){
     Serial.println();
     Serial.print("Current PM10 zero:");
     Serial.print(PM_10_zero);
@@ -2569,7 +2570,7 @@ void serial_get_pm10_zero(void){
     }
 }
 
-void serial_get_temperature_slope(void){
+void serialGetTemperatureSlope(void){
     Serial.println();
     Serial.print("Current Temperature slope:");
     Serial.print(String(temp_slope, 2));
@@ -2593,7 +2594,7 @@ void serial_get_temperature_slope(void){
     }
 }
 
-void serial_get_temperature_zero(void){
+void serialGetTemperatureZero(void){
     Serial.println();
     Serial.print("Current Temperature zero:");
     Serial.print(temp_zero);
@@ -2613,7 +2614,7 @@ void serial_get_temperature_zero(void){
     }
 }
 
-void serial_get_pressure_slope(void){
+void serialGetPressureSlope(void){
     Serial.println();
     Serial.print("Current Pressure slope:");
     Serial.print(String(pressure_slope, 2));
@@ -2637,7 +2638,7 @@ void serial_get_pressure_slope(void){
     }
 }
 
-void serial_get_pressure_zero(void){
+void serialGetPressureZero(void){
     Serial.println();
     Serial.print("Current Pressure zero:");
     Serial.print(pressure_zero);
@@ -2657,7 +2658,7 @@ void serial_get_pressure_zero(void){
     }
 }
 
-void serial_get_humidity_slope(void){
+void serialGetHumiditySlope(void){
     Serial.println();
     Serial.print("Current RH slope:");
     Serial.print(String(rh_slope, 2));
@@ -2681,7 +2682,7 @@ void serial_get_humidity_slope(void){
     }
 }
 
-void serial_get_humidity_zero(void){
+void serialGetHumidityZero(void){
     Serial.println();
     Serial.print("Current RH zero:");
     Serial.print(rh_zero);
@@ -2701,7 +2702,7 @@ void serial_get_humidity_zero(void){
     }
 }
 
-void serial_get_ozone_offset(void){
+void serialGetOzoneOffset(void){
     Serial.println();
     Serial.print("Current O3 analog offset:");
     Serial.print(ozone_offset);
@@ -2721,7 +2722,7 @@ void serial_get_ozone_offset(void){
     }
 }
 
-void serial_get_lower_limit(void){
+void serialGetLowerLimit(void){
     Serial.println();
     Serial.print("Current lower limit:");
     Serial.println(gas_lower_limit);
@@ -2748,7 +2749,7 @@ void serial_get_lower_limit(void){
         Serial.println("\n\rIncorrect password!");
     }
 }
-void serial_get_upper_limit(void){
+void serialGetUpperLimit(void){
     Serial.println();
     Serial.print("Current upper limit:");
     Serial.println(gas_upper_limit);
@@ -2776,13 +2777,13 @@ void serial_get_upper_limit(void){
     }
 }
 
-void read_alpha1_constantly(void){
+void readAlpha1Constantly(void){
     while(!Serial.available()){
-        CO_float = read_CO();
+        CO_float = readCO();
         Serial.printf("CO: %1.3f ppm\n\r", CO_float);
     }
 }
-void output_serial_menu_options(void){
+void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");
     Serial.println("b:  Adjust CO2 zero");
