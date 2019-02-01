@@ -30,7 +30,7 @@
 #include "SdFat.h"
 
 #define APP_VERSION 4
-#define BUILD_VERSION 0
+#define BUILD_VERSION 1
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
