@@ -167,6 +167,8 @@ Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
 GPS gps;
 PMIC pmic;
+//MicroOLED
+MicroOLED oled(MODE_I2C, B3, 1);  //1 is that the address is open
 
 //sdcard
 SdFat sd;
