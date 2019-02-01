@@ -541,6 +541,11 @@ void setup()
     //initialize main serial port for debug output
     Serial.begin(9600);
 
+    //setup the oled
+    oled.begin();    // Initialize the OLED
+    oled.clear(ALL); // Clear the display's internal memory
+    oled.display();  // Display what's in the buffer (splashscreen)
+
     // Setup the PMIC manually (resets the BQ24195 charge controller)
     // REG00 Input Source Control Register  (disabled)
     writeRegister(0, 0b00110000);  //0x30
@@ -777,7 +782,7 @@ void loop() {
 
     //getEspWifiStatus();
     outputDataToESP();
-
+    outputGpsToOLED();
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
           sample_counter = 0;
@@ -1579,6 +1584,72 @@ void outputDataToESP(void){
 
 }
 
+void outputDataToOLED(void){
+    // Demonstrate font 3. 12x48. Stopwatch demo.
+    oled.setFontType(0);
+
+    oled.clear(PAGE);     // Clear the display
+    oled.setCursor(0, 0); // Set cursor to top-left
+    oled.print("T:");
+    oled.print(readTemperature(), 1);
+    oled.print(" C");
+    oled.setCursor(0, 8);
+    oled.print("RH:");
+    oled.print(readHumidity(), 1);
+    oled.print(" %");
+    oled.setCursor(0, 16);
+    oled.print("P:");
+    oled.print(bme.pressure/100, 1);
+    oled.print(" m");
+
+    oled.setCursor(0,32);
+    oled.print("IP Address:");
+      oled.setCursor(0, 40);
+      //oled.print("IP:");
+      //oled.print(wifiIpAddress);
+
+
+    oled.display();       // Draw on the screen
+
+}
+
+
+void outputGpsToOLED(void){
+    time_t time = Time.now();
+    Time.setFormat(TIME_FORMAT_ISO8601_FULL);
+    readGpsStream();
+    oled.setFontType(0);
+    oled.clear(PAGE);     // Clear the display
+    oled.setCursor(0, 0); // Set cursor to top-left
+    oled.print("Lat:");
+    oled.print(String(gps.get_latitude()));
+    oled.setCursor(0,8);
+    oled.print("Long:");
+    oled.print(String(gps.get_longitude()));
+    oled.setCursor(0,16);
+    oled.print("Time:");
+    oled.print(String(Time.format(time, "%d/%m/%y,%H:%M:%S")));
+    /*oled.print("T:");
+    oled.print(ambient_temperature, 1);
+    oled.print(" C");
+    oled.setCursor(0, 8);
+    oled.print("RH:");
+    oled.print(bme.humidity, 1);
+    oled.print(" %");
+    oled.setCursor(0, 16);
+    oled.print("P:");
+    oled.print(bme.pressure/100, 1);
+    oled.print(" m");
+
+    oled.setCursor(0,32);
+    oled.print("IP Address:");
+      oled.setCursor(0, 40);
+      //oled.print("IP:");
+      oled.print(wifiIpAddress);*/
+
+
+    oled.display();       // Draw on the screen
+}
 //ask the ESP if it has a wifi connection
 void getEspWifiStatus(void){
     //command to ask esp for wifi status
