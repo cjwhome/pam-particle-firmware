@@ -26,6 +26,7 @@
 #include "Serial5/Serial5.h"
 #include "gps.h"
 #include "inttypes.h"
+#include "SparkFunMicroOLED.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
