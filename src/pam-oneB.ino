@@ -30,7 +30,7 @@
 #include "SdFat.h"
 
 #define APP_VERSION 4
-#define BUILD_VERSION 1
+#define BUILD_VERSION 2
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -337,6 +337,13 @@ void outputToCloud(String data){
 //read all eeprom stored variables
 void readStoredVars(void){
     int tempValue;
+    //just changing the rh calibration for temporary!! -- remove me!!
+    //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
+    tempValue = 14; //
+    EEPROM.put(RH_ZERO_MEM_ADDRESS, tempValue);
+    tempValue = 187;
+    EEPROM.put(RH_SLOPE_MEM_ADDRESS, tempValue);
+
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
     if(DEVICE_id == -1){
         DEVICE_id = 555;
@@ -770,7 +777,7 @@ void loop() {
     if(debugging_enabled){
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
     }
-    corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
+    corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -993,8 +1000,9 @@ float readTemperature(void){
         temperature = bme.temperature;
     }
     //temperature *= 100;
-    temperature += temp_zero;       //user input zero offset
+
     temperature *= temp_slope;
+    temperature += temp_zero;       //user input zero offset
 
     return temperature;
     //temperature = temperature +
@@ -1002,8 +1010,9 @@ float readTemperature(void){
 
 float readHumidity(void){
     float humidity = bme.humidity;
-    humidity += rh_zero;       //user input zero offset
+
     humidity *= rh_slope;
+    humidity += rh_zero;       //user input zero offset
     if(humidity > 100)
         humidity = 100;
     return humidity;
@@ -1033,8 +1042,8 @@ float readCO(void){
     float_offset = CO_zero;
     float_offset /= 1000;
 
-    CO_float += float_offset;
     CO_float *= CO_slope;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -1042,8 +1051,9 @@ float readCO(void){
 float readCO2(void){
     //read CO2 values and apply calibration factors
     CO2_float = t6713.readPPM();
-    CO2_float += CO2_zero;
+
     CO2_float *= CO2_slope;
+    CO2_float += CO2_zero;
     return CO2_float;
 }
 float readAlpha1(void){
