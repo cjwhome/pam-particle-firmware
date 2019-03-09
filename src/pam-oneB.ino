@@ -1391,7 +1391,7 @@ void outputDataToESP(void){
     cloud_output_string += String(gps.get_latitude());
 
     cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
-    if(gps.get_ewIndicator() == 0){
+    if(gps.get_ewIndicator() == 0x01){
         csv_output_string += "-";
         cloud_output_string += "-";
     }
