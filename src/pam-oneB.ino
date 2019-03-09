@@ -85,6 +85,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_A_OR_D_MEM_ADDRESS 108
 #define OZONE_OFFSET_MEM_ADDRESS 112
 #define MEASUREMENTS_TO_AVG_MEM_ADDRESS 116
+#define MAX_MEM_ADDRESS 116
 
 
 //max and min values
@@ -141,7 +142,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
 int lmp91000_2_en = B2;
-int cellular_en = D5;
+int fiveVolt_en = D5;
 int plantower_en = B4;
 int power_led_en = D6;
 int kill_power = WKP;
@@ -280,6 +281,7 @@ float readCO(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
+int remoteReadStoredVars(String mem_address);
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -334,19 +336,43 @@ void outputToCloud(String data){
     }
 }
 
+int remoteWriteStoredVars(String addressAndValue){
+/*    uint16_t tempValue = 0;
+    int numerical_mem_address = mem_address.toInt();
+    int index_of_comma = addressAndValue.indexOf(',');
+
+    String addressString = addressAndValue.substring(0, index_of_comma);
+
+    if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
+        //EEPROM.put(numerical_mem_address, tempValue);
+        return tempValue;
+    }else{
+        return -1;
+    }*/
+    return 1;
+}
+
+int remoteReadStoredVars(String mem_address){
+    uint16_t tempValue = 0;
+    int numerical_mem_address = mem_address.toInt();
+    if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
+        EEPROM.get(numerical_mem_address, tempValue);
+        return tempValue;
+    }else{
+        return -1;
+    }
+}
 //read all eeprom stored variables
 void readStoredVars(void){
     int tempValue;
     //just changing the rh calibration for temporary!! -- remove me!!
     //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
-    tempValue = 14; //
-    EEPROM.put(RH_ZERO_MEM_ADDRESS, tempValue);
-    tempValue = 187;
-    EEPROM.put(RH_SLOPE_MEM_ADDRESS, tempValue);
+
+
 
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
     if(DEVICE_id == -1){
-        DEVICE_id = 555;
+        DEVICE_id = 1555;
     }
 
     EEPROM.get(CO2_SLOPE_MEM_ADDRESS, tempValue);
@@ -507,7 +533,7 @@ void setup()
     //setup i/o
     pinMode(lmp91000_1_en, OUTPUT);
     pinMode(lmp91000_2_en, OUTPUT);
-    pinMode(cellular_en, INPUT);
+    pinMode(fiveVolt_en, OUTPUT);
     pinMode(plantower_en, OUTPUT);
     pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
@@ -526,9 +552,13 @@ void setup()
     digitalWrite(esp_wroom_en, HIGH);
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
+    digitalWrite(fiveVolt_en, HIGH);
 
     //read all stored variables (calibration parameters)
     readStoredVars();
+
+    // register the cloud function
+    Particle.function("geteepromdata", remoteReadStoredVars);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -1011,8 +1041,8 @@ float readTemperature(void){
 float readHumidity(void){
     float humidity = bme.humidity;
 
-    humidity *= rh_slope;
-    humidity += rh_zero;       //user input zero offset
+    //humidity *= rh_slope;
+    //humidity += rh_zero;       //user input zero offset
     if(humidity > 100)
         humidity = 100;
     return humidity;
@@ -1922,6 +1952,7 @@ void goToSleep(void){
   digitalWrite(esp_wroom_en, LOW);
   digitalWrite(blower_en, LOW);
   digitalWrite(co2_en, LOW);
+  //digitalWrite(fiveVolt_en, LOW);
   System.sleep(D4,FALLING);
   delay(500);
   System.reset();
