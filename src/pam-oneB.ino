@@ -30,7 +30,7 @@
 #include "SdFat.h"
 
 #define APP_VERSION 4
-#define BUILD_VERSION 0
+#define BUILD_VERSION 2
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -85,6 +85,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_A_OR_D_MEM_ADDRESS 108
 #define OZONE_OFFSET_MEM_ADDRESS 112
 #define MEASUREMENTS_TO_AVG_MEM_ADDRESS 116
+#define MAX_MEM_ADDRESS 116
 
 
 //max and min values
@@ -141,7 +142,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
 int lmp91000_2_en = B2;
-int cellular_en = D5;
+int fiveVolt_en = D5;
 int plantower_en = B4;
 int power_led_en = D6;
 int kill_power = WKP;
@@ -270,6 +271,7 @@ void serialGetCo2Zero(void);
 void serialGetCoZero(void);
 void serialGetCoZero(void);
 void serialGetOzoneOffset(void);
+void serialResetSettings(void);
 void writeLogFile(String data);
 
 void outputSerialMenuOptions(void);
@@ -280,6 +282,8 @@ float readCO(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
+int remoteReadStoredVars(String mem_address);
+void writeDefaultSettings(void);
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -334,12 +338,47 @@ void outputToCloud(String data){
     }
 }
 
+//send memory address and value separated by a comma
+int remoteWriteStoredVars(String addressAndValue){
+    uint16_t tempValue = 0;
+
+    int index_of_comma = addressAndValue.indexOf(',');
+
+    String addressString = addressAndValue.substring(0, index_of_comma - 1);
+
+    int numerical_mem_address = mem_address.toInt();
+
+    if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
+        //EEPROM.put(numerical_mem_address, tempValue);
+        return tempValue;
+    }else{
+        return -1;
+    }
+    return 1;
+}
+
+int remoteReadStoredVars(String mem_address){
+    uint16_t tempValue = 0;
+    int numerical_mem_address = mem_address.toInt();
+    if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
+        EEPROM.get(numerical_mem_address, tempValue);
+        return tempValue;
+    }else{
+        return -1;
+    }
+}
 //read all eeprom stored variables
 void readStoredVars(void){
     int tempValue;
+    //just changing the rh calibration for temporary!! -- remove me!!
+    //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
+
+
+
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
     if(DEVICE_id == -1){
-        DEVICE_id = 555;
+        DEVICE_id = 1555;
+        writeDefaultSettings();
     }
 
     EEPROM.get(CO2_SLOPE_MEM_ADDRESS, tempValue);
@@ -415,7 +454,43 @@ void readStoredVars(void){
     }
 }
 
+void writeDefaultSettings(void){
+    EEPROM.put(DEVICE_ID_MEM_ADDRESS, 1555);
 
+
+    EEPROM.put(CO2_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(CO_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(TEMP_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(PRESSURE_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(RH_SLOPE_MEM_ADDRESS, 100);
+
+    EEPROM.put(CO2_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(CO_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(PM_1_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(PM_25_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(PM_10_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(TEMP_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(PRESSURE_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(RH_ZERO_MEM_ADDRESS, 0);
+
+    EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, 0);
+    EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, 0);
+    EEPROM.put(OZONE_EN_MEM_ADDRESS, 0);
+    EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+    EEPROM.put(GAS_LOWER_LIMIT_MEM_ADDRESS, 1000);
+    EEPROM.put(GAS_UPPER_LIMIT_MEM_ADDRESS, 10000);
+    EEPROM.put(TIME_ZONE_MEM_ADDRESS, -7);
+    Time.zone(tempValue);
+    EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, 0);
+    EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, 0);
+    EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, 1);
+    EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, 0);
+    EEPROM.put(OZONE_OFFSET_MEM_ADDRESS,0);
+    EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, 1);
+}
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
   char ch;
@@ -500,7 +575,7 @@ void setup()
     //setup i/o
     pinMode(lmp91000_1_en, OUTPUT);
     pinMode(lmp91000_2_en, OUTPUT);
-    pinMode(cellular_en, INPUT);
+    pinMode(fiveVolt_en, OUTPUT);
     pinMode(plantower_en, OUTPUT);
     pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
@@ -519,9 +594,13 @@ void setup()
     digitalWrite(esp_wroom_en, HIGH);
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
+    digitalWrite(fiveVolt_en, HIGH);
 
     //read all stored variables (calibration parameters)
     readStoredVars();
+
+    // register the cloud function
+    Particle.function("geteepromdata", remoteReadStoredVars);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -591,17 +670,22 @@ void setup()
 
     //setup the AFE
     Serial.println("Starting LMP91000 CO initialization");
-    writeLogFile("Starting LMP91000 CO initialization");
+    if(debugging_enabled)
+        writeLogFile("Starting LMP91000 CO initialization");
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_1_en, LOW); //enable the chip
 
     if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for CO");
-          writeLogFile("Couldn't communicate with LMP91000 for CO");
+          if(debugging_enabled){
+            writeLogFile("Couldn't communicate with LMP91000 for CO");
+          }
     }else{
           Serial.println("Initialized LMP91000 for CO");
-          writeLogFile("Initialized LMP91000 for CO");
+          if(debugging_enabled){
+            writeLogFile("Initialized LMP91000 for CO");
+          }
           /*Serial.print("STATUS: ");
           Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
           Serial.print("TIACN: ");
@@ -620,7 +704,8 @@ void setup()
       //digitalWrite(red_status_led, LOW);
       //delay(200);
       Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
-      writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
+      if(debugging_enabled)
+        writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
     }
     else{
       ads1.setGain(GAIN_TWOTHIRDS);
@@ -629,7 +714,8 @@ void setup()
     //AFE 2 setup
     #if AFE2_en
     Serial.println("Starting LMP91000 2 initialization");
-    writeLogFile("Starting LMP91000 2 initialization");
+    if(debugging_enabled)
+        writeLogFile("Starting LMP91000 2 initialization");
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_2_en, LOW); //enable the chip
 
@@ -639,7 +725,8 @@ void setup()
           writeLogFile("Couldn't communicate with LMP91000 for 2");
     }else{
           Serial.println("Initialized LMP91000 for 2");
-          writeLogFile("Initialized LMP91000 for 2");
+          if(debugging_enabled)
+            writeLogFile("Initialized LMP91000 for 2");
           /*Serial.print("STATUS: ");
           Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
           Serial.print("TIACN: ");
@@ -658,7 +745,8 @@ void setup()
       //digitalWrite(red_status_led, LOW);
       //delay(200);
       Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
-      writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
+      if(debugging_enabled)
+        writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
     }
     else{
       ads2.setGain(GAIN_TWOTHIRDS);
@@ -667,16 +755,19 @@ void setup()
 
     if (!bme.begin()) {
       Serial.println("Could not find a valid BME680 sensor, check wiring!");
-      writeLogFile("Could not find a valid BME680 sensor, check wiring!");
+      if(debugging_enabled)
+          writeLogFile("Could not find a valid BME680 sensor, check wiring!");
       //while (1);
     }else{
       Serial.println("Initialized BME Sensor");
-      writeLogFile("Initialized BME Sensor");
+      if(debugging_enabled)
+        writeLogFile("Initialized BME Sensor");
     }
 
     if(!t6713.begin()){
       Serial.println("Could not find a valid T6713 sensor, check wiring!");
-      writeLogFile("Could not find a valid T6713");
+      if(debugging_enabled)
+          writeLogFile("Could not find a valid T6713");
     }
   //Serial.println("before bme setup");
     // Set up oversampling and filter initialization
@@ -770,7 +861,9 @@ void loop() {
     if(debugging_enabled){
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
     }
-    corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
+    corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
+    corrected_PM_25 = corrected_PM_25 + PM_25_zero;
+    corrected_PM_25 = corrected_PM_25 * PM_25_slope;
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -993,8 +1086,9 @@ float readTemperature(void){
         temperature = bme.temperature;
     }
     //temperature *= 100;
-    temperature += temp_zero;       //user input zero offset
+
     temperature *= temp_slope;
+    temperature += temp_zero;       //user input zero offset
 
     return temperature;
     //temperature = temperature +
@@ -1002,8 +1096,9 @@ float readTemperature(void){
 
 float readHumidity(void){
     float humidity = bme.humidity;
-    humidity += rh_zero;       //user input zero offset
-    humidity *= rh_slope;
+
+    //humidity *= rh_slope;
+    //humidity += rh_zero;       //user input zero offset
     if(humidity > 100)
         humidity = 100;
     return humidity;
@@ -1033,8 +1128,8 @@ float readCO(void){
     float_offset = CO_zero;
     float_offset /= 1000;
 
-    CO_float += float_offset;
     CO_float *= CO_slope;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -1042,8 +1137,9 @@ float readCO(void){
 float readCO2(void){
     //read CO2 values and apply calibration factors
     CO2_float = t6713.readPPM();
-    CO2_float += CO2_zero;
+
     CO2_float *= CO2_slope;
+    CO2_float += CO2_zero;
     return CO2_float;
 }
 float readAlpha1(void){
@@ -1912,6 +2008,7 @@ void goToSleep(void){
   digitalWrite(esp_wroom_en, LOW);
   digitalWrite(blower_en, LOW);
   digitalWrite(co2_en, LOW);
+  digitalWrite(fiveVolt_en, LOW);
   System.sleep(D4,FALLING);
   delay(500);
   System.reset();
@@ -2072,6 +2169,8 @@ void serialMenu(){
     }else if(incomingByte == 'K'){
       Serial.println("Outputting GPS continuously");
       echoGps();
+    }else if(incomingByte == 'L'){
+      serialResetSettings();
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
@@ -2291,6 +2390,22 @@ void serialGetDeviceId(void){
         }else{
             Serial.println("\n\rInvalid value!");
         }
+    }else{
+        Serial.println("\n\rIncorrect password!");
+    }
+}
+
+void serialResetSettings(void){
+
+    Serial.println();
+    Serial.println("Please enter password in order to apply default settings");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+
+
+    if(tempString == "bould"){
+        Serial.println("Password correct, resetting all settings to default!  Please reset your ID to the one shown on your enclosure.");
+        writeDefaultSettings();
     }else{
         Serial.println("\n\rIncorrect password!");
     }
@@ -2830,6 +2945,7 @@ void outputSerialMenuOptions(void){
     Serial.println("I:  Adjust average time for uploading");
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");
+    Serial.println("L:  Write default settings");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
