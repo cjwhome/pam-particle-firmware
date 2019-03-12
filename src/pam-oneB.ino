@@ -272,6 +272,7 @@ void serialGetCoZero(void);
 void serialGetCoZero(void);
 void serialGetOzoneOffset(void);
 void serialResetSettings(void);
+void serialTestRemoteFunction(void);
 void writeLogFile(String data);
 
 void outputSerialMenuOptions(void);
@@ -282,6 +283,7 @@ float readCO(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
+int remoteWriteStoredVars(String addressAndValue);
 int remoteReadStoredVars(String mem_address);
 void writeDefaultSettings(void);
 
@@ -347,7 +349,10 @@ int remoteWriteStoredVars(String addressAndValue){
     String addressString = addressAndValue.substring(0, index_of_comma);
     String valueString = addressAndValue.substring(index_of_comma + 1);
 
-    int numerical_mem_address = memAddress.toInt();
+    Serial.printf("address substring: %s\n\r", addressString);
+    Serial.printf("Value substring: %s\n\r", valueString);
+
+    int numerical_mem_address = addressString.toInt();
     int numerical_value = valueString.toInt();
 
     if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
@@ -2173,6 +2178,9 @@ void serialMenu(){
       echoGps();
     }else if(incomingByte == 'L'){
       serialResetSettings();
+    }else if(incomingByte == 'M'){
+      serialTestRemoteFunction();
+
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
@@ -2256,6 +2264,17 @@ void serialMenu(){
 
 }
 
+void serialTestRemoteFunction(void){
+  Serial.println("Enter string (address,value)");
+  String tempString = Serial.readStringUntil('\r');
+  int response = remoteWriteStoredVars(tempString);
+  if(response){
+    Serial.println("sucess in writing");
+  }else{
+    Serial.println("failed writing string");
+  }
+
+}
 void serialIncreaseChargeCurrent(void){
     int total_current = 0;
     bool bit7 = 0;
