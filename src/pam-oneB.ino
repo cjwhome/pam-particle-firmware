@@ -344,17 +344,19 @@ int remoteWriteStoredVars(String addressAndValue){
 
     int index_of_comma = addressAndValue.indexOf(',');
 
-    String addressString = addressAndValue.substring(0, index_of_comma - 1);
+    String addressString = addressAndValue.substring(0, index_of_comma);
+    String valueString = addressAndValue.substring(index_of_comma + 1);
 
-    int numerical_mem_address = mem_address.toInt();
+    int numerical_mem_address = memAddress.toInt();
+    int numerical_value = valueString.toInt();
 
     if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
-        //EEPROM.put(numerical_mem_address, tempValue);
-        return tempValue;
+        EEPROM.put(numerical_mem_address, numerical_value);
+        return 1;
     }else{
         return -1;
     }
-    return 1;
+
 }
 
 int remoteReadStoredVars(String mem_address){
