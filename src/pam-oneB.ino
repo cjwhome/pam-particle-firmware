@@ -46,6 +46,7 @@
 #define TMP36_VPDC 0.01 //10mV per degree C
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
+#define ALPHA_ADC_READ_AMOUNT 10
 //float ads_bitmv = 0.1920;
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
@@ -187,6 +188,7 @@ int counter = 0;
 float CO_float = 0;
 float CO_float_2 = 0;
 float CO2_float = 0;
+float CO2_float_previous = 0;
 int CO2_value = 0;
 float O3_float = 0;
 int DEVICE_id = 555;       //default value
@@ -345,7 +347,8 @@ int remoteWriteStoredVars(String addressAndValue){
     uint16_t tempValue = 0;
 
     int index_of_comma = addressAndValue.indexOf(',');
-
+    Serial.print("Full address and value substring: ");
+    Serial.println(addressAndValue);
     String addressString = addressAndValue.substring(0, index_of_comma);
     String valueString = addressAndValue.substring(index_of_comma + 1);
 
@@ -836,6 +839,11 @@ void loop() {
     //CO_float_2 *= CO_slope_2;
 
     CO2_float = readCO2();
+    if(CO2_float == 0){
+        CO2_float = CO2_float_previous;
+    }else{
+        CO2_float_previous = CO2_float;
+    }
 
     //correct for altitude
     float pressure_correction = bme.pressure/100;
@@ -1215,17 +1223,17 @@ float readAlpha1(void){
         A1_aux = 0;
         A2_temperature = 0;
         half_Vref = 0;
-        for(int i=0; i<100; i++){
+        for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
           A0_gas += ads1.readADC_SingleEnded(0); //gas
           A1_aux += ads1.readADC_SingleEnded(1); //aux out
           A2_temperature += ads1.readADC_SingleEnded(2); //temperature
           half_Vref += ads1.readADC_SingleEnded(3); //half of Vref
         }
 
-        A0_gas = A0_gas / 100;
-        A1_aux = A1_aux / 100;
-        A2_temperature = A2_temperature / 100;
-        half_Vref = half_Vref / 100;
+        A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
+        A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
+        A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
+        half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
@@ -2015,7 +2023,7 @@ void goToSleep(void){
   digitalWrite(esp_wroom_en, LOW);
   digitalWrite(blower_en, LOW);
   digitalWrite(co2_en, LOW);
-  digitalWrite(fiveVolt_en, LOW);
+  //digitalWrite(fiveVolt_en, LOW);
   System.sleep(D4,FALLING);
   delay(500);
   System.reset();
@@ -2265,7 +2273,9 @@ void serialMenu(){
 }
 
 void serialTestRemoteFunction(void){
+
   Serial.println("Enter string (address,value)");
+  Serial.setTimeout(50000);
   String tempString = Serial.readStringUntil('\r');
   int response = remoteWriteStoredVars(tempString);
   if(response){
