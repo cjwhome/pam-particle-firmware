@@ -243,6 +243,9 @@ float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according
 int measurements_to_average = 0;
 int battery_threshold_enable;
 
+int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
+
+
 //serial menu variables
 int addr;
 uint16_t value;
@@ -616,7 +619,6 @@ void setup()
     //Serial.print("Starting value of inputCurrentLimit: ");
     //Serial.println(pmic.getInputCurrentLimit());
     //Serial.println("");
-
 
     if(digitalRead(D4)){
       goToSleep();
@@ -2078,26 +2080,47 @@ void goToSleep(void){
 }
 
 void goToSleepBattery(void){
-    digitalWrite(power_led_en, LOW);
+    digitalWrite(power_led_en, HIGH);   // Sets the LED on
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, HIGH);   // Sets the LED on
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, HIGH);   // Sets the LED on
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, HIGH);    // Sets the LED off
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, HIGH);    // Sets the LED off
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, HIGH);    // Sets the LED off
+    delay(250);                   // waits for a second
+    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    //System.sleep(D4, RISING,sleepInterval * 2); //Put the Electron into Sleep Mode for 2 Mins + leave the Modem in Sleep Standby mode so when you wake up the modem is ready to send data vs a full reconnection process.
+
     digitalWrite(plantower_en, LOW);
     digitalWrite(esp_wroom_en, LOW);
     digitalWrite(blower_en, LOW);
     digitalWrite(co2_en, LOW);
     digitalWrite(fiveVolt_en, LOW);
-    while(fuel.getSoC() < BATTERY_THRESHOLD + 2){
-        System.sleep(SLEEP_MODE_SOFTPOWEROFF, 10);
-        digitalWrite(power_led_en, HIGH);
-        Serial.printf("Sleeping...  Battery charge level: %d\n\r", fuel.getSoC());
-        delay(500);
-        digitalWrite(power_led_en, LOW);
-    }
-    Serial.println("Waking up from battery sleep...");
-    digitalWrite(power_led_en, HIGH);
+
+    Serial.print("Sleeping...  Battery charge level:");
+    Serial.println(fuel.getSoC());
+    System.sleep(D4, RISING,sleepInterval * 2);
+
     digitalWrite(plantower_en, HIGH);
     digitalWrite(esp_wroom_en, HIGH);
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
     digitalWrite(fiveVolt_en, HIGH);
+    //System.sleep(SLEEP_MODE_DEEP, 600);
 
 }
 
