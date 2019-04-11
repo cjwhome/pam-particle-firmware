@@ -26,10 +26,11 @@
 #include "Serial5/Serial5.h"
 #include "gps.h"
 #include "inttypes.h"
+#include "Particle.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
-#define APP_VERSION 4
+#define APP_VERSION 5
 #define BUILD_VERSION 2
 
 //define constants
@@ -86,7 +87,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_A_OR_D_MEM_ADDRESS 108
 #define OZONE_OFFSET_MEM_ADDRESS 112
 #define MEASUREMENTS_TO_AVG_MEM_ADDRESS 116
-#define MAX_MEM_ADDRESS 116
+#define BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS 120
+#define MAX_MEM_ADDRESS 120
 
 
 //max and min values
@@ -126,6 +128,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
 
 #define MAX_COUNTER_INDEX 15000
+
+#define BATTERY_THRESHOLD 20    //if battery is below 20 percent, go into sleep mode
 
 //define pin functions
 //fix these so they are more consistent!
@@ -237,6 +241,7 @@ int gas_lower_limit = 1200;   // Bad air quality limit
 int gas_upper_limit = 50000;  // Good air quality limit
 float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according to Zheng et. al 2018
 int measurements_to_average = 0;
+int battery_threshold_enable;
 
 //serial menu variables
 int addr;
@@ -275,6 +280,7 @@ void serialGetCoZero(void);
 void serialGetOzoneOffset(void);
 void serialResetSettings(void);
 void serialTestRemoteFunction(void);
+void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
 
 void outputSerialMenuOptions(void);
@@ -439,6 +445,7 @@ void readStoredVars(void){
     EEPROM.get(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
     EEPROM.get(OZONE_OFFSET_MEM_ADDRESS, ozone_offset);
     EEPROM.get(MEASUREMENTS_TO_AVG_MEM_ADDRESS, measurements_to_average);
+    EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
 
 
     //check all values to make sure are within limits
@@ -500,6 +507,7 @@ void writeDefaultSettings(void){
     EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, 0);
     EEPROM.put(OZONE_OFFSET_MEM_ADDRESS,0);
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, 1);
+    EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, 1);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -595,7 +603,24 @@ void setup()
     //if user presses power button during operation, reset and it will go to low power mode
     attachInterrupt(D4, System.reset, RISING);
 
+    pmic.begin();
+    //pmic.setInputVoltageLimit(4000);  //  for 5Volt usb input
+    pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
+    //pmic.setInputCurrentLimit(2000);
+    pmic.setChargeCurrent(0,1,1,0,0,0);
+    pmic.setInputCurrentLimit(1200);
+    //pmic.enableDPDM();
+    //pmic.disableDPDM();
+    pmic.enableCharging();
+    writeRegister(0, 0b00000100);
+    //Serial.print("Starting value of inputCurrentLimit: ");
+    //Serial.println(pmic.getInputCurrentLimit());
+    //Serial.println("");
 
+
+    if(digitalRead(D4)){
+      goToSleep();
+    }
 
     digitalWrite(lmp91000_1_en, HIGH);
     digitalWrite(lmp91000_2_en, HIGH);
@@ -619,17 +644,10 @@ void setup()
     Serial5.begin(9600);        //gps is connected to this serial port
     //set the Timeout to 1500ms, longer than the data transmission periodic time of the sensor
     Serial4.setTimeout(5000);
-    if(digitalRead(D4)){
-      goToSleep();
-    }
-    //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
-    delay(10000);
-    //initialize main serial port for debug output
-    Serial.begin(9600);
 
     // Setup the PMIC manually (resets the BQ24195 charge controller)
     // REG00 Input Source Control Register  (disabled)
-    writeRegister(0, 0b00110000);  //0x30
+    /*writeRegister(0, 0b00110000);  //0x30
 
     // REG01 Power-On Configuration Register (charge battery, 3.5 V)
     writeRegister(1, 0b00011011);   //0x1B
@@ -648,7 +666,13 @@ void setup()
     // REG06 Thermal Regulation Control Register
     writeRegister(6, 0b00000011);   //0x03
     // REG07 Misc Operation Control Register Format
-    writeRegister(7, 0b01001011);   //0x4B
+    writeRegister(7, 0b01001011);   //0x4B*/
+
+
+    //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
+    delay(10000);
+    //initialize main serial port for debug output
+    Serial.begin(9600);
 
 
 
@@ -801,11 +825,22 @@ void setup()
         file_started = 1;
     }*/
     resetESP();
+
     Serial.println("ESP reset!");
+
+    Serial.print("FW Version: ");
+    Serial.println(APP_VERSION);
+    Serial.print("Build: ");
+    Serial.println(BUILD_VERSION);
 
 }
 
 void loop() {
+
+
+
+
+
     if(output_only_particles == 1){
         outputParticles();
     }
@@ -938,6 +973,11 @@ void loop() {
       }
     }
 
+    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD)){
+        Serial.println("Going to sleep because battery is below 20% charge");
+        goToSleepBattery();
+    }
+
 }
 
 void calculateAQI(void){
@@ -989,6 +1029,11 @@ void echoGps(){
     }
 }
 
+/*void disableGPS(void){
+    Serial.println("Turning off gps");
+    String disableString = "";
+    Serial5.write()
+}*/
 void readGpsStream(void){
     String gps_sentence = "init";
     int stringFound = 0;
@@ -2023,11 +2068,37 @@ void goToSleep(void){
   digitalWrite(esp_wroom_en, LOW);
   digitalWrite(blower_en, LOW);
   digitalWrite(co2_en, LOW);
-  //digitalWrite(fiveVolt_en, LOW);
+  digitalWrite(fiveVolt_en, LOW);
+ // while(digitalRead(D4));
   System.sleep(D4,FALLING);
-  delay(500);
-  System.reset();
+  //System.sleep(SLEEP_MODE_DEEP, 2);
+  //delay(500);
+  //System.reset();
   //detachInterrupt(D3);
+}
+
+void goToSleepBattery(void){
+    digitalWrite(power_led_en, LOW);
+    digitalWrite(plantower_en, LOW);
+    digitalWrite(esp_wroom_en, LOW);
+    digitalWrite(blower_en, LOW);
+    digitalWrite(co2_en, LOW);
+    digitalWrite(fiveVolt_en, LOW);
+    while(fuel.getSoC() < BATTERY_THRESHOLD + 2){
+        System.sleep(SLEEP_MODE_SOFTPOWEROFF, 10);
+        digitalWrite(power_led_en, HIGH);
+        Serial.printf("Sleeping...  Battery charge level: %d\n\r", fuel.getSoC());
+        delay(500);
+        digitalWrite(power_led_en, LOW);
+    }
+    Serial.println("Waking up from battery sleep...");
+    digitalWrite(power_led_en, HIGH);
+    digitalWrite(plantower_en, HIGH);
+    digitalWrite(esp_wroom_en, HIGH);
+    digitalWrite(blower_en, HIGH);
+    digitalWrite(co2_en, HIGH);
+    digitalWrite(fiveVolt_en, HIGH);
+
 }
 
 void resetESP(void){
@@ -2187,7 +2258,24 @@ void serialMenu(){
     }else if(incomingByte == 'L'){
       serialResetSettings();
     }else if(incomingByte == 'M'){
-      serialTestRemoteFunction();
+      //serialTestRemoteFunction();
+      if(battery_threshold_enable == 1){
+          Serial.println("Battery threshold already enabled");
+      }else{
+          Serial.println("Enabling battery threshold limiting");
+          battery_threshold_enable = 1;
+          EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
+      }
+
+    }else if(incomingByte == 'N'){
+      //serialTestRemoteFunction();
+      if(battery_threshold_enable == 0){
+          Serial.println("Battery threshold already disabled");
+      }else{
+          Serial.println("Disabling battery threshold limiting");
+          battery_threshold_enable = 0;
+          EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
+      }
 
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
@@ -2240,6 +2328,8 @@ void serialMenu(){
 
     }else if(incomingByte == '9'){
         serialIncreaseChargeCurrent();
+    }else if(incomingByte == '0'){
+        serialIncreaseInputCurrent();
     }else if(incomingByte == 'A'){
         readAlpha1Constantly();
     }else if(incomingByte == 'B'){
@@ -2285,6 +2375,33 @@ void serialTestRemoteFunction(void){
   }
 
 }
+
+void serialIncreaseInputCurrent(void){
+    int inputCurrent = pmic.getInputCurrentLimit();
+    Serial.printf("Old input current limit: %d\n\r", inputCurrent);
+
+    if(inputCurrent == 100){
+        inputCurrent = 150;
+    }else if(inputCurrent == 100){
+        inputCurrent = 150;
+    }else if(inputCurrent == 150){
+        inputCurrent = 500;
+    }else if(inputCurrent == 500){
+        inputCurrent = 900;
+    }else if(inputCurrent == 900){
+        inputCurrent = 1200;
+    }else if(inputCurrent == 1200){
+        inputCurrent = 1500;
+    }else if(inputCurrent == 1500){
+        inputCurrent = 2000;
+    }else if(inputCurrent == 2000){
+        inputCurrent = 3000;
+    }
+    //delay(2000);
+    pmic.setInputCurrentLimit(inputCurrent);
+    Serial.printf("New input current limit: %d\n\r", inputCurrent);
+}
+
 void serialIncreaseChargeCurrent(void){
     int total_current = 0;
     bool bit7 = 0;
@@ -2965,6 +3082,7 @@ void outputSerialMenuOptions(void){
     Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
     Serial.println("9:  Increase the charge current by 64 mA");
+    Serial.println("0:  Increase the current input limit by 100 mA");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celcius");
@@ -2977,6 +3095,8 @@ void outputSerialMenuOptions(void){
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");
     Serial.println("L:  Write default settings");
+    Serial.println("M:  Enable 20% battery threshold limiting");
+    Serial.println("N:  Disable 20% battery threshold limiting WARNING!!");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
