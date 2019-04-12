@@ -27,11 +27,12 @@
 #include "gps.h"
 #include "inttypes.h"
 #include "Particle.h"
+#include "PowerCheck.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 
 #define APP_VERSION 5
-#define BUILD_VERSION 2
+#define BUILD_VERSION 4
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -172,6 +173,9 @@ Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
 GPS gps;
 PMIC pmic;
+PowerCheck powerCheck;
+unsigned long lastCheck = 0;
+char lastStatus[256];
 
 //sdcard
 SdFat sd;
@@ -298,6 +302,12 @@ int remoteWriteStoredVars(String addressAndValue);
 int remoteReadStoredVars(String mem_address);
 void writeDefaultSettings(void);
 
+//gps functions
+void enableLowPowerGPS(void);
+void changeFrequency(void);
+void sendPacket(byte *packet, byte len);
+void sendPacket(byte *packet, byte len);
+
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
     // This would be easier if pmic.writeRegister wasn't private
@@ -307,6 +317,8 @@ void writeRegister(uint8_t reg, uint8_t value) {
     Wire3.endTransmission(true);
 
 }
+
+
 
 void outputToCloud(String data){
     String webhook_data = " ";
@@ -603,23 +615,27 @@ void setup()
     pinMode(blower_en, OUTPUT);
     pinMode(D4, INPUT);
     pinMode(co2_en, OUTPUT);
-    //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D4, System.reset, RISING);
+
+    //read all stored variables (calibration parameters)
+    readStoredVars();
 
     pmic.begin();
-    //pmic.setInputVoltageLimit(4000);  //  for 5Volt usb input
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
-    //pmic.setInputCurrentLimit(2000);
     pmic.setChargeCurrent(0,1,1,0,0,0);
     pmic.setInputCurrentLimit(1200);
-    //pmic.enableDPDM();
-    //pmic.disableDPDM();
     pmic.enableCharging();
     writeRegister(0, 0b00000100);
-    //Serial.print("Starting value of inputCurrentLimit: ");
-    //Serial.println(pmic.getInputCurrentLimit());
-    //Serial.println("");
+    writeRegister(1, 0b00011011);
 
+    //check power
+    powerCheck.loop();
+
+    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
+        //Serial.println("Going to sleep because battery is below 20% charge");
+        goToSleepBattery();
+    }
+    //if user presses power button during operation, reset and it will go to low power mode
+    attachInterrupt(D4, System.reset, RISING);
     if(digitalRead(D4)){
       goToSleep();
     }
@@ -633,8 +649,7 @@ void setup()
     digitalWrite(co2_en, HIGH);
     digitalWrite(fiveVolt_en, HIGH);
 
-    //read all stored variables (calibration parameters)
-    readStoredVars();
+
 
     // register the cloud function
     Particle.function("geteepromdata", remoteReadStoredVars);
@@ -975,7 +990,11 @@ void loop() {
       }
     }
 
-    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD)){
+    //check power
+    powerCheck.loop();
+
+	//Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
+    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
         Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
@@ -1128,6 +1147,78 @@ void readGpsStream(void){
         }
     }
 
+}
+// Send a packet to the receiver to change frequency to 100 ms.
+void changeFrequency()
+{
+    // CFG-RATE packet.
+    byte packet[] = {
+        0xB5, // sync char 1
+        0x62, // sync char 2
+        0x06, // class
+        0x08, // id
+        0x06, // length
+        0x00, // length
+        0x64, // payload
+        0x00, // payload
+        0x01, // payload
+        0x00, // payload
+        0x01, // payload
+        0x00, // payload
+        0x7A, // CK_A
+        0x12, // CK_B
+    };
+
+    sendPacket(packet, sizeof(packet));
+}
+
+void enableLowPowerGPS()
+{
+    // CFG-MSG packet.
+    byte packet[] = {
+        0xB5, // sync char 1
+        0x62, // sync char 2
+        0x06, // class
+        0x11, // id
+        0x02, // length
+        0x00, // length
+        0x01, // payload
+        0x00, // payload
+        0x1A, // CK_A
+        0x83, // CK_B
+    };
+
+    sendPacket(packet, sizeof(packet));
+}
+
+// Send the packet specified to the receiver.
+void sendPacket(byte *packet, byte len)
+{
+    for (byte i = 0; i < len; i++)
+    {
+        Serial5.write(packet[i]);
+    }
+
+    printPacket(packet, len);
+}
+
+// Print the packet specified to the PC serial in a hexadecimal form.
+void printPacket(byte *packet, byte len)
+{
+    char temp[3];
+
+    for (byte i = 0; i < len; i++)
+    {
+        sprintf(temp, "%.2X", packet[i]);
+        Serial.print(temp);
+
+        if (i != len - 1)
+        {
+            Serial.print(' ');
+        }
+    }
+
+    Serial.println();
 }
 
 float readTemperature(void){
@@ -2064,19 +2155,15 @@ int transmitPM10(char *thebuf)  {
 }
 
 void goToSleep(void){
-  //Serial.println("Going to sleep:)");
-  digitalWrite(power_led_en, LOW);
-  digitalWrite(plantower_en, LOW);
-  digitalWrite(esp_wroom_en, LOW);
-  digitalWrite(blower_en, LOW);
-  digitalWrite(co2_en, LOW);
-  digitalWrite(fiveVolt_en, LOW);
- // while(digitalRead(D4));
-  System.sleep(D4,FALLING);
-  //System.sleep(SLEEP_MODE_DEEP, 2);
-  //delay(500);
-  //System.reset();
-  //detachInterrupt(D3);
+    //Serial.println("Going to sleep:)");
+    digitalWrite(power_led_en, LOW);
+    digitalWrite(plantower_en, LOW);
+    digitalWrite(esp_wroom_en, LOW);
+    digitalWrite(blower_en, LOW);
+    digitalWrite(co2_en, LOW);
+    digitalWrite(fiveVolt_en, LOW);
+    enableLowPowerGPS();
+    System.sleep(D4, FALLING, sleepInterval * 2);     //every 2 minutes wake up and check if battery voltage is too low
 }
 
 void goToSleepBattery(void){
@@ -2103,23 +2190,27 @@ void goToSleepBattery(void){
     digitalWrite(power_led_en, HIGH);    // Sets the LED off
     delay(250);                   // waits for a second
     digitalWrite(power_led_en, LOW);    // Sets the LED off
+
+    //Serial.println("Turning off batfet");
+    writeRegister(7, 0b01101011);   //turn off batfet
     //System.sleep(D4, RISING,sleepInterval * 2); //Put the Electron into Sleep Mode for 2 Mins + leave the Modem in Sleep Standby mode so when you wake up the modem is ready to send data vs a full reconnection process.
 
-    digitalWrite(plantower_en, LOW);
+    /*digitalWrite(plantower_en, LOW);
     digitalWrite(esp_wroom_en, LOW);
     digitalWrite(blower_en, LOW);
     digitalWrite(co2_en, LOW);
     digitalWrite(fiveVolt_en, LOW);
+    enableLowPowerGPS();
 
     Serial.print("Sleeping...  Battery charge level:");
     Serial.println(fuel.getSoC());
-    System.sleep(D4, RISING,sleepInterval * 2);
+    System.sleep(D4, RISING, sleepInterval * 10);
 
     digitalWrite(plantower_en, HIGH);
     digitalWrite(esp_wroom_en, HIGH);
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
-    digitalWrite(fiveVolt_en, HIGH);
+    digitalWrite(fiveVolt_en, HIGH);*/
     //System.sleep(SLEEP_MODE_DEEP, 600);
 
 }
@@ -2300,6 +2391,18 @@ void serialMenu(){
           EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
       }
 
+    }else if(incomingByte == 'O'){
+        //Serial.println("Changing frequency for gps");
+        //changeFrequency();
+        Serial.println("Enabling low power for gps");
+        enableLowPowerGPS();
+    }else if(incomingByte  == 'P'){
+        Serial.println("Turning off batfet");
+        writeRegister(7, 0b01101011);   //turn off batfet
+    }else if(incomingByte == 'Q'){
+
+        Serial.println("Allowing batfet to turn on");
+        writeRegister(7, 0b01001011);   //allow batfet to turn on
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
@@ -3120,6 +3223,9 @@ void outputSerialMenuOptions(void){
     Serial.println("L:  Write default settings");
     Serial.println("M:  Enable 20% battery threshold limiting");
     Serial.println("N:  Disable 20% battery threshold limiting WARNING!!");
+    Serial.println("O:  Enable low power for GPS module");
+    Serial.println("P:  Turn off BATFET");
+    Serial.println("Q:  Allow BATFET to turn on");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
