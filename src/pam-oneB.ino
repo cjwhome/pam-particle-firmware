@@ -32,7 +32,7 @@
 #include "SdFat.h"
 
 #define APP_VERSION 5
-#define BUILD_VERSION 4
+#define BUILD_VERSION 7
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -891,11 +891,11 @@ void loop() {
     //CO_float_2 *= CO_slope_2;
 
     CO2_float = readCO2();
-    if(CO2_float == 0){
+    /*if(CO2_float == 0){
         CO2_float = CO2_float_previous;
     }else{
         CO2_float_previous = CO2_float;
-    }
+    }*/
 
     //correct for altitude
     float pressure_correction = bme.pressure/100;
@@ -1289,6 +1289,9 @@ float readCO(void){
 
 float readCO2(void){
     //read CO2 values and apply calibration factors
+    if(debugging_enabled){
+        t6713.readStatus(1);
+    }
     CO2_float = t6713.readPPM();
 
     CO2_float *= CO2_slope;
@@ -2164,6 +2167,7 @@ void goToSleep(void){
     digitalWrite(fiveVolt_en, LOW);
     enableLowPowerGPS();
     System.sleep(D4, FALLING, sleepInterval * 2);     //every 2 minutes wake up and check if battery voltage is too low
+    System.reset();
 }
 
 void goToSleepBattery(void){
@@ -2749,7 +2753,7 @@ void serialGetCo2Slope(void){
     float tempfloat = tempString.toFloat();
     int tempValue;
 
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
+    if(tempfloat >= 0.5 && tempfloat < 10.0){
         CO2_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;

@@ -28,7 +28,7 @@ class Telaire_T6713
     bool begin();
     void queryPPM(void);
     int readPPM(void);
-    void readStatus(void);
+    void readStatus(int debugging);
     void resetSensor(void);
     /*bool  begin(uint8_t addr = T6713_DEFAULT_ADDRESS);
     float readTemperature(void);
