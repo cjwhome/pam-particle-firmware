@@ -30,6 +30,8 @@ class Telaire_T6713
     int readPPM(void);
     void readStatus(int debugging);
     void resetSensor(void);
+    void disableABCLogic();
+    void enableABCLogic();
     /*bool  begin(uint8_t addr = T6713_DEFAULT_ADDRESS);
     float readTemperature(void);
     float readPressure(void);

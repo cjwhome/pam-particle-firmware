@@ -32,7 +32,7 @@
 #include "SdFat.h"
 
 #define APP_VERSION 5
-#define BUILD_VERSION 7
+#define BUILD_VERSION 8
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -89,6 +89,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_OFFSET_MEM_ADDRESS 112
 #define MEASUREMENTS_TO_AVG_MEM_ADDRESS 116
 #define BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS 120
+#define ABC_ENABLE_MEM_ADDRESS 124
 #define MAX_MEM_ADDRESS 120
 
 
@@ -213,6 +214,7 @@ int temperature_units = 0;
 int output_only_particles = 0;
 int new_temperature_sensor_enabled = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
+int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
 
 //used for averaging
@@ -304,6 +306,7 @@ void writeDefaultSettings(void);
 
 //gps functions
 void enableLowPowerGPS(void);
+void enableContinuousGPS(void);
 void changeFrequency(void);
 void sendPacket(byte *packet, byte len);
 void sendPacket(byte *packet, byte len);
@@ -461,7 +464,7 @@ void readStoredVars(void){
     EEPROM.get(OZONE_OFFSET_MEM_ADDRESS, ozone_offset);
     EEPROM.get(MEASUREMENTS_TO_AVG_MEM_ADDRESS, measurements_to_average);
     EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
-
+    EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
 
     //check all values to make sure are within limits
     if(!CO2_slope)
@@ -523,6 +526,7 @@ void writeDefaultSettings(void){
     EEPROM.put(OZONE_OFFSET_MEM_ADDRESS,0);
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, 1);
     EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, 1);
+    EEPROM.put(ABC_ENABLE_MEM_ADDRESS, 0);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -850,6 +854,8 @@ void setup()
     Serial.print("Build: ");
     Serial.println(BUILD_VERSION);
 
+    enableContinuousGPS();
+
 }
 
 void loop() {
@@ -1167,6 +1173,25 @@ void changeFrequency()
         0x00, // payload
         0x7A, // CK_A
         0x12, // CK_B
+    };
+
+    sendPacket(packet, sizeof(packet));
+}
+
+void enableContinuousGPS()
+{
+    // CFG-MSG packet.
+    byte packet[] = {
+        0xB5, // sync char 1
+        0x62, // sync char 2
+        0x06, // class
+        0x11, // id
+        0x02, // length
+        0x00, // length
+        0x00, // payload
+        0x00, // payload
+        0x1A, // CK_A
+        0x83, // CK_B
     };
 
     sendPacket(packet, sizeof(packet));
@@ -2407,6 +2432,26 @@ void serialMenu(){
 
         Serial.println("Allowing batfet to turn on");
         writeRegister(7, 0b01001011);   //allow batfet to turn on
+    }else if(incomingByte == 'R'){
+        if(abc_logic_enabled){
+            Serial.println("Disabling ABC logic for CO2 sensor");
+            abc_logic_enabled = 0;
+            EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
+            t6713.disableABCLogic();
+        }else{
+            Serial.println("ABC logic already disabled");
+        }
+
+    }else if(incomingByte == 'S'){
+        if(!abc_logic_enabled){
+            Serial.println("Enabling abc logic for CO2 sensor");
+            abc_logic_enabled = 1;
+            EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
+            t6713.enableABCLogic();
+        }else{
+            Serial.println("ABC logic already enabled");
+        }
+
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
@@ -3230,6 +3275,8 @@ void outputSerialMenuOptions(void){
     Serial.println("O:  Enable low power for GPS module");
     Serial.println("P:  Turn off BATFET");
     Serial.println("Q:  Allow BATFET to turn on");
+    Serial.println("R:  Disable ABC logic for CO2 sensor");
+    Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
