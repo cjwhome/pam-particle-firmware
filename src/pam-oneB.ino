@@ -30,9 +30,13 @@
 #include "PowerCheck.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
+#include "HIH61XX.h"
+#include "google-maps-device-locator.h"
 
-#define APP_VERSION 5
-#define BUILD_VERSION 8
+GoogleMapsDeviceLocator locator;
+
+#define APP_VERSION 6
+#define BUILD_VERSION 2
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -46,6 +50,9 @@
 #define FARENHEIT 0
 #define TMP36_OFFSET 0.5
 #define TMP36_VPDC 0.01 //10mV per degree C
+
+//google maps API key:
+#define GOOGLE_API_KEY "AIzaSyAfgY0VX3KSMkVoIVvWAr9oVlT-AoQ68e0"
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
 #define ALPHA_ADC_READ_AMOUNT 10
@@ -90,7 +97,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define MEASUREMENTS_TO_AVG_MEM_ADDRESS 116
 #define BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS 120
 #define ABC_ENABLE_MEM_ADDRESS 124
-#define MAX_MEM_ADDRESS 120
+#define HIH8120_ENABLE_MEM_ADDRESS 128
+#define MAX_MEM_ADDRESS 128
 
 
 //max and min values
@@ -175,6 +183,7 @@ FuelGauge fuel;
 GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
+HIH61XX hih(0x27);
 unsigned long lastCheck = 0;
 char lastStatus[256];
 
@@ -213,9 +222,13 @@ int voc_enabled = 0;
 int temperature_units = 0;
 int output_only_particles = 0;
 int new_temperature_sensor_enabled = 0;
+int hih8120_enabled = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
+
+char geolocation_latitude[12] = "111.1111111";
+char geolocation_longitude[13] = "22.22222222";
 
 //used for averaging
 float CO_sum = 0;
@@ -303,6 +316,7 @@ void sendEspSerialCom(char *serial_command);
 int remoteWriteStoredVars(String addressAndValue);
 int remoteReadStoredVars(String mem_address);
 void writeDefaultSettings(void);
+void readHIH8120(void);
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -310,6 +324,9 @@ void enableContinuousGPS(void);
 void changeFrequency(void);
 void sendPacket(byte *packet, byte len);
 void sendPacket(byte *packet, byte len);
+
+//google api callback
+void locationCallback(float lat, float lon, float accuracy);
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -465,6 +482,7 @@ void readStoredVars(void){
     EEPROM.get(MEASUREMENTS_TO_AVG_MEM_ADDRESS, measurements_to_average);
     EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
+    EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
 
     //check all values to make sure are within limits
     if(!CO2_slope)
@@ -527,6 +545,7 @@ void writeDefaultSettings(void){
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, 1);
     EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, 1);
     EEPROM.put(ABC_ENABLE_MEM_ADDRESS, 0);
+    EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, 1);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -608,6 +627,7 @@ void setup()
 {
     String init_log; //intialization error log
 
+
     setADCSampleTime(ADC_SampleTime_480Cycles);
     //setup i/o
     pinMode(lmp91000_1_en, OUTPUT);
@@ -625,10 +645,10 @@ void setup()
 
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
-    pmic.setChargeCurrent(0,1,1,0,0,0);
-    pmic.setInputCurrentLimit(1200);
+    //pmic.setChargeCurrent(0,1,1,0,0,0);
+    //pmic.setInputCurrentLimit(1200);
     pmic.enableCharging();
-    writeRegister(0, 0b00000100);
+    writeRegister(0, 0b00110100);
     writeRegister(1, 0b00011011);
 
     //check power
@@ -855,13 +875,26 @@ void setup()
     Serial.println(BUILD_VERSION);
 
     enableContinuousGPS();
+    locator.withSubscribe(locationCallback).withLocatePeriodic(30); //setup google maps geolocation
 
+}
+
+void locationCallback(float lat, float lon, float accuracy) {
+  // Handle the returned location data for the device. This method is passed three arguments:
+  // - Latitude
+  // - Longitude
+  // - Accuracy of estimated location (in meters)
+  Serial.println("google geolocation:");
+  Serial.printlnf("Latitude:%f, longitude:%f, acc:%f", lat, lon, accuracy);
+  snprintf(geolocation_latitude, sizeof(geolocation_latitude), "%.6f", lat);
+  snprintf(geolocation_longitude, sizeof(geolocation_longitude), "%.6f", lon);
 }
 
 void loop() {
 
 
-
+    //Serial.println("locator loop");
+    locator.loop();
 
 
     if(output_only_particles == 1){
@@ -881,7 +914,9 @@ void loop() {
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
       }
     }
-
+    if(hih8120_enabled){
+        readHIH8120();
+    }
     readGpsStream();
 
 
@@ -897,11 +932,7 @@ void loop() {
     //CO_float_2 *= CO_slope_2;
 
     CO2_float = readCO2();
-    /*if(CO2_float == 0){
-        CO2_float = CO2_float_previous;
-    }else{
-        CO2_float_previous = CO2_float;
-    }*/
+
 
     //correct for altitude
     float pressure_correction = bme.pressure/100;
@@ -1248,7 +1279,15 @@ void printPacket(byte *packet, byte len)
 
 float readTemperature(void){
     float temperature = 0;
-    if(new_temperature_sensor_enabled){
+    if(hih8120_enabled){
+        temperature = hih.temperature();
+        if(debugging_enabled){
+            Serial.println("Temperature reading from HIH8120");
+        }
+    }else if(new_temperature_sensor_enabled){
+        if(debugging_enabled){
+            Serial.println("Temperature reading from TMP36");
+        }
         temperature = analogRead(A1);
 
 
@@ -1273,10 +1312,23 @@ float readTemperature(void){
 }
 
 float readHumidity(void){
-    float humidity = bme.humidity;
+    float humidity;
+    if(hih8120_enabled){
+        humidity = hih.humidity();
+        humidity *= 100;
+        if(debugging_enabled){
+            Serial.println("Humidity reading from HIH8120");
+        }
+    }else{
+        humidity = bme.humidity;
+        if(debugging_enabled){
+            Serial.println("Humidity reading from BME");
+        }
+    }
 
-    //humidity *= rh_slope;
-    //humidity += rh_zero;       //user input zero offset
+
+    humidity *= rh_slope;
+    humidity += rh_zero;       //user input zero offset
     if(humidity > 100)
         humidity = 100;
     return humidity;
@@ -1664,16 +1716,27 @@ void outputDataToESP(void){
         csv_output_string += "-";
         cloud_output_string += "-";
     }
-    csv_output_string += String(gps.get_latitude()) + ",";
-    cloud_output_string += String(gps.get_latitude());
+    if(gps.get_latitude() != 0){
+        csv_output_string += String(gps.get_latitude()) + ",";
+        cloud_output_string += String(gps.get_latitude());
+    }else{
+        csv_output_string += String(geolocation_latitude)+ ",";
+        cloud_output_string += String(geolocation_latitude);
+    }
 
     cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
     if(gps.get_ewIndicator() == 0x01){
         csv_output_string += "-";
         cloud_output_string += "-";
     }
-    csv_output_string += String(gps.get_longitude()) + ",";
-    cloud_output_string += String(gps.get_longitude());
+    if(gps.get_longitude() != 0){
+        csv_output_string += String(gps.get_longitude()) + ",";
+        cloud_output_string += String(gps.get_longitude());
+    }else{
+        csv_output_string += String(geolocation_longitude) + ",";
+        cloud_output_string += String(geolocation_longitude);
+    }
+
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
@@ -2126,6 +2189,25 @@ void outputParticles(){
         sample_counter += 1;
     }
 }
+
+void readHIH8120(void){
+    hih.start();
+
+    //  request an update of the humidity and temperature
+    hih.update();
+
+    /*Serial.print("Humidity: ");
+    Serial.print(hih.humidity(), 5);
+    Serial.print(" RH (");
+    Serial.print(hih.humidity_Raw());
+    Serial.println(")");
+
+    Serial.print("Temperature: ");
+    Serial.print(hih.temperature(), 5);
+    Serial.println(" C (");
+    Serial.print(hih.temperature_Raw());
+    Serial.println(")");*/
+}
 //read from plantower pms 5500
 void readPlantower(void){
     if(Serial4.find("B")){    //start to read when detect 0x42
@@ -2450,6 +2532,17 @@ void serialMenu(){
             t6713.enableABCLogic();
         }else{
             Serial.println("ABC logic already enabled");
+        }
+    }else if(incomingByte == 'T'){
+        if(!hih8120_enabled){
+            Serial.println("Enabling HIH8120 RH sensor");
+            hih8120_enabled = 1;
+            EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
+
+        }else{
+            Serial.println("Disabling HIH8120 RH sensor");
+            hih8120_enabled = 0;
+            EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
         }
 
     }else if(incomingByte == '1'){
@@ -3277,6 +3370,7 @@ void outputSerialMenuOptions(void){
     Serial.println("Q:  Allow BATFET to turn on");
     Serial.println("R:  Disable ABC logic for CO2 sensor");
     Serial.println("S:  Enable ABC logic for CO2 sensor");
+    Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
