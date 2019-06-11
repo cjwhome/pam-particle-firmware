@@ -1834,7 +1834,7 @@ void outputDataToESP(void){
     // 9: Humidity
     floatBytes.myFloat = readHumidity();
     ble_output_array[13] = 9;
-    ble_output_array[13] = floatBytes.bytes[0];
+    ble_output_array[14] = floatBytes.bytes[0];
     ble_output_array[15] = floatBytes.bytes[1];
     ble_output_array[16] = floatBytes.bytes[2];
 
@@ -1870,83 +1870,21 @@ void outputDataToESP(void){
     // 13: PM2.5
     floatBytes.myFloat = corrected_PM_25;
     ble_output_array[13 + BLE_PAYLOAD_SIZE] = 13;
-    ble_output_array[13 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[0];
+    ble_output_array[14 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[0];
     ble_output_array[15 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[1];
     ble_output_array[16 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[2];
 
-    // 24: PM10
+    // 14: PM10
     floatBytes.myFloat = PM10Value;
-    ble_output_array[17 + BLE_PAYLOAD_SIZE] = 24;
+    ble_output_array[17 + BLE_PAYLOAD_SIZE] = 14;
     ble_output_array[18 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[0];
     ble_output_array[19 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[1];
     ble_output_array[20 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[2];
 
-    ble_output_array[21 + BLE_PAYLOAD_SIZE] = '#';
-    //
-
-    //bytes 5+ - Identifier (7:Temperature, 10:Pressure, 9:humidity, --:Sound, --:Ozone,
-    //22:CO2, 17:CO, 12:PM1, 13:PM2.5, 14:PM10, --:VOCs)
-    /*
-    0-CO_float
-    1-CO2_float
-    2-bme.gas_resistance / 1000.0
-    3-PM01Value
-    4-PM2_5Value
-    5-PM10Value
-    6-bme.temperature
-    7-bme.pressure / 100.0
-    8-bme.humidity
-    9-O3_float
-    10-fuel.getSoC()
-    11-sound_average
-
-
-
-    */
-    // if(i == 0){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 17;    // CARBON_MONOXIDE_PACKET_CONSTANT;
-    //     floatBytes.myFloat = CO_float;
-    // }else if(i == 1){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 22;    // CARBON_DIOXIDE_PACKET_CONSTANT;
-    //     floatBytes.myFloat = CO2_float;
-    // }else if(i == 2){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
-    //     floatBytes.myFloat = fuel.getSoC();
-    // }else if(i == 2){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 12;    // PM1_PACKET_CONSTANT;
-    //     floatBytes.myFloat = PM01Value;
-    // }else if(i == 3){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 13;    // PM2PT5_PACKET_CONSTANT;
-    //     floatBytes.myFloat = corrected_PM_25;
-    // }else if(i == 4){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = 14;    // PM10_PACKET_CONSTANT;
-    //     floatBytes.myFloat = PM10Value;
-    // }else if(i == 5){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
-    //     floatBytes.myFloat = readTemperature();
-    // }else if(i == 7){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
-    //     floatBytes.myFloat = bme.pressure / 100.0;
-    // }else if(i == 8){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
-    //     floatBytes.myFloat = readHumidity();
-    // }else if(i == 9){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
-    //     floatBytes.myFloat = sound_average;
-    // }else if(i == 10){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-    //     floatBytes.myFloat = air_quality_score;
-    // }/*else if(i == 11){
-    //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
-    //     floatBytes.myFloat = O3_float;
-    // }*/
-
-    // }
-
     //send start delimeter to ESP
     Serial1.print("$");
     //send the packaged data with # delimeters in between packets
-    Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
+    Serial1.write(ble_output_array, 2*BLE_PAYLOAD_SIZE);
 
     //send ending delimeter
     Serial1.print("&");
