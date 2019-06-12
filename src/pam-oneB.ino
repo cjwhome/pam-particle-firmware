@@ -1881,6 +1881,8 @@ void outputDataToESP(void){
     ble_output_array[19 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[1];
     ble_output_array[20 + BLE_PAYLOAD_SIZE] = floatBytes.bytes[2];
 
+    ble_output_array[21 + BLE_PAYLOAD_SIZE] = '#';
+
     //send start delimeter to ESP
     Serial1.print("$");
     //send the packaged data with # delimeters in between packets
