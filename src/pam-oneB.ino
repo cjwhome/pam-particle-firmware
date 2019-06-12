@@ -36,7 +36,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 6
-#define BUILD_VERSION 2
+#define BUILD_VERSION 4
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -62,7 +62,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define sd_en 1
 
 //enable AFE 2 (just for testing now using a second CO sensor connected to it)
-#define AFE2_en 0
+#define AFE2_en 1
 
 //define addresses of eeprom stored variables
 #define DEVICE_ID_MEM_ADDRESS 0
@@ -98,7 +98,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS 120
 #define ABC_ENABLE_MEM_ADDRESS 124
 #define HIH8120_ENABLE_MEM_ADDRESS 128
-#define MAX_MEM_ADDRESS 128
+#define CO_SOCKET_MEM_ADDRESS 132
+#define MAX_MEM_ADDRESS 132
 
 
 //max and min values
@@ -226,6 +227,8 @@ int hih8120_enabled = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
+int battery_threshold_enable;
+int CO_socket = 0;
 
 char geolocation_latitude[12] = "111.1111111";
 char geolocation_longitude[13] = "22.22222222";
@@ -260,7 +263,7 @@ int gas_lower_limit = 1200;   // Bad air quality limit
 int gas_upper_limit = 50000;  // Good air quality limit
 float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according to Zheng et. al 2018
 int measurements_to_average = 0;
-int battery_threshold_enable;
+
 
 int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
 
@@ -483,6 +486,9 @@ void readStoredVars(void){
     EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
+    EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
+
+    measurements_to_average = 5;
 
     //check all values to make sure are within limits
     if(!CO2_slope)
@@ -546,6 +552,7 @@ void writeDefaultSettings(void){
     EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, 1);
     EEPROM.put(ABC_ENABLE_MEM_ADDRESS, 0);
     EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, 1);
+    EEPROM.put(CO_SOCKET_MEM_ADDRESS, 0);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -875,7 +882,7 @@ void setup()
     Serial.println(BUILD_VERSION);
 
     enableContinuousGPS();
-    locator.withSubscribe(locationCallback).withLocatePeriodic(30); //setup google maps geolocation
+    locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
 
 }
 
@@ -917,16 +924,14 @@ void loop() {
     if(hih8120_enabled){
         readHIH8120();
     }
-    readGpsStream();
+    //readGpsStream();
 
 
     //read CO values and apply calibration factors
     CO_float = readCO();
 
 
-    #if AFE2_en
-        CO_float_2 = readAlpha2();
-    #endif
+
 
     //CO_float_2 += CO_zero_2;
     //CO_float_2 *= CO_slope_2;
@@ -1354,7 +1359,12 @@ double readSound(void){
 float readCO(void){
     float float_offset;
 
-    CO_float = readAlpha1();
+    if(CO_socket == 0){
+        CO_float = readAlpha1();
+    }else{
+        CO_float = readAlpha2();
+    }
+
     float_offset = CO_zero;
     float_offset /= 1000;
 
@@ -1551,17 +1561,17 @@ float readAlpha2(void){
         A1_aux = 0;
         A2_temperature = 0;
         half_Vref = 0;
-        for(int i=0; i<100; i++){
+        for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
           A0_gas += ads2.readADC_SingleEnded(0); //gas
           A1_aux += ads2.readADC_SingleEnded(1); //aux out
           A2_temperature += ads2.readADC_SingleEnded(2); //temperature
           half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
         }
 
-        A0_gas = A0_gas / 100;
-        A1_aux = A1_aux / 100;
-        A2_temperature = A2_temperature / 100;
-        half_Vref = half_Vref / 100;
+        A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
+        A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
+        A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
+        half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
@@ -1712,11 +1722,12 @@ void outputDataToESP(void){
 
     csv_output_string += String(sound_average, 0) + ",";
     cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
-    if(gps.get_nsIndicator() == 0){
-        csv_output_string += "-";
-        cloud_output_string += "-";
-    }
+
     if(gps.get_latitude() != 0){
+        if(gps.get_nsIndicator() == 0){
+            csv_output_string += "-";
+            cloud_output_string += "-";
+        }
         csv_output_string += String(gps.get_latitude()) + ",";
         cloud_output_string += String(gps.get_latitude());
     }else{
@@ -1725,11 +1736,12 @@ void outputDataToESP(void){
     }
 
     cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
-    if(gps.get_ewIndicator() == 0x01){
-        csv_output_string += "-";
-        cloud_output_string += "-";
-    }
+
     if(gps.get_longitude() != 0){
+        if(gps.get_ewIndicator() == 0x01){
+            csv_output_string += "-";
+            cloud_output_string += "-";
+        }
         csv_output_string += String(gps.get_longitude()) + ",";
         cloud_output_string += String(gps.get_longitude());
     }else{
@@ -2545,6 +2557,17 @@ void serialMenu(){
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
         }
 
+    }else if(incomingByte == 'U'){
+        if(!CO_socket){
+            Serial.println("Now reading CO from U20-Alpha2");
+            CO_socket = 1;
+            EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
+
+        }else{
+            Serial.println("Now reading CO from U19-Alpha1");
+            CO_socket = 0;
+            EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
+        }
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
@@ -3371,6 +3394,7 @@ void outputSerialMenuOptions(void){
     Serial.println("R:  Disable ABC logic for CO2 sensor");
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
+    Serial.println("U:  Switch socket where CO is read from");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
