@@ -36,7 +36,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 6
-#define BUILD_VERSION 4
+#define BUILD_VERSION 5
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -112,7 +112,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 //ble data output
 
-#define BLE_PAYLOAD_SIZE 20     //number of bytes allowed in payload - this is sent to the ESP chip to be output in ble broadcast packets
+#define BLE_PAYLOAD_SIZE 22     //number of bytes allowed in payload - this is sent to the ESP chip to be output in ble broadcast packets
 
 //define constants for species - to do in future - read from json file!
 #define DEVICE_ID_PACKET_CONSTANT 'Z'       //instrument ID number as INTEGER
@@ -293,6 +293,46 @@ float gas_reference = 250000;
 float hum_reference = 40;
 
 
+union{
+    uint16_t status_int;
+    char byte[2];
+}status_word;
+
+char cellular_status = 0;
+char gps_status = 0;
+
+/*
+The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
+
+Bits 15-12; Mask 0xF000
+	- 4 Bit Revision Number
+	- (Status & 0xF000) >> 12
+
+Bits 11-8; Mask 0x0F00
+	- 4 Bit Build Number
+	- (Status & 0x0F00) >> 8
+
+Bit 3: Mask 0b11100
+	GPS Indicator
+	First Bit (0b10000): Type
+		1: Geolocation
+		0: GPS
+	Last 2 Bits (0b01100): Quality
+		11: Best
+		      …
+		00: Worst
+
+Bits 1-0: Mask 0b11
+	Cellular Indicator
+	0b00: Not Enabled
+	0b01: Enabled, Not Connected
+	0b11: Enabled, Connected
+	0b10: TBD
+
+*/
+
+
+
 //function declarations
 void readStoredVars(void);
 void checkCalFile(void);
@@ -333,6 +373,10 @@ void sendPacket(byte *packet, byte len);
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
 
+
+
+
+
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
     // This would be easier if pmic.writeRegister wasn't private
@@ -362,6 +406,7 @@ void outputToCloud(String data){
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
+            status_word.status_int |= 0x02;
             Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
@@ -634,6 +679,10 @@ void check_wifi_file(void){
 
 void setup()
 {
+    status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
+    status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
+    //status_word.status_int |= 0x6500;
+
     String init_log; //intialization error log
 
 
@@ -898,6 +947,17 @@ void locationCallback(float lat, float lon, float accuracy) {
   snprintf(geolocation_latitude, sizeof(geolocation_latitude), "%.6f", lat);
   snprintf(geolocation_longitude, sizeof(geolocation_longitude), "%.6f", lon);
   snprintf(geolocation_accuracy, sizeof(geolocation_accuracy), "%3.2f", accuracy);
+  if(gps.get_latitude() == 0){
+      status_word.status_int |= 0x0008;
+      status_word.status_int &= 0xFFF3;
+      if(accuracy < 2){
+          status_word.status_int |= 0x000C;
+      }else if(accuracy < 5){
+          status_word.status_int |= 0x0008;
+      }else if(accuracy < 20){
+          status_word.status_int |= 0x0004;
+      }
+  }
 }
 
 void loop() {
@@ -927,7 +987,7 @@ void loop() {
     if(hih8120_enabled){
         readHIH8120();
     }
-    //readGpsStream();
+    readGpsStream();
 
 
     //read CO values and apply calibration factors
@@ -1000,7 +1060,7 @@ void loop() {
     }
 
     if(serial_cellular_enabled){
-
+        status_word.status_int |= 0x01;
         //Serial.println("Cellular is enabled.");
       if (Particle.connected() == false && tried_cellular_connect == false) {
         tried_cellular_connect = true;
@@ -1160,6 +1220,7 @@ void readGpsStream(void){
                         //Serial.print(" ");
                         //Serial.println(gps_sentence.charAt(a+12));
                         gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
+                        status_word.status_int &= 0xFFF7;
                         //Serial.print("Latitude decimal: ");
                         //Serial.println(gps.get_latitude(), 5);
                     }
@@ -1185,6 +1246,16 @@ void readGpsStream(void){
                     if(gps_sentence.charAt(a+1)!=','){
                         String hdString = gps_sentence.substring(a+1,a+3);
                         gps.set_horizontalDillution(hdString);
+                        status_word.status_int &= 0xFFF3;
+                        if(gps.get_horizontalDillution() < 2){
+                            status_word.status_int |= 0x000C;
+                        }else if(gps.get_horizontalDillution() < 5){
+                            status_word.status_int |= 0x0008;
+                        }else if(gps.get_horizontalDillution() < 20){
+                            status_word.status_int |= 0x0004;
+                        }
+
+
                     }
                 }
                 comma_counter++;
@@ -1754,8 +1825,10 @@ void outputDataToESP(void){
 
     cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
     if (gps.get_longitude() != 0) {
+        csv_output_string += String(gps.get_horizontalDillution() / 10.0) + ",";
         cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
     } else {
+        csv_output_string += String(geolocation_accuracy);
         cloud_output_string += String(geolocation_accuracy);
     }
 
@@ -1915,8 +1988,10 @@ void outputDataToESP(void){
 
         ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
         ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
+        ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[1];
+        ble_output_array[20 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[0];
 
-        ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
+        ble_output_array[21 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
 
     }
 
