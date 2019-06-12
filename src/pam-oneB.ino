@@ -128,6 +128,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define SOUND_PACKET_CONSTANT 's'           //sound as DECIBELS
 #define LATITUDE_PACKET_CONSTANT 'a'        //Latitude as DEGREES
 #define LONGITUDE_PACKET_CONSTANT 'o'       //Longitude as DEGREES
+#define ACCURACY_PACKET_CONSTANT 'c'
 #define PARTICLE_TIME_PACKET_CONSTANT 'Y'   //result of now()
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
@@ -229,6 +230,7 @@ bool tried_cellular_connect = false;
 
 char geolocation_latitude[12] = "111.1111111";
 char geolocation_longitude[13] = "22.22222222";
+char geolocation_accuracy[6] = "255.0";
 
 //used for averaging
 float CO_sum = 0;
@@ -888,6 +890,7 @@ void locationCallback(float lat, float lon, float accuracy) {
   Serial.printlnf("Latitude:%f, longitude:%f, acc:%f", lat, lon, accuracy);
   snprintf(geolocation_latitude, sizeof(geolocation_latitude), "%.6f", lat);
   snprintf(geolocation_longitude, sizeof(geolocation_longitude), "%.6f", lon);
+  snprintf(geolocation_accuracy, sizeof(geolocation_accuracy), "%3.2f", accuracy);
 }
 
 void loop() {
@@ -1735,6 +1738,13 @@ void outputDataToESP(void){
     }else{
         csv_output_string += String(geolocation_longitude) + ",";
         cloud_output_string += String(geolocation_longitude);
+    }
+
+    cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
+    if (gps.get_longitude() != 0) {
+        cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
+    } else {
+        cloud_output_string += String(geolocation_accuracy);
     }
 
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
