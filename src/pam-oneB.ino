@@ -36,7 +36,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 6
-#define BUILD_VERSION 5
+#define BUILD_VERSION 8
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -406,7 +406,7 @@ void outputToCloud(String data){
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
-            status_word.status_int |= 0x02;
+            status_word.status_int |= 0x0002;
             Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
@@ -421,6 +421,7 @@ void outputToCloud(String data){
 
                   }
             }else{
+                status_word.status_int &= 0xFFFD;   //clear the connected bit
                 if(debugging_enabled){
                     Serial.println("Couldn't connect to particle.");
                     writeLogFile("Couldn't connect to particle.");
@@ -679,6 +680,7 @@ void check_wifi_file(void){
 
 void setup()
 {
+    status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
     status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
     //status_word.status_int |= 0x6500;
@@ -708,7 +710,7 @@ void setup()
     pmic.enableCharging();
     writeRegister(0, 0b00110100);
     writeRegister(1, 0b00011011);
-
+    //writeRegister(2, 0b01100000);
     //check power
     powerCheck.loop();
 
@@ -1726,7 +1728,7 @@ void writeLogFile(String data){
 
 void outputDataToESP(void){
     //used for converting double to bytes for latitude and longitude
-
+    char buffer[2];
     union{
 	       double myDouble;
 	       unsigned char bytes[sizeof(double)];
@@ -1828,10 +1830,11 @@ void outputDataToESP(void){
         csv_output_string += String(gps.get_horizontalDillution() / 10.0) + ",";
         cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
     } else {
-        csv_output_string += String(geolocation_accuracy);
+        csv_output_string += String(geolocation_accuracy) + ",";
         cloud_output_string += String(geolocation_accuracy);
     }
 
+    csv_output_string += String(status_word.status_int) + ",";
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
@@ -2653,6 +2656,10 @@ void serialMenu(){
             CO_socket = 0;
             EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
         }
+    }else if(incomingByte == 'V'){
+        Serial.println("Reseting the CO2 sensor");
+        t6713.resetSensor();
+    
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
