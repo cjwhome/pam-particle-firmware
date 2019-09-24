@@ -36,7 +36,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 6
-#define BUILD_VERSION 8
+#define BUILD_VERSION 10
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -62,7 +62,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define sd_en 1
 
 //enable AFE 2 (just for testing now using a second CO sensor connected to it)
-#define AFE2_en 1
+#define AFE2_en 0
 
 //define addresses of eeprom stored variables
 #define DEVICE_ID_MEM_ADDRESS 0
@@ -847,7 +847,7 @@ void setup()
     }
 
     //AFE 2 setup
-    #if AFE2_en
+    //#if AFE2_en
     Serial.println("Starting LMP91000 2 initialization");
     if(debugging_enabled)
         writeLogFile("Starting LMP91000 2 initialization");
@@ -886,7 +886,7 @@ void setup()
     else{
       ads2.setGain(GAIN_TWOTHIRDS);
     }
-    #endif
+    //#endif
 
     if (!bme.begin()) {
       Serial.println("Could not find a valid BME680 sensor, check wiring!");
@@ -2659,7 +2659,7 @@ void serialMenu(){
     }else if(incomingByte == 'V'){
         Serial.println("Reseting the CO2 sensor");
         t6713.resetSensor();
-    
+
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
@@ -2975,18 +2975,18 @@ void serialGetZone(void){
 
 void serialGetAverageTime(void){
     Serial.println();
-    Serial.print("Current Average: ");
+    Serial.print("Current Frequency: ");
     Serial.print(measurements_to_average);
-    Serial.println(" 5 second measurements");
+    Serial.println(" 1 second measurements");
     Serial.print("Enter new amount\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
     if(tempValue >= 1 && tempValue < 1000){
-        Serial.print("\n\rNew average time: ");
+        Serial.print("\n\rNew Frequency: ");
         Serial.println(tempValue);
-        Serial.println(" 5 second measurements");
+        Serial.println(" 1 second measurements");
         measurements_to_average = tempValue;
         EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, tempValue);
     }else{
@@ -3474,7 +3474,7 @@ void outputSerialMenuOptions(void){
     Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
-    Serial.println("I:  Adjust average time for uploading");
+    Serial.println("I:  Adjust frequency for uploading");
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");
     Serial.println("L:  Write default settings");
