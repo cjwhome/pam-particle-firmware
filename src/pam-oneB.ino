@@ -35,8 +35,8 @@
 
 GoogleMapsDeviceLocator locator;
 
-#define APP_VERSION 6
-#define BUILD_VERSION 10
+#define APP_VERSION 7
+#define BUILD_VERSION 1
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -134,7 +134,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,Date/Time"
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,N/A,N/A,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
@@ -388,18 +388,18 @@ void writeRegister(uint8_t reg, uint8_t value) {
 }
 
 
-
+//todo: average everything except ozone
 void outputToCloud(String data){
     String webhook_data = " ";
     CO_sum += CO_float;
     CO2_sum += CO2_float;
-    O3_sum += O3_float;
+    O3_sum = O3_float;
     measurement_count++;
 
     if(measurement_count == measurements_to_average){
         CO_sum /= measurements_to_average;
         CO2_sum /= measurements_to_average;
-        O3_sum /= measurements_to_average;
+        //O3_sum /= measurements_to_average;
 
         measurement_count = 0;
         String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";

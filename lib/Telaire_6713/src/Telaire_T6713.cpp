@@ -255,3 +255,24 @@ void Telaire_T6713::enableABCLogic()
     // end transmission
     Wire.endTransmission();
 }
+
+
+//start a 1 point calibration - this lasts 6 minutes so check the status bit
+void Telaire_T6713::calibrate()
+{
+    //[0x05, 0x03, 0xec, 0xff, 0x00]
+    Wire.beginTransmission(ADDR_6713);
+    // Function code = 0x04
+    Wire.write(0x05);
+    // Starting address (MSB) = 0x13
+    Wire.write(0x03);
+    // Starting address (LSB) = 0x8B
+    Wire.write(0xEC);
+    // Input registers to read (MSB) = 0x00
+    Wire.write(0xFF);
+    // Input registers to read (LSB) = 0x01
+    Wire.write(0x00);
+
+    // end transmission
+    Wire.endTransmission();
+}
