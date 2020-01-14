@@ -32,6 +32,7 @@
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "google-maps-device-locator.h"
+#include "CellularHelper.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -99,7 +100,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define ABC_ENABLE_MEM_ADDRESS 124
 #define HIH8120_ENABLE_MEM_ADDRESS 128
 #define CO_SOCKET_MEM_ADDRESS 132
-#define MAX_MEM_ADDRESS 132
+#define MAX_MEM_ADDRESS 134
 
 
 //max and min values
@@ -185,6 +186,7 @@ FuelGauge fuel;
 GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
+SerialLogHandler logHandler;
 HIH61XX hih(0x27);
 unsigned long lastCheck = 0;
 char lastStatus[256];
@@ -239,6 +241,9 @@ char geolocation_accuracy[6] = "255.0";
 float CO_sum = 0;
 float CO2_sum = 0;
 float O3_sum = 0;
+
+float PM25_sum = 0;
+float PM10_sum = 0;
 int measurement_count = 0;
 double sound_average;
 
@@ -375,8 +380,6 @@ void locationCallback(float lat, float lon, float accuracy);
 
 
 
-
-
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
     // This would be easier if pmic.writeRegister wasn't private
@@ -393,7 +396,7 @@ void outputToCloud(String data){
     String webhook_data = " ";
     CO_sum += CO_float;
     CO2_sum += CO2_float;
-    O3_sum = O3_float;
+    O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
     measurement_count++;
 
     if(measurement_count == measurements_to_average){
@@ -934,8 +937,17 @@ void setup()
     Serial.print("Build: ");
     Serial.println(BUILD_VERSION);
 
+
+
     enableContinuousGPS();
     locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
+
+    Log.info("This is info message");
+    Log.warn("This is warning message");
+    Log.error("This is error message");
+
+    // Format text message
+    Log.info("System version: %s", (const char*)System.version());
 
 }
 
@@ -2736,7 +2748,18 @@ void serialMenu(){
                 Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
             }
         }
+    }else if(incomingByte == 'Z'){
 
+        Log.info("IMEI=%s", CellularHelper.getIMEI().c_str());
+
+        Log.info("IMSI=%s", CellularHelper.getIMSI().c_str());
+
+        Log.info("ICCID=%s", CellularHelper.getICCID().c_str());
+        //if(serial_cellular_enabled){
+
+        //}else{
+        //    Serial.println("Cellular not enabled.  Please enable cellular first!");
+        //}
     }else if(incomingByte == '?'){
         outputSerialMenuOptions();
     }
