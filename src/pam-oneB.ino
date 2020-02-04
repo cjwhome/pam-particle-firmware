@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 1
+#define BUILD_VERSION 4
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -100,7 +100,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define ABC_ENABLE_MEM_ADDRESS 124
 #define HIH8120_ENABLE_MEM_ADDRESS 128
 #define CO_SOCKET_MEM_ADDRESS 132
-#define MAX_MEM_ADDRESS 134
+#define GOOGLE_LOCATION_MEM_ADDRESS 136
+#define MAX_MEM_ADDRESS 136
 
 
 //max and min values
@@ -232,6 +233,7 @@ int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
 int battery_threshold_enable;
 int CO_socket = 0;
+int google_location_en = 0;
 
 char geolocation_latitude[12] = "111.1111111";
 char geolocation_longitude[13] = "22.22222222";
@@ -270,6 +272,7 @@ int gas_lower_limit = 1200;   // Bad air quality limit
 int gas_upper_limit = 50000;  // Good air quality limit
 float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according to Zheng et. al 2018
 int measurements_to_average = 0;
+int co2_calibration_timer = 0;
 
 
 int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
@@ -538,6 +541,7 @@ void readStoredVars(void){
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
+    EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
 
     measurements_to_average = 5;
 
@@ -604,6 +608,7 @@ void writeDefaultSettings(void){
     EEPROM.put(ABC_ENABLE_MEM_ADDRESS, 0);
     EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, 1);
     EEPROM.put(CO_SOCKET_MEM_ADDRESS, 0);
+    EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, 0);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -940,13 +945,13 @@ void setup()
 
 
     enableContinuousGPS();
-    locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
 
-    Log.info("This is info message");
-    Log.warn("This is warning message");
-    Log.error("This is error message");
+    if(google_location_en){
+        Serial.println("Setting up google maps geolocation.");
+        locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
+    }
 
-    // Format text message
+    
     Log.info("System version: %s", (const char*)System.version());
 
 }
@@ -1118,6 +1123,13 @@ void loop() {
         goToSleepBattery();
     }
 
+    if(co2_calibration_timer){
+        co2_calibration_timer--;
+        if(debugging_enabled){
+            t6713.readStatus(1);
+        }
+    }
+
 }
 
 void calculateAQI(void){
@@ -1212,6 +1224,111 @@ void readGpsStream(void){
         for(int a = 0; a<gps_sentence.length(); a++){
             if(gps_sentence.charAt(a) == ','){
                 if(comma_counter == TIME_FIELD_INDEX){
+                    if(gps_sentence.charAt(a+1)!=','){
+                        String utc_string = gps_sentence.substring(a+1,a+11);
+                        //Serial.print("GPS utc string: ");
+                        if(debugging_enabled){
+                            Serial.print("GPS utc string: ");
+                            Serial.println(utc_string);
+
+                        }
+                        //Serial.println(utc_string);
+                    }
+                }else if(comma_counter == LATITUDE_FIELD_INDEX){
+                    if(gps_sentence.charAt(a+1)!=','){
+                        String latitudeString = gps_sentence.substring(a+1,a+10);
+                        if(debugging_enabled){
+                          Serial.print("Latitude string: ");
+                          Serial.print(latitudeString);
+                        }
+                        //Serial.print("Latitude string: ");
+                        //Serial.print(latitudeString);
+                        //Serial.print(" ");
+                        //Serial.println(gps_sentence.charAt(a+12));
+                        gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
+                        status_word.status_int &= 0xFFF7;
+                        //Serial.print("Latitude decimal: ");
+                        //Serial.println(gps.get_latitude(), 5);
+                    }
+                }else if(comma_counter == LONGITUDE_FIELD_INDEX){
+                    if(gps_sentence.charAt(a+1)!=','){
+                        String longitudeString = gps_sentence.substring(a+1,a+11);
+                        if(debugging_enabled){
+                          Serial.print("longitude string: ");
+                          Serial.print(longitudeString);
+                        }
+                        //Serial.print(" ");
+                        //Serial.println(gps_sentence.charAt(a+13));
+                        gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
+                        //Serial.print("Longitude decimal: ");
+                        //Serial.println(gps.get_longitude(), 5);
+                    }
+                }else if(comma_counter == NUMBER_OF_SATELLITES_INDEX){
+                    if(gps_sentence.charAt(a+1)!=','){
+                        String numberOfSatellitesString = gps_sentence.substring(a+1,a+3);
+                        gps.set_satellites(numberOfSatellitesString);
+                    }
+                }else if(comma_counter == HORZONTAL_DILLUTION_INDEX){
+                    if(gps_sentence.charAt(a+1)!=','){
+                        String hdString = gps_sentence.substring(a+1,a+3);
+                        gps.set_horizontalDillution(hdString);
+                        status_word.status_int &= 0xFFF3;
+                        if(gps.get_horizontalDillution() < 2){
+                            status_word.status_int |= 0x000C;
+                        }else if(gps.get_horizontalDillution() < 5){
+                            status_word.status_int |= 0x0008;
+                        }else if(gps.get_horizontalDillution() < 20){
+                            status_word.status_int |= 0x0004;
+                        }
+
+
+                    }
+                }
+                comma_counter++;
+            }
+        }
+    }
+
+}
+
+void readGpsStreamDate(void){
+    String gps_sentence = "init";
+    int stringFound = 0;
+    int error = 0;
+    int comma_counter = 0;
+    while(!stringFound && !error){
+        gps_sentence = Serial5.readStringUntil('\r');
+        String prefix_string = gps_sentence.substring(4,7);
+        if(prefix_string.equals("RMC")){
+
+            //
+            //Serial.print("prefix string: ");
+            //Serial.println(prefix_string);
+            //Serial.print("String:");
+            //Serial.println(gps_sentence);
+            stringFound = 1;
+        }else if(gps_sentence.equals("init")){
+            error = 1;
+            Serial.println("Error reading GPS RMC");
+            writeLogFile("Error reading GPS RMC");
+        }
+    }
+    if(stringFound){
+
+        //parse the gps string into latitude, longitude
+        //UTC time is after first comma
+        //Latitude is after second comma (ddmm.mmmm)
+        //N/S indicator is after 3rd comma
+        //longitude is after 4th comma (dddmm.mmmm)
+        //E/W indicator is after 5th comma
+        //quality is after 6th comma
+        //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
+        //
+        comma_counter = 0;
+
+        for(int a = 0; a<gps_sentence.length(); a++){
+            if(gps_sentence.charAt(a) == ','){
+                if(comma_counter == DATE_FIELD_INDEX){
                     if(gps_sentence.charAt(a+1)!=','){
                         String utc_string = gps_sentence.substring(a+1,a+11);
                         //Serial.print("GPS utc string: ");
@@ -2748,7 +2865,30 @@ void serialMenu(){
                 Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
             }
         }
+    }else if(incomingByte == 'W'){
+        if(google_location_en == 1){
+            Serial.println("Disabling google location services.");
+            google_location_en = 0;
+            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
+        }else{
+            Serial.println("Enabling google location services.");
+            google_location_en = 1;
+            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
+        }
+        
+    }else if(incomingByte == 'X'){
+        //calibrate CO2 sensor
+        //if(debugging_enabled){
+            t6713.calibrate(1);
+        //}else{
+         //   t6713.calibrate(0);
+        //}
+        
+        co2_calibration_timer = 180;        //6 minutes if measurement cycle is 2 seconds
+        
+    
     }else if(incomingByte == 'Z'){
+        Serial.println("Getting cellular information, this may take a while...");
 
         Log.info("IMEI=%s", CellularHelper.getIMEI().c_str());
 
@@ -3510,6 +3650,9 @@ void outputSerialMenuOptions(void){
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
+    Serial.println("W:  Enable/Disable google location services");
+    Serial.println("X:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
+    Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");

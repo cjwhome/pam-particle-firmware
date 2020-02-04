@@ -10,6 +10,7 @@
 #define NUMBER_OF_SATELLITES_INDEX 6
 #define HORZONTAL_DILLUTION_INDEX 7
 #define ALTITUDE_FIELD_INDEX 8
+#define DATE_FIELD_INDEX 6
 
 class GPS {
     double utc_time;

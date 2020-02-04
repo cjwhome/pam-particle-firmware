@@ -258,8 +258,11 @@ void Telaire_T6713::enableABCLogic()
 
 
 //start a 1 point calibration - this lasts 6 minutes so check the status bit
-void Telaire_T6713::calibrate()
+void Telaire_T6713::calibrate(int debugging)
 {
+    if(debugging){
+      Serial.println("Calibrating CO2");
+    }
     //[0x05, 0x03, 0xec, 0xff, 0x00]
     Wire.beginTransmission(ADDR_6713);
     // Function code = 0x04
