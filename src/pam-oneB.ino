@@ -184,7 +184,7 @@ LMP91000 lmp91000;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
 Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
-GPS gps;
+PAMGps pamGPS;
 PMIC pmic;
 PowerCheck powerCheck;
 SerialLogHandler logHandler;
@@ -360,7 +360,7 @@ void writeLogFile(String data);
 
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
-void echoGps();
+//void echoGps();
 void readOzone(void);
 float readCO(void);
 float getEspOzoneData(void);
@@ -372,11 +372,11 @@ void writeDefaultSettings(void);
 void readHIH8120(void);
 
 //gps functions
-void enableLowPowerGPS(void);
-void enableContinuousGPS(void);
-void changeFrequency(void);
-void sendPacket(byte *packet, byte len);
-void sendPacket(byte *packet, byte len);
+//void enableLowPowerGPS(void);
+//void enableContinuousGPS(void);
+//void changeFrequency(void);
+//void sendPacket(byte *packet, byte len);
+//void sendPacket(byte *packet, byte len);
 
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
@@ -944,7 +944,7 @@ void setup()
 
 
 
-    enableContinuousGPS();
+    PAMGps.enableContinuousGPS();
 
     if(google_location_en){
         Serial.println("Setting up google maps geolocation.");
@@ -1006,7 +1006,7 @@ void loop() {
     if(hih8120_enabled){
         readHIH8120();
     }
-    readGpsStream();
+    PAMGps.readGpsStream();
 
 
     //read CO values and apply calibration factors
@@ -1170,7 +1170,7 @@ void calculateAQI(void){
 
 }
 
-void echoGps(){
+/*void echoGps(){
     char gps_byte = 0;
     while(!Serial.available()){
         if(Serial5.available() > 0){
@@ -1179,14 +1179,14 @@ void echoGps(){
         }
 
     }
-}
+}*/
 
 /*void disableGPS(void){
     Serial.println("Turning off gps");
     String disableString = "";
     Serial5.write()
 }*/
-void readGpsStream(void){
+/*void readGpsStream(void){
     String gps_sentence = "init";
     int stringFound = 0;
     int error = 0;
@@ -1485,7 +1485,7 @@ void printPacket(byte *packet, byte len)
     }
 
     Serial.println();
-}
+}*/
 
 float readTemperature(void){
     float temperature = 0;
