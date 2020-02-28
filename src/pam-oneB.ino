@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 4
+#define BUILD_VERSION 5
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -197,10 +197,13 @@ SdFat sd;
 SdFile file;
 SdFile log_file;
 File file1;
+File tempFile;
 String fileName;
 String logFileName;
 int file_started = 0;
 int log_file_started = 0;
+// Create a Serial output stream.
+ArduinoOutStream cout(Serial);
 
 //wifi
 String ssid; //wifi network name
@@ -408,8 +411,8 @@ void outputToCloud(String data){
         //O3_sum /= measurements_to_average;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
+        //String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
+        //webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
@@ -543,7 +546,7 @@ void readStoredVars(void){
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
 
-    measurements_to_average = 5;
+    
 
     //check all values to make sure are within limits
     if(!CO2_slope)
@@ -626,6 +629,30 @@ size_t readField(File* file, char* str, size_t size, const char* delim) {
   }
   str[n] = '\0';
   return n;
+}
+void read_data_file(String fileName){
+    tempFile = sd.open(fileName, O_READ);
+    size_t n;      // Length of returned field with delimiter.
+    char str[50];  // Must hold longest field with delimiter and zero byte.
+    // Read the file and print fields.
+    int cred = 0;
+    int i = 0;
+    Serial.println("Contents of wifi file line by line:");
+    while(1)
+    {
+        n = readField(&tempFile, str, sizeof(str), ",\n");
+        // done if Error or at EOF.
+        if (n == 0){
+            break;
+        }
+        //Serial.print("I:");
+        //Serial.print(i);
+        //Serial.print(":");
+        //Serial.println(str);
+        //the first field is "SSID,PASSWORD", the second is the actual values
+        
+    tempFile.close();
+
 }
 
 void check_wifi_file(void){
@@ -791,6 +818,8 @@ void setup()
      logFileName = "log_" + fileName;
 
     if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
+        cout << F("\nList of files on the SD.\n");
+        sd.ls(LS_R);
       /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
       file.remove();
       file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
@@ -984,6 +1013,10 @@ void loop() {
 
     //Serial.println("locator loop");
     locator.loop();
+
+    ozone_analog_enabled = 0;
+    measurements_to_average = 50;
+    ozone_enabled = 1;
 
 
     if(output_only_particles == 1){
@@ -3654,6 +3687,7 @@ void outputSerialMenuOptions(void){
     Serial.println("X:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
     Serial.println("!:  Continuous serial output of VOC's");
+    Serial.println("+   List files on uSD card");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
