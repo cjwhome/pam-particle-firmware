@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 4
+#define BUILD_VERSION 8
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -187,7 +187,7 @@ FuelGauge fuel;
 GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
-SerialLogHandler logHandler;
+//SerialLogHandler logHandler;
 HIH61XX hih(0x27);
 unsigned long lastCheck = 0;
 char lastStatus[256];
@@ -543,7 +543,9 @@ void readStoredVars(void){
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
 
-    measurements_to_average = 5;
+    //measurements_to_average = 5;
+    if(measurements_to_average < 1 || measurements_to_average > 5000)
+        measurements_to_average = 1;
 
     //check all values to make sure are within limits
     if(!CO2_slope)
@@ -1586,8 +1588,15 @@ float readCO2(void){
     }
     CO2_float = t6713.readPPM();
 
+    if(CO2_float == 0){
+        CO2_float = CO2_float_previous;
+    }else{
+        CO2_float_previous = CO2_float;
+    }
+
     CO2_float *= CO2_slope;
     CO2_float += CO2_zero;
+    
     return CO2_float;
 }
 float readAlpha1(void){
@@ -3140,16 +3149,16 @@ void serialGetAverageTime(void){
     Serial.println();
     Serial.print("Current Frequency: ");
     Serial.print(measurements_to_average);
-    Serial.println(" 1 second measurements");
+    Serial.println("(~2 second) measurements");
     Serial.print("Enter new amount\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
-    if(tempValue >= 1 && tempValue < 1000){
+    if(tempValue >= 1 && tempValue < 10000){
         Serial.print("\n\rNew Frequency: ");
         Serial.println(tempValue);
-        Serial.println(" 1 second measurements");
+        Serial.println("(~2 second) measurements");
         measurements_to_average = tempValue;
         EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, tempValue);
     }else{
@@ -3214,7 +3223,7 @@ void serialGetCoSlope(void){
     float tempfloat = tempString.toFloat();
     int tempValue;
 
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
+    if(tempfloat >= 0.1 && tempfloat < 2.0){
         CO_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
@@ -3637,7 +3646,7 @@ void outputSerialMenuOptions(void){
     Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
-    Serial.println("I:  Adjust frequency for uploading");
+    Serial.println("I:  Adjust frequency for uploading through cellular");
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");
     Serial.println("L:  Write default settings");
