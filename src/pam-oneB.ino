@@ -1,22 +1,4 @@
-/***************************************************************************
-  This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
-  Designed specifically to work with the Adafruit BME680 Breakout
-  ----> http://www.adafruit.com/products/3660
-
-  These sensors use I2C or SPI to communicate, 2 or 4 pins are required
-  to interface.
-
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit and open-source hardware by purchasing products
-  from Adafruit!
-
-  Written by Limor Fried & Kevin Townsend for Adafruit Industries.
-  BSD license, all text above must be included in any redistribution
- ***************************************************************************/
-
-//#include <Wire.h>
-//#include <SPI.h>
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME680.h"
 #include "Telaire_T6713.h"
@@ -28,11 +10,13 @@
 #include "inttypes.h"
 #include "Particle.h"
 #include "PowerCheck.h"
-//#include "Serial1/Serial1.h"
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "google-maps-device-locator.h"
 #include "CellularHelper.h"
+
+#include "PAMSensorManager/PAMSensorManager.h"
+#include "Sensors/T6713/T6713.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -784,7 +768,12 @@ void setup()
     delay(10000);
     //initialize main serial port for debug output
     Serial.begin(9600);
-
+    
+    PAMSensorManager *manager = PAMSensorManager::GetInstance();
+    manager->addSensor(new T6713());
+    char *csv_header = manager->csvHeader();
+    Serial.println(csv_header);
+    free(csv_header);
 
 
     #if sd_en

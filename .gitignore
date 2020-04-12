@@ -1,3 +1,30 @@
 .vscode/
 
 *.pch
+
+target/
+src/*.cpp
+# src/pam-oneB.cpp
+
+# Created by https://www.gitignore.io/api/particle,visualstudiocode
+# Edit at https://www.gitignore.io/?templates=particle,visualstudiocode
+
+### Particle ###
+# Compiled output #
+
+###################
+
+*.bin
+
+### VisualStudioCode ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+### VisualStudioCode Patch ###
+# Ignore all local history of files
+.history
+
+# End of https://www.gitignore.io/api/particle,visualstudiocode
