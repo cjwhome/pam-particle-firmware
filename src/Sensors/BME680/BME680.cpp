@@ -1,9 +1,6 @@
 #include "BME680.h"
 
-BME680::BME680() {}
-BME680::~BME680() {}
-
-void BME680::start()
+BME680::BME680()
 {
     this->temperature.name = "Temperature";
     this->temperature.units = "C";
@@ -24,8 +21,15 @@ void BME680::start()
     this->voc.units = "";
     this->voc.packet_constant = DONT_ADVERTISE_CONSTANT;
     this->species.push_back(&this->voc);
+}
 
-    if (!this->_bme680.begin()) {
+BME680::~BME680() {}
+
+bool BME680::start()
+{
+    bool adafruit_init_success = false;
+
+    if (!(adafruit_init_success = this->_bme680.begin())) {
         Serial.println("Could not start BME680!");
     } else {
         Serial.println("Initialized BME Sensor!");
@@ -35,6 +39,8 @@ void BME680::start()
     this->_bme680.setPressureOversampling(BME680_OS_4X);
     this->_bme680.setIIRFilterSize(BME680_FILTER_SIZE_3);
     this->_bme680.setGasHeater(320, 150); // 320*C for 150 ms
+
+    return adafruit_init_success;
 }
 
 bool BME680::measure()

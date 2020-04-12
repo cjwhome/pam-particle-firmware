@@ -16,7 +16,11 @@ PAMSensorManager* PAMSensorManager::GetInstance()
 void PAMSensorManager::addSensor(PAMSensor *sensor)
 {
     this->sensors.push_back(sensor);
-    sensor->start();
+    if (sensor->start()) {
+        sensor->state = PAMSensor::SensorState::IDLE;
+    } else {
+        sensor->state = PAMSensor::SensorState::ERROR;
+    }
 }
 
 char *PAMSensorManager::csvHeader()
@@ -67,7 +71,12 @@ void PAMSensorManager::loop() {
 
         for (size_t i = 0; i < this->sensors.size(); i++) {
             PAMSensor *sensor = this->sensors[i];
-            sensor->measure();
+            sensor->state = PAMSensor::SensorState::MEASURING;
+            if (sensor->measure()) {
+                sensor->state = PAMSensor::SensorState::IDLE;
+            } else {
+                sensor->state = PAMSensor::SensorState::ERROR;
+            }
 
             for (size_t j = 0; j < sensor->getSpecies()->size(); j++) {
                 PAMSpecie *specie = sensor->getSpecies()->at(j);

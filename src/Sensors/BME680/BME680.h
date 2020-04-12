@@ -27,7 +27,7 @@ public:
 
     Adafruit_BME680 _bme680;
 
-    void start();
+    bool start();
     bool measure();
 };
 

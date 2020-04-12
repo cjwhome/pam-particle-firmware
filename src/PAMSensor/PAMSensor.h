@@ -19,11 +19,17 @@ public:
     PAMSensor();
     ~PAMSensor();
 
+    enum SensorState { UNINITIALIZED, IDLE, MEASURING, SLEEPING, ERROR };
+    SensorState state = SensorState::UNINITIALIZED;
+
+    char *name = "";
+
     // Lifecycle Methods
-    virtual void start() { Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); };
+    virtual bool start() { Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); return false; };
+    virtual bool stop() { Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); return false; }
     virtual bool measure() { Serial.println("[PAMSensor]::measure\tNOT IMPLEMENTED"); return false; };
-    virtual void sleep() { Serial.println("[PAMSensor]::sleep\tNOT IMPLEMENTED"); };
-    virtual void wakeup() { Serial.println("[PAMSensor]::wakeup\tNOT IMPLEMENTED"); };
+    virtual bool sleep() { Serial.println("[PAMSensor]::sleep\tNOT IMPLEMENTED"); return false; };
+    virtual bool wakeup() { Serial.println("[PAMSensor]::wakeup\tNOT IMPLEMENTED"); return false; };
 
     char *csvHeader();
 

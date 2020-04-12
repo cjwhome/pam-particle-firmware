@@ -17,7 +17,9 @@
 
 #include "PAMSensorManager/PAMSensorManager.h"
 #include "Sensors/T6713/T6713.h"
-#include "Sensors/BME680/BME680.h"
+// #include "Sensors/BME680/BME680.h"
+// #include "Sensors/HIH8120/HIH8120.h"
+#include "Sensors/TPHFusion/TPHFusion.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -168,7 +170,10 @@ SYSTEM_THREAD(ENABLED);
 // Telaire_T6713 t6713;  //CO2 sensor
 T6713 t6713;
 // Adafruit_BME680 bme; // I2C
-BME680 bme680;
+// BME680 bme680;
+// HIH61XX hih(0x27);
+// HIH8120 hih8120(0x27);
+TPHFusion tph_fusion(0x27, false);
 
 LMP91000 lmp91000;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
@@ -178,7 +183,7 @@ GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
 //SerialLogHandler logHandler;
-HIH61XX hih(0x27);
+
 unsigned long lastCheck = 0;
 char lastStatus[256];
 
@@ -399,9 +404,9 @@ void outputToCloud(String data){
 
         measurement_count = 0;
         // String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme680.voc.adj_value, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
+        String webhook_data = String(DEVICE_id) + ",VOC: " + String(tph_fusion.voc->adj_value, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         // webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
-        webhook_data += String(bme680.pressure.adj_value, 1) + ",HUM: " + String(bme680.humidity.adj_value, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
+        webhook_data += String(tph_fusion.pressure->adj_value, 1) + ",HUM: " + String(tph_fusion.humidity->adj_value, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
@@ -532,6 +537,11 @@ void readStoredVars(void){
     EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
+    if (hih8120_enabled) {
+        tph_fusion.enable_hih();
+    } else {
+        tph_fusion.disable_hih();
+    }
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
 
@@ -946,7 +956,7 @@ void setup()
 
     PAMSensorManager *manager = PAMSensorManager::GetInstance();
     manager->addSensor(&t6713);
-    manager->addSensor(&bme680);
+    manager->addSensor(&tph_fusion);
 
     char *csv_header = manager->csvHeader();
     Serial.println(csv_header);
@@ -1006,9 +1016,9 @@ void loop() {
     //     Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
     //   }
     // }
-    if(hih8120_enabled){
-        readHIH8120();
-    }
+    // if(hih8120_enabled){
+    //     readHIH8120();
+    // }
     readGpsStream();
 
 
@@ -1026,7 +1036,7 @@ void loop() {
 
     //correct for altitude
     // float pressure_correction = bme.pressure/100;
-    float pressure_correction = bme680.pressure.adj_value;
+    float pressure_correction = tph_fusion.pressure->adj_value;
     if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
         pressure_correction /= SEALEVELPRESSURE_HPA;
         if(debugging_enabled){
@@ -1141,7 +1151,7 @@ void loop() {
 void calculateAQI(void){
     //Calculate humidity contribution to IAQ index
         // gas_reference = bme.gas_resistance/100;
-    gas_reference = bme680.voc.adj_value;
+    gas_reference = tph_fusion.voc->adj_value;
       float current_humidity = readHumidity();
       if(debugging_enabled){
           Serial.printf("gas resistance: %1.0f, humidity: %1.2f\n\r", gas_reference, current_humidity);
@@ -1495,63 +1505,66 @@ void printPacket(byte *packet, byte len)
 }
 
 float readTemperature(void){
-    float temperature = 0;
-    if(hih8120_enabled){
-        temperature = hih.temperature();
-        if(debugging_enabled){
-            Serial.println("Temperature reading from HIH8120");
-        }
-    }else if(new_temperature_sensor_enabled){
-        if(debugging_enabled){
-            Serial.println("Temperature reading from TMP36");
-        }
-        temperature = analogRead(A1);
+    // float temperature = 0;
+    // if(hih8120_enabled){
+    //     // temperature = hih.temperature();
+    //     temperature = hih8120.temperature.adj_value;
+    //     if(debugging_enabled){
+    //         Serial.println("Temperature reading from HIH8120");
+    //     }
+    // }else if(new_temperature_sensor_enabled){
+    //     if(debugging_enabled){
+    //         Serial.println("Temperature reading from TMP36");
+    //     }
+    //     temperature = analogRead(A1);
 
 
-        temperature *= VOLTS_PER_UNIT;
+    //     temperature *= VOLTS_PER_UNIT;
 
-        temperature -= TMP36_OFFSET;
-        temperature /= TMP36_VPDC;
-    }else{
-        if(debugging_enabled){
-            Serial.println("Temperature reading from BME for Alphasense");
+    //     temperature -= TMP36_OFFSET;
+    //     temperature /= TMP36_VPDC;
+    // }else{
+    //     if(debugging_enabled){
+    //         Serial.println("Temperature reading from BME for Alphasense");
 
-          }
-        // temperature = bme.temperature;
-        temperature = bme680.temperature.adj_value;
-    }
-    //temperature *= 100;
+    //       }
+    //     // temperature = bme.temperature;
+    //     temperature = bme680.temperature.adj_value;
+    // }
+    // //temperature *= 100;
 
-    temperature *= temp_slope;
-    temperature += temp_zero;       //user input zero offset
+    // temperature *= temp_slope;
+    // temperature += temp_zero;       //user input zero offset
 
-    return temperature;
+    return tph_fusion.temperature->adj_value;
     //temperature = temperature +
 }
 
 float readHumidity(void){
-    float humidity;
-    if(hih8120_enabled){
-        humidity = hih.humidity();
-        humidity *= 100;
-        if(debugging_enabled){
-            Serial.println("Humidity reading from HIH8120");
-        }
-    }else{
-        // humidity = bme.humidity;
-        humidity = bme680.humidity.adj_value;
-        if(debugging_enabled){
-            Serial.println("Humidity reading from BME");
-        }
-    }
+    // float humidity;
+    // if(hih8120_enabled){
+    //     // humidity = hih.humidity();
+    //     humidity = hih8120.humidity.adj_value;
+    //     humidity *= 100;
+    //     if(debugging_enabled){
+    //         Serial.println("Humidity reading from HIH8120");
+    //     }
+    // }else{
+    //     // humidity = bme.humidity;
+    //     humidity = bme680.humidity.adj_value;
+    //     if(debugging_enabled){
+    //         Serial.println("Humidity reading from BME");
+    //     }
+    // }
 
 
-    humidity *= rh_slope;
-    humidity += rh_zero;       //user input zero offset
-    if(humidity > 100)
-        humidity = 100;
-    return humidity;
+    // humidity *= rh_slope;
+    // humidity += rh_zero;       //user input zero offset
+    // if(humidity > 100)
+    //     humidity = 100;
+    // return humidity;
     //temperature = temperature +
+    return tph_fusion.humidity->adj_value;
 }
 //read sound from
 double readSound(void){
@@ -1610,8 +1623,8 @@ float readCO2(void){
     //     CO2_float = specie->adj_value;
     // }
     t6713.measure();
-    if (t6713.CO2->adj_value != 0 && t6713.CO2->adj_value != VALUE_UNKNOWN) {
-        CO2_float = t6713.CO2->adj_value;
+    if (t6713.CO2.adj_value != 0 && t6713.CO2.adj_value != VALUE_UNKNOWN) {
+        CO2_float = t6713.CO2.adj_value;
     }
     return CO2_float;
 }
@@ -1939,9 +1952,9 @@ void outputDataToESP(void){
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
     csv_output_string += String(readTemperature(), 1) + ",";
     // cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
-    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme680.pressure.adj_value, 1);
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(tph_fusion.pressure->adj_value, 1);
     // csv_output_string += String(bme.pressure / 100.0, 1) + ",";
-    csv_output_string += String(bme680.pressure.adj_value, 1) + ",";
+    csv_output_string += String(tph_fusion.pressure->adj_value, 1) + ",";
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
     csv_output_string += String(readHumidity(), 1) + ",";
     if(ozone_enabled){
@@ -2099,7 +2112,7 @@ void outputDataToESP(void){
         }else if(i == 7){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
             // floatBytes.myFloat = bme.pressure / 100.0;
-            floatBytes.myFloat = bme680.pressure.adj_value;
+            floatBytes.myFloat = tph_fusion.pressure->adj_value;
         }else if(i == 8){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
             floatBytes.myFloat = readHumidity();
@@ -2343,7 +2356,7 @@ void outputParticles(){
         CO2_float *= CO2_slope;
         //correct for altitude
         // float pressure_correction = bme.pressure/100;
-        float pressure_correction = bme680.pressure.adj_value;
+        float pressure_correction = tph_fusion.pressure->adj_value;
         if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
             pressure_correction /= SEALEVELPRESSURE_HPA;
             CO2_float *= pressure_correction;
@@ -2450,10 +2463,10 @@ void outputParticles(){
 }
 
 void readHIH8120(void){
-    hih.start();
+    // hih.start();
 
     //  request an update of the humidity and temperature
-    hih.update();
+    // hih.update();
 
     /*Serial.print("Humidity: ");
     Serial.print(hih.humidity(), 5);
@@ -2799,11 +2812,13 @@ void serialMenu(){
         if (!hih8120_enabled) {
             Serial.println("Enabling HIH8120 RH sensor");
             hih8120_enabled = 1;
+            tph_fusion.enable_hih();
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
 
         } else {
             Serial.println("Disabling HIH8120 RH sensor");
             hih8120_enabled = 0;
+            tph_fusion.disable_hih();
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
         }
 
@@ -2892,12 +2907,12 @@ void serialMenu(){
         Serial.println("Outputting VOCs continuously!  Press any button to exit...");
         while(!Serial.available()){
             // if (! bme.performReading()) {
-            if (! bme680.measure()) {
+            if (! tph_fusion.measure()) {
               Serial.println("Failed to read BME680");
               return;
             }else{
                 // Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
-                Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme680.voc.adj_value, bme680.temperature.adj_value, bme680.pressure.adj_value, bme680.humidity.adj_value);
+                Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", tph_fusion.voc->adj_value, tph_fusion.temperature->adj_value, tph_fusion.pressure->adj_value, tph_fusion.humidity->adj_value);
             }
         }
     }else if(incomingByte == 'W'){

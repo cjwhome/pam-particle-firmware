@@ -14,10 +14,10 @@ public:
     T6713();
     ~T6713();
 
-    void start();
+    bool start();
     bool measure();
 
-    PAMSpecie *CO2 = nullptr;
+    PAMSpecie CO2;
 
     Telaire_T6713 _t6713;
 
