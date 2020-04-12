@@ -21,7 +21,7 @@ public:
 
     // Lifecycle Methods
     virtual void start() { Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); };
-    virtual void measure() { Serial.println("[PAMSensor]::measure\tNOT IMPLEMENTED"); };
+    virtual bool measure() { Serial.println("[PAMSensor]::measure\tNOT IMPLEMENTED"); return false; };
     virtual void sleep() { Serial.println("[PAMSensor]::sleep\tNOT IMPLEMENTED"); };
     virtual void wakeup() { Serial.println("[PAMSensor]::wakeup\tNOT IMPLEMENTED"); };
 

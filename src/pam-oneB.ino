@@ -17,6 +17,7 @@
 
 #include "PAMSensorManager/PAMSensorManager.h"
 #include "Sensors/T6713/T6713.h"
+#include "Sensors/BME680/BME680.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -162,8 +163,13 @@ SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
 
 //global objects
-Adafruit_BME680 bme; // I2C
-Telaire_T6713 t6713;  //CO2 sensor
+
+// PAM Sensors
+// Telaire_T6713 t6713;  //CO2 sensor
+T6713 t6713;
+// Adafruit_BME680 bme; // I2C
+BME680 bme680;
+
 LMP91000 lmp91000;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
 Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
@@ -392,8 +398,10 @@ void outputToCloud(String data){
         //O3_sum /= measurements_to_average;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
+        // String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
+        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme680.voc.adj_value, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
+        // webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
+        webhook_data += String(bme680.pressure.adj_value, 1) + ",HUM: " + String(bme680.humidity.adj_value, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
@@ -881,16 +889,16 @@ void setup()
     }
     //#endif
 
-    if (!bme.begin()) {
-      Serial.println("Could not find a valid BME680 sensor, check wiring!");
-      if(debugging_enabled)
-          writeLogFile("Could not find a valid BME680 sensor, check wiring!");
-      //while (1);
-    }else{
-      Serial.println("Initialized BME Sensor");
-      if(debugging_enabled)
-        writeLogFile("Initialized BME Sensor");
-    }
+    // if (!bme.begin()) {
+    //   Serial.println("Could not find a valid BME680 sensor, check wiring!");
+    //   if(debugging_enabled)
+    //       writeLogFile("Could not find a valid BME680 sensor, check wiring!");
+    //   //while (1);
+    // }else{
+    //   Serial.println("Initialized BME Sensor");
+    //   if(debugging_enabled)
+    //     writeLogFile("Initialized BME Sensor");
+    // }
 
     // if(!t6713.begin()){
     //   Serial.println("Could not find a valid T6713 sensor, check wiring!");
@@ -899,11 +907,11 @@ void setup()
     // }
   //Serial.println("before bme setup");
     // Set up oversampling and filter initialization
-    bme.setTemperatureOversampling(BME680_OS_8X);
-    bme.setHumidityOversampling(BME680_OS_2X);
-    bme.setPressureOversampling(BME680_OS_4X);
-    bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    bme.setGasHeater(320, 150); // 320*C for 150 ms
+    // bme.setTemperatureOversampling(BME680_OS_8X);
+    // bme.setHumidityOversampling(BME680_OS_2X);
+    // bme.setPressureOversampling(BME680_OS_4X);
+    // bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
+    // bme.setGasHeater(320, 150); // 320*C for 150 ms
 //Serial.println("After bme setup");
     //output current time
 
@@ -937,7 +945,8 @@ void setup()
     }
 
     PAMSensorManager *manager = PAMSensorManager::GetInstance();
-    manager->addSensor(new T6713());
+    manager->addSensor(&t6713);
+    manager->addSensor(&bme680);
 
     char *csv_header = manager->csvHeader();
     Serial.println(csv_header);
@@ -984,19 +993,19 @@ void loop() {
         outputParticles();
     }
     //read temp, press, humidity, and TVOCs
-    if(debugging_enabled){
-      Serial.println("Before reading bme");
-      writeLogFile("before reading bme");
-    }
-    if (! bme.performReading()) {
-      Serial.println("Failed to read BME680");
-      writeLogFile("Failed to read BME680");
-      return;
-    }else{
-      if(debugging_enabled){
-        Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
-      }
-    }
+    // if(debugging_enabled){
+    //   Serial.println("Before reading bme");
+    //   writeLogFile("before reading bme");
+    // }
+    // if (! bme.performReading()) {
+    //   Serial.println("Failed to read BME680");
+    //   writeLogFile("Failed to read BME680");
+    //   return;
+    // }else{
+    //   if(debugging_enabled){
+    //     Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
+    //   }
+    // }
     if(hih8120_enabled){
         readHIH8120();
     }
@@ -1016,7 +1025,8 @@ void loop() {
 
 
     //correct for altitude
-    float pressure_correction = bme.pressure/100;
+    // float pressure_correction = bme.pressure/100;
+    float pressure_correction = bme680.pressure.adj_value;
     if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
         pressure_correction /= SEALEVELPRESSURE_HPA;
         if(debugging_enabled){
@@ -1117,18 +1127,21 @@ void loop() {
         goToSleepBattery();
     }
 
-    if(co2_calibration_timer){
-        co2_calibration_timer--;
-        if(debugging_enabled){
-            t6713.readStatus(1);
-        }
-    }
+    // CRAIG: What is the purpose of this?
+    // It looks like it will read the status of the CO2 module while the time is active, which is 180 cycles
+    // if(co2_calibration_timer){
+    //     co2_calibration_timer--;
+    //     if(debugging_enabled){
+    //         t6713.readStatus(1);
+    //     }
+    // }
 
 }
 
 void calculateAQI(void){
     //Calculate humidity contribution to IAQ index
-        gas_reference = bme.gas_resistance/100;
+        // gas_reference = bme.gas_resistance/100;
+    gas_reference = bme680.voc.adj_value;
       float current_humidity = readHumidity();
       if(debugging_enabled){
           Serial.printf("gas resistance: %1.0f, humidity: %1.2f\n\r", gas_reference, current_humidity);
@@ -1504,7 +1517,8 @@ float readTemperature(void){
             Serial.println("Temperature reading from BME for Alphasense");
 
           }
-        temperature = bme.temperature;
+        // temperature = bme.temperature;
+        temperature = bme680.temperature.adj_value;
     }
     //temperature *= 100;
 
@@ -1524,7 +1538,8 @@ float readHumidity(void){
             Serial.println("Humidity reading from HIH8120");
         }
     }else{
-        humidity = bme.humidity;
+        // humidity = bme.humidity;
+        humidity = bme680.humidity.adj_value;
         if(debugging_enabled){
             Serial.println("Humidity reading from BME");
         }
@@ -1590,9 +1605,13 @@ float readCO2(void){
     // CO2_float += CO2_zero;
     
     // return CO2_float;
-    PAMSpecie *specie;
-    if ((specie = PAMSensorManager::GetInstance()->findSpeciesForName("CO2")->front()) != nullptr) {
-        CO2_float = specie->adj_value;
+    // PAMSpecie *specie;
+    // if ((specie = PAMSensorManager::GetInstance()->findSpeciesForName("CO2")->front()) != nullptr) {
+    //     CO2_float = specie->adj_value;
+    // }
+    t6713.measure();
+    if (t6713.CO2->adj_value != 0 && t6713.CO2->adj_value != VALUE_UNKNOWN) {
+        CO2_float = t6713.CO2->adj_value;
     }
     return CO2_float;
 }
@@ -1919,8 +1938,10 @@ void outputDataToESP(void){
     csv_output_string += String(PM10Value) + ",";
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
     csv_output_string += String(readTemperature(), 1) + ",";
-    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
-    csv_output_string += String(bme.pressure / 100.0, 1) + ",";
+    // cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme680.pressure.adj_value, 1);
+    // csv_output_string += String(bme.pressure / 100.0, 1) + ",";
+    csv_output_string += String(bme680.pressure.adj_value, 1) + ",";
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
     csv_output_string += String(readHumidity(), 1) + ",";
     if(ozone_enabled){
@@ -2077,7 +2098,8 @@ void outputDataToESP(void){
             floatBytes.myFloat = readTemperature();
         }else if(i == 7){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
-            floatBytes.myFloat = bme.pressure / 100.0;
+            // floatBytes.myFloat = bme.pressure / 100.0;
+            floatBytes.myFloat = bme680.pressure.adj_value;
         }else if(i == 8){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
             floatBytes.myFloat = readHumidity();
@@ -2308,18 +2330,20 @@ void outputParticles(){
     }wordBytes;
 
     while(!Serial.available()){
-        if (! bme.performReading()) {
-          Serial.println("Failed to read BME680");
+        // if (! bme.performReading()) {
+        //   Serial.println("Failed to read BME680");
 
-        }
+        // }
         readPlantower();
         readGpsStream();
-        CO2_float = t6713.readPPM();
+        // CO2_float = t6713.readPPM();
+        CO2_float = readCO2();
 
         CO2_float += CO2_zero;
         CO2_float *= CO2_slope;
         //correct for altitude
-        float pressure_correction = bme.pressure/100;
+        // float pressure_correction = bme.pressure/100;
+        float pressure_correction = bme680.pressure.adj_value;
         if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
             pressure_correction /= SEALEVELPRESSURE_HPA;
             CO2_float *= pressure_correction;
@@ -2754,7 +2778,8 @@ void serialMenu(){
             Serial.println("Disabling ABC logic for CO2 sensor");
             abc_logic_enabled = 0;
             EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
-            t6713.disableABCLogic();
+            // t6713.disableABCLogic();
+            t6713._t6713.disableABCLogic();
         }else{
             Serial.println("ABC logic already disabled");
         }
@@ -2764,17 +2789,19 @@ void serialMenu(){
             Serial.println("Enabling abc logic for CO2 sensor");
             abc_logic_enabled = 1;
             EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
-            t6713.enableABCLogic();
+            // t6713.enableABCLogic();
+            t6713._t6713.enableABCLogic();
+
         }else{
             Serial.println("ABC logic already enabled");
         }
     }else if(incomingByte == 'T'){
-        if(!hih8120_enabled){
+        if (!hih8120_enabled) {
             Serial.println("Enabling HIH8120 RH sensor");
             hih8120_enabled = 1;
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
 
-        }else{
+        } else {
             Serial.println("Disabling HIH8120 RH sensor");
             hih8120_enabled = 0;
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
@@ -2793,8 +2820,8 @@ void serialMenu(){
         }
     }else if(incomingByte == 'V'){
         Serial.println("Reseting the CO2 sensor");
-        t6713.resetSensor();
-
+        // t6713.resetSensor();
+        t6713._t6713.resetSensor();
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
@@ -2864,11 +2891,13 @@ void serialMenu(){
 
         Serial.println("Outputting VOCs continuously!  Press any button to exit...");
         while(!Serial.available()){
-            if (! bme.performReading()) {
+            // if (! bme.performReading()) {
+            if (! bme680.measure()) {
               Serial.println("Failed to read BME680");
               return;
             }else{
-                Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
+                // Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
+                Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme680.voc.adj_value, bme680.temperature.adj_value, bme680.pressure.adj_value, bme680.humidity.adj_value);
             }
         }
     }else if(incomingByte == 'W'){
@@ -2885,7 +2914,8 @@ void serialMenu(){
     }else if(incomingByte == 'X'){
         //calibrate CO2 sensor
         //if(debugging_enabled){
-            t6713.calibrate(1);
+            // t6713.calibrate(1);
+            t6713._t6713.calibrate(1);
         //}else{
          //   t6713.calibrate(0);
         //}

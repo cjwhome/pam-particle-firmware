@@ -3,7 +3,7 @@
 #include "Particle.h"
 #include "Telaire_T6713.h"
 
-//#define T6713_DEBUG     //comment this out if not want debug
+// #define T6713_DEBUG     //comment this out if not want debug
 
 #define ADDR_6713  0x15 // default I2C slave address
 
