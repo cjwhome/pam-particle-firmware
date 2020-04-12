@@ -27,6 +27,8 @@ public:
 
     char *csvHeader();
 
+    std::vector<PAMSpecie *>* getSpecies() { return &(this->species); }
+
 protected:
     std::vector<PAMSpecie *> species;
 

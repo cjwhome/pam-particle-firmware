@@ -768,12 +768,6 @@ void setup()
     delay(10000);
     //initialize main serial port for debug output
     Serial.begin(9600);
-    
-    PAMSensorManager *manager = PAMSensorManager::GetInstance();
-    manager->addSensor(new T6713());
-    char *csv_header = manager->csvHeader();
-    Serial.println(csv_header);
-    free(csv_header);
 
 
     #if sd_en
@@ -898,11 +892,11 @@ void setup()
         writeLogFile("Initialized BME Sensor");
     }
 
-    if(!t6713.begin()){
-      Serial.println("Could not find a valid T6713 sensor, check wiring!");
-      if(debugging_enabled)
-          writeLogFile("Could not find a valid T6713");
-    }
+    // if(!t6713.begin()){
+    //   Serial.println("Could not find a valid T6713 sensor, check wiring!");
+    //   if(debugging_enabled)
+    //       writeLogFile("Could not find a valid T6713");
+    // }
   //Serial.println("before bme setup");
     // Set up oversampling and filter initialization
     bme.setTemperatureOversampling(BME680_OS_8X);
@@ -942,6 +936,13 @@ void setup()
         locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
     }
 
+    PAMSensorManager *manager = PAMSensorManager::GetInstance();
+    manager->addSensor(new T6713());
+
+    char *csv_header = manager->csvHeader();
+    Serial.println(csv_header);
+    free(csv_header);
+
     
     Log.info("System version: %s", (const char*)System.version());
 
@@ -975,6 +976,8 @@ void loop() {
 
     //Serial.println("locator loop");
     locator.loop();
+
+    PAMSensorManager::GetInstance()->loop();
 
 
     if(output_only_particles == 1){
@@ -1572,20 +1575,25 @@ float readCO(void){
 
 float readCO2(void){
     //read CO2 values and apply calibration factors
-    if(debugging_enabled){
-        t6713.readStatus(1);
-    }
-    CO2_float = t6713.readPPM();
+    // if(debugging_enabled){
+    //     t6713.readStatus(1);
+    // }
+    // CO2_float = t6713.readPPM();
 
-    if(CO2_float == 0){
-        CO2_float = CO2_float_previous;
-    }else{
-        CO2_float_previous = CO2_float;
-    }
+    // if(CO2_float == 0){
+    //     CO2_float = CO2_float_previous;
+    // }else{
+    //     CO2_float_previous = CO2_float;
+    // }
 
-    CO2_float *= CO2_slope;
-    CO2_float += CO2_zero;
+    // CO2_float *= CO2_slope;
+    // CO2_float += CO2_zero;
     
+    // return CO2_float;
+    PAMSpecie *specie;
+    if ((specie = PAMSensorManager::GetInstance()->findSpeciesForName("CO2")->front()) != nullptr) {
+        CO2_float = specie->adj_value;
+    }
     return CO2_float;
 }
 float readAlpha1(void){

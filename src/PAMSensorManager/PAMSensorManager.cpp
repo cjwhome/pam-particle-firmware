@@ -39,3 +39,41 @@ char *PAMSensorManager::csvHeader()
     
     return header;
 }
+
+std::vector<PAMSpecie *>* PAMSensorManager::findSpeciesForName(char *name)
+{
+    std::vector<PAMSpecie *> *species = new std::vector<PAMSpecie *>();
+
+    for (size_t i = 0; i < this->sensors.size(); i++) {
+        PAMSensor *sensor = this->sensors[i];
+        for (size_t j = 0; j < sensor->getSpecies()->size(); j++) {
+            PAMSpecie *specie = sensor->getSpecies()->at(j);
+            if (strcmp(name, specie->name) == 0) {
+                species->push_back(specie);
+            }
+        }
+    }
+
+    return species;
+}
+
+void PAMSensorManager::loop() {
+    if (millis() > (this->last_loop_ms + this->measurement_period_ms)) {
+        this->last_loop_ms = millis();
+
+        char *serial_line = (char *) malloc(256);
+        memset(serial_line, 0, 256);
+        sprintf(serial_line, "%d", 1011);
+
+        for (size_t i = 0; i < this->sensors.size(); i++) {
+            PAMSensor *sensor = this->sensors[i];
+            sensor->measure();
+
+            for (size_t j = 0; j < sensor->getSpecies()->size(); j++) {
+                PAMSpecie *specie = sensor->getSpecies()->at(j);
+                sprintf(serial_line, "%s,%0.2f", serial_line, specie->adj_value);
+            }
+        }
+        Serial.println(serial_line);
+    }
+}

@@ -3,7 +3,10 @@
 
 #include "Particle.h"
 
+#include "Telaire_T6713.h"
+
 #include "../../PAMSensor/PAMSensor.h"
+#include "../../PAMSpecie/PAMSpecie.h"
 
 class T6713: public PAMSensor {
 
@@ -12,6 +15,12 @@ public:
     ~T6713();
 
     void start();
+    void measure();
+
+    PAMSpecie *CO2 = nullptr;
+
+private:
+    Telaire_T6713 t6713;
 
 };
 
