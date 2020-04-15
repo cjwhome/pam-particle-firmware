@@ -20,6 +20,7 @@
 // #include "Sensors/BME680/BME680.h"
 // #include "Sensors/HIH8120/HIH8120.h"
 #include "Sensors/TPHFusion/TPHFusion.h"
+#include "Sensors/Plantower/Plantower.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -32,8 +33,7 @@ GoogleMapsDeviceLocator locator;
 #define HIGH_PRESSURE_LIMIT (1500)
 #define VOLTS_PER_UNIT (0.0008)   //3.3V/4096  3.3 is the adc reference voltage and the adc is 12 bits or 4096
 #define VOLTS_PER_PPB (0.0125)  //2.5V/200 ppb this is what you divide the voltage reading by to get ppb in ozone if the ozone monitor is set to 2.5V=200ppb
-#define PM_25_CONSTANT_A (1.19)
-#define PM_25_CONSTANT_B (0.119)
+
 #define CELCIUS 1
 #define FARENHEIT 0
 #define TMP36_OFFSET 0.5
@@ -174,6 +174,7 @@ T6713 t6713;
 // HIH61XX hih(0x27);
 // HIH8120 hih8120(0x27);
 TPHFusion tph_fusion(0x27, false);
+Plantower plantower(Serial4);
 
 LMP91000 lmp91000;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
@@ -279,10 +280,10 @@ uint16_t value;
 char recieveStr[5];
 
 //plantower PMS5003 vars
-int PM01Value=0;
-int PM2_5Value=0;
-int PM10Value=0;
-float corrected_PM_25 = 0;
+// int PM01Value=0;
+// int PM2_5Value=0;
+// int PM10Value=0;
+// float corrected_PM_25 = 0;
 #define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
 char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
 char incomingByte;  //serial connection from user
@@ -404,7 +405,7 @@ void outputToCloud(String data){
 
         measurement_count = 0;
         // String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(tph_fusion.voc->adj_value, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
+        String webhook_data = String(DEVICE_id) + ",VOC: " + String(tph_fusion.voc->adj_value, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + plantower.pm1.adj_value + ",PM2.5: " + plantower.pm2_5.adj_value + ", PM10: " + plantower.pm10.adj_value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         // webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
         webhook_data += String(tph_fusion.pressure->adj_value, 1) + ",HUM: " + String(tph_fusion.humidity->adj_value, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
@@ -753,10 +754,10 @@ void setup()
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
     //init serial4 to communicate with Plantower PMS5003
-    Serial4.begin(9600);
+    // Serial4.begin(9600);
     Serial5.begin(9600);        //gps is connected to this serial port
     //set the Timeout to 1500ms, longer than the data transmission periodic time of the sensor
-    Serial4.setTimeout(5000);
+    // Serial4.setTimeout(5000);
 
     // Setup the PMIC manually (resets the BQ24195 charge controller)
     // REG00 Input Source Control Register  (disabled)
@@ -957,6 +958,7 @@ void setup()
     PAMSensorManager *manager = PAMSensorManager::GetInstance();
     manager->addSensor(&t6713);
     manager->addSensor(&tph_fusion);
+    manager->addSensor(&plantower);
 
     char *csv_header = manager->csvHeader();
     Serial.println(csv_header);
@@ -1060,15 +1062,15 @@ void loop() {
     calculateAQI();
     sound_average = readSound();
     //read PM values and apply calibration factors
-    readPlantower();
+    // readPlantower();
 
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-    if(debugging_enabled){
-        Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
-    }
-    corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
-    corrected_PM_25 = corrected_PM_25 + PM_25_zero;
-    corrected_PM_25 = corrected_PM_25 * PM_25_slope;
+    // pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+    // if(debugging_enabled){
+    //     Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
+    // }
+    // corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
+    // corrected_PM_25 = corrected_PM_25 + PM_25_zero;
+    // corrected_PM_25 = corrected_PM_25 * PM_25_slope;
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -1943,12 +1945,19 @@ void outputDataToESP(void){
         cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
         csv_output_string += String(air_quality_score, 1) + ",";
     }
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
-    csv_output_string += String(PM01Value) + ",";
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
-    csv_output_string += String(corrected_PM_25, 0) + ",";
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
-    csv_output_string += String(PM10Value) + ",";
+    // cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(plantower.pm1.adj_value);
+    // csv_output_string += String(PM01Value) + ",";
+    csv_output_string += String(plantower.pm1.adj_value) + ",";
+    // cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(plantower.pm2_5.adj_value, 0);
+    // csv_output_string += String(corrected_PM_25, 0) + ",";
+    csv_output_string += String(plantower.pm2_5.adj_value, 0) + ",";
+    // cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(plantower.pm10.adj_value);
+    // csv_output_string += String(PM10Value) + ",";
+    csv_output_string += String(plantower.pm10.adj_value) + ",";
+
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
     csv_output_string += String(readTemperature(), 1) + ",";
     // cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
@@ -2099,13 +2108,16 @@ void outputDataToESP(void){
             floatBytes.myFloat = fuel.getSoC();
         }else if(i == 3){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-            floatBytes.myFloat = PM01Value;
+            // floatBytes.myFloat = PM01Value;
+            floatBytes.myFloat = plantower.pm1.adj_value;
         }else if(i == 4){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-            floatBytes.myFloat = corrected_PM_25;
+            // floatBytes.myFloat = corrected_PM_25;
+            floatBytes.myFloat = plantower.pm2_5.adj_value;
         }else if(i == 5){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-            floatBytes.myFloat = PM10Value;
+            // floatBytes.myFloat = PM10Value;
+            floatBytes.myFloat = plantower.pm10.adj_value;
         }else if(i == 6){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
             floatBytes.myFloat = readTemperature();
@@ -2347,7 +2359,7 @@ void outputParticles(){
         //   Serial.println("Failed to read BME680");
 
         // }
-        readPlantower();
+        // readPlantower();
         readGpsStream();
         // CO2_float = t6713.readPPM();
         CO2_float = readCO2();
@@ -2361,8 +2373,8 @@ void outputParticles(){
             pressure_correction /= SEALEVELPRESSURE_HPA;
             CO2_float *= pressure_correction;
         }
-        pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-        corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
+        // pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+        // corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
         byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
 
@@ -2400,13 +2412,16 @@ void outputParticles(){
                 floatBytes.myFloat = fuel.getSoC();
             }else if(i == 1){
                 ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-                floatBytes.myFloat = PM01Value;
+                // floatBytes.myFloat = PM01Value;
+                floatBytes.myFloat = plantower.pm1.adj_value;
             }else if(i == 2){
                 ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-                floatBytes.myFloat = corrected_PM_25;
+                // floatBytes.myFloat = corrected_PM_25;
+                floatBytes.myFloat = plantower.pm2_5.adj_value;
             }else if(i == 3){
                 ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-                floatBytes.myFloat = PM10Value;
+                // floatBytes.myFloat = PM10Value;
+                floatBytes.myFloat = plantower.pm10.adj_value;
             }else if(i == 4){
                 ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
                 floatBytes.myFloat = CO2_float;
@@ -2460,80 +2475,6 @@ void outputParticles(){
         Serial1.print("&");
         sample_counter += 1;
     }
-}
-
-void readHIH8120(void){
-    // hih.start();
-
-    //  request an update of the humidity and temperature
-    // hih.update();
-
-    /*Serial.print("Humidity: ");
-    Serial.print(hih.humidity(), 5);
-    Serial.print(" RH (");
-    Serial.print(hih.humidity_Raw());
-    Serial.println(")");
-
-    Serial.print("Temperature: ");
-    Serial.print(hih.temperature(), 5);
-    Serial.println(" C (");
-    Serial.print(hih.temperature_Raw());
-    Serial.println(")");*/
-}
-//read from plantower pms 5500
-void readPlantower(void){
-    if(Serial4.find("B")){    //start to read when detect 0x42
-        //if(debugging_enabled)
-          //Serial.println("Found a B when reading plantower");
-          Serial4.readBytes(buf,LENG);
-          if(buf[0] == 0x4d){
-              if(checkValue(buf,LENG)){ //All units are ug/m^3
-                  //Serial.println("Value is good from pm buff");
-                  PM01Value=transmitPM01(buf); //count PM1.0 value of the air detector module
-                  PM2_5Value=transmitPM2_5(buf);//count PM2.5 value of the air detector module
-                  PM10Value=transmitPM10(buf); //count PM10 value of the air detector module
-              }
-          }
-      }
-      else{
-        //Serial.println("Clearing serial buffer from PM measurement");
-        while(Serial4.available()){
-            char clearBuffer = Serial4.read();
-            //Serial.print(clearBuffer);
-        }
-      }
-}
-char checkValue(char *thebuf, char leng)  {
-    char receiveflag=0;
-    int receiveSum=0;
-
-    for(int i=0; i<(leng-2); i++) {
-      receiveSum=receiveSum+thebuf[i];
-    }
-    receiveSum=receiveSum + 0x42;
-
-    if(receiveSum == ((thebuf[leng-2]<<8)+thebuf[leng-1])) { //check the serial data
-      receiveSum = 0;
-      receiveflag = 1;
-    }
-    return receiveflag;
-}
-int transmitPM01(char *thebuf)  {
-    int PM01Val;
-    PM01Val=((thebuf[3]<<8) + thebuf[4]); //count PM1.0 value of the air detector module
-    return PM01Val;
-}
-//transmit PM Value to PC
-float transmitPM2_5(char *thebuf) {
-    float PM2_5Val;
-    PM2_5Val=((thebuf[5]<<8) + thebuf[6]);//count PM2.5 value of the air detector module
-    return PM2_5Val;
-}
-//transmit PM Value to PC
-int transmitPM10(char *thebuf)  {
-    int PM10Val;
-    PM10Val=((thebuf[7]<<8) + thebuf[8]); //count PM10 value of the air detector module
-    return PM10Val;
 }
 
 void goToSleep(void){

@@ -62,6 +62,11 @@ std::vector<PAMSpecie *>* PAMSensorManager::findSpeciesForName(char *name)
 }
 
 void PAMSensorManager::loop() {
+    for (size_t i = 0; i < this->sensors.size(); i++) {
+        PAMSensor *sensor = this->sensors[i];
+        sensor->loop();
+    }
+
     if (millis() > (this->last_loop_ms + this->measurement_period_ms)) {
         this->last_loop_ms = millis();
 

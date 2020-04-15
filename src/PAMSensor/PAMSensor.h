@@ -25,11 +25,12 @@ public:
     char *name = "";
 
     // Lifecycle Methods
-    virtual bool start() { Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); return false; };
-    virtual bool stop() { Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); return false; }
-    virtual bool measure() { Serial.println("[PAMSensor]::measure\tNOT IMPLEMENTED"); return false; };
-    virtual bool sleep() { Serial.println("[PAMSensor]::sleep\tNOT IMPLEMENTED"); return false; };
-    virtual bool wakeup() { Serial.println("[PAMSensor]::wakeup\tNOT IMPLEMENTED"); return false; };
+    virtual bool start() { /* Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); */ return false; };
+    virtual bool stop() { /* Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); */ return false; };
+    virtual void loop() { /* Serial.println("[PAMSensor]::loop\tNOT IMPLEMENTED"); */ };
+    virtual bool measure() { /* Serial.println("[PAMSensor]::measure\tNOT IMPLEMENTED"); */ return false; };
+    virtual bool sleep() { /* Serial.println("[PAMSensor]::sleep\tNOT IMPLEMENTED"); */ return false; };
+    virtual bool wakeup() { /* Serial.println("[PAMSensor]::wakeup\tNOT IMPLEMENTED"); */ return false; };
 
     char *csvHeader();
 
