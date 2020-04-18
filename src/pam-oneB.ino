@@ -2,7 +2,7 @@
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME680.h"
 #include "Telaire_T6713.h"
-#include "Adafruit_ADS1X15.h"
+// #include "Adafruit_ADS1X15.h"
 #include "LMP91000.h"
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
@@ -15,12 +15,16 @@
 #include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 
+#include "Wiring.h"
+#include "Constants.h"
+
 #include "PAMSensorManager/PAMSensorManager.h"
 #include "Sensors/T6713/T6713.h"
 // #include "Sensors/BME680/BME680.h"
 // #include "Sensors/HIH8120/HIH8120.h"
 #include "Sensors/TPHFusion/TPHFusion.h"
 #include "Sensors/Plantower/Plantower.h"
+#include "Sensors/PAMCO/PAMCO.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -42,8 +46,7 @@ GoogleMapsDeviceLocator locator;
 //google maps API key:
 #define GOOGLE_API_KEY "AIzaSyAfgY0VX3KSMkVoIVvWAr9oVlT-AoQ68e0"
 
-float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
-#define ALPHA_ADC_READ_AMOUNT 10
+// float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
 //float ads_bitmv = 0.1920;
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
@@ -146,20 +149,6 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define NUMBER_OF_FIELDS_LOGGING 7
 
 
-int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
-int lmp91000_2_en = B2;
-int fiveVolt_en = D5;
-int plantower_en = B4;
-int power_led_en = D6;
-int kill_power = WKP;
-int esp_wroom_en = D7;
-int blower_en = D2;
-int sound_input = B5;  //ozone monitor's voltage output is connected to this input
-int co2_en = C5;        //enables the CO2 sensor power
-
-
-
-
 //manually control connection to cellular network
 SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
@@ -175,10 +164,11 @@ T6713 t6713;
 // HIH8120 hih8120(0x27);
 TPHFusion tph_fusion(0x27, false);
 Plantower plantower(Serial4);
+PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
 
-LMP91000 lmp91000;
-Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
-Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
+// LMP91000 lmp91000;
+// Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
+// Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
 GPS gps;
 PMIC pmic;
@@ -204,8 +194,8 @@ String password; //wifi network password
 
 //global variables
 int counter = 0;
-float CO_float = 0;
-float CO_float_2 = 0;
+// float CO_float = 0;
+// float CO_float_2 = 0;
 float CO2_float = 0;
 float CO2_float_previous = 0;
 int CO2_value = 0;
@@ -358,7 +348,7 @@ void outputSerialMenuOptions(void);
 void outputToCloud(void);
 void echoGps();
 void readOzone(void);
-float readCO(void);
+// float readCO(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
@@ -393,7 +383,8 @@ void writeRegister(uint8_t reg, uint8_t value) {
 //todo: average everything except ozone
 void outputToCloud(String data){
     String webhook_data = " ";
-    CO_sum += CO_float;
+    // CO_sum += CO_float;
+    CO_sum += pamco.co.adj_value;
     CO2_sum += CO2_float;
     O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
     measurement_count++;
@@ -693,6 +684,9 @@ void check_wifi_file(void){
 
 void setup()
 {
+    Wire.begin();
+
+
     status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
     status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
@@ -703,15 +697,15 @@ void setup()
 
     setADCSampleTime(ADC_SampleTime_480Cycles);
     //setup i/o
-    pinMode(lmp91000_1_en, OUTPUT);
-    pinMode(lmp91000_2_en, OUTPUT);
-    pinMode(fiveVolt_en, OUTPUT);
-    pinMode(plantower_en, OUTPUT);
-    pinMode(power_led_en, OUTPUT);
-    pinMode(esp_wroom_en, OUTPUT);
-    pinMode(blower_en, OUTPUT);
+    // pinMode(lmp91000_1_en, OUTPUT);
+    // pinMode(lmp91000_2_en, OUTPUT);
+    pinMode(FIVE_VOLT_EN, OUTPUT);
+    pinMode(PLANTOWER_EN, OUTPUT);
+    pinMode(POWER_LED_EN, OUTPUT);
+    pinMode(ESP_WROOM_EN, OUTPUT);
+    pinMode(BLOWER_EN, OUTPUT);
     pinMode(D4, INPUT);
-    pinMode(co2_en, OUTPUT);
+    pinMode(CO2_EN, OUTPUT);
 
     //read all stored variables (calibration parameters)
     readStoredVars();
@@ -737,14 +731,14 @@ void setup()
       goToSleep();
     }
 
-    digitalWrite(lmp91000_1_en, HIGH);
-    digitalWrite(lmp91000_2_en, HIGH);
-    digitalWrite(power_led_en, HIGH);
-    digitalWrite(plantower_en, HIGH);
-    digitalWrite(esp_wroom_en, HIGH);
-    digitalWrite(blower_en, HIGH);
-    digitalWrite(co2_en, HIGH);
-    digitalWrite(fiveVolt_en, HIGH);
+    // digitalWrite(lmp91000_1_en, HIGH);
+    // digitalWrite(lmp91000_2_en, HIGH);
+    digitalWrite(POWER_LED_EN, HIGH);
+    digitalWrite(PLANTOWER_EN, HIGH);
+    digitalWrite(ESP_WROOM_EN, HIGH);
+    digitalWrite(BLOWER_EN, HIGH);
+    digitalWrite(CO2_EN, HIGH);
+    digitalWrite(FIVE_VOLT_EN, HIGH);
 
 
 
@@ -816,88 +810,88 @@ void setup()
 
 
     //setup the AFE
-    Serial.println("Starting LMP91000 CO initialization");
-    if(debugging_enabled)
-        writeLogFile("Starting LMP91000 CO initialization");
-    Wire.begin();   //this must be done for the LMP91000
-    digitalWrite(lmp91000_1_en, LOW); //enable the chip
+    // Serial.println("Starting LMP91000 CO initialization");
+    // if(debugging_enabled)
+    //     writeLogFile("Starting LMP91000 CO initialization");
+    // Wire.begin();   //this must be done for the LMP91000
+    // digitalWrite(lmp91000_1_en, LOW); //enable the chip
 
-    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
-    {
-          Serial.println("Couldn't communicate with LMP91000 for CO");
-          if(debugging_enabled){
-            writeLogFile("Couldn't communicate with LMP91000 for CO");
-          }
-    }else{
-          Serial.println("Initialized LMP91000 for CO");
-          if(debugging_enabled){
-            writeLogFile("Initialized LMP91000 for CO");
-          }
-          /*Serial.print("STATUS: ");
-          Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
-          Serial.print("TIACN: ");
-          Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
-          Serial.print("REFCN: ");
-          Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
-          Serial.print("MODECN: ");
-          Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
-          digitalWrite(lmp91000_1_en, HIGH);  //disable
-    }
-    ads1.begin();
-    if(Wire.requestFrom(0x49,1) == 0) { //if can't get 1 byte from ADC1, add it to the init error log
-      //init_log += "AD1,";
-      //digitalWrite(red_status_led, HIGH);
-      //delay(200);
-      //digitalWrite(red_status_led, LOW);
-      //delay(200);
-      Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
-      if(debugging_enabled)
-        writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
-    }
-    else{
-      ads1.setGain(GAIN_TWOTHIRDS);
-    }
+    // if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    // {
+    //       Serial.println("Couldn't communicate with LMP91000 for CO");
+    //       if(debugging_enabled){
+    //         writeLogFile("Couldn't communicate with LMP91000 for CO");
+    //       }
+    // }else{
+    //       Serial.println("Initialized LMP91000 for CO");
+    //       if(debugging_enabled){
+    //         writeLogFile("Initialized LMP91000 for CO");
+    //       }
+    //       /*Serial.print("STATUS: ");
+    //       Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
+    //       Serial.print("TIACN: ");
+    //       Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
+    //       Serial.print("REFCN: ");
+    //       Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
+    //       Serial.print("MODECN: ");
+    //       Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
+    //       digitalWrite(lmp91000_1_en, HIGH);  //disable
+    // }
+    // ads1.begin();
+    // if(Wire.requestFrom(0x49,1) == 0) { //if can't get 1 byte from ADC1, add it to the init error log
+    //   //init_log += "AD1,";
+    //   //digitalWrite(red_status_led, HIGH);
+    //   //delay(200);
+    //   //digitalWrite(red_status_led, LOW);
+    //   //delay(200);
+    //   Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
+    //   if(debugging_enabled)
+    //     writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
+    // }
+    // else{
+    //   ads1.setGain(GAIN_TWOTHIRDS);
+    // }
 
-    //AFE 2 setup
-    //#if AFE2_en
-    Serial.println("Starting LMP91000 2 initialization");
-    if(debugging_enabled)
-        writeLogFile("Starting LMP91000 2 initialization");
-    Wire.begin();   //this must be done for the LMP91000
-    digitalWrite(lmp91000_2_en, LOW); //enable the chip
+    // //AFE 2 setup
+    // //#if AFE2_en
+    // Serial.println("Starting LMP91000 2 initialization");
+    // if(debugging_enabled)
+    //     writeLogFile("Starting LMP91000 2 initialization");
+    // Wire.begin();   //this must be done for the LMP91000
+    // digitalWrite(lmp91000_2_en, LOW); //enable the chip
 
-    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
-    {
-          Serial.println("Couldn't communicate with LMP91000 for 2");
-          writeLogFile("Couldn't communicate with LMP91000 for 2");
-    }else{
-          Serial.println("Initialized LMP91000 for 2");
-          if(debugging_enabled)
-            writeLogFile("Initialized LMP91000 for 2");
-          /*Serial.print("STATUS: ");
-          Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
-          Serial.print("TIACN: ");
-          Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
-          Serial.print("REFCN: ");
-          Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
-          Serial.print("MODECN: ");
-          Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
-          digitalWrite(lmp91000_2_en, HIGH);  //disable
-    }
-    ads2.begin();
-    if(Wire.requestFrom(0x4A,1) == 0) { //if can't get 1 byte from ADC1, add it to the init error log
-      //init_log += "AD1,";
-      //digitalWrite(red_status_led, HIGH);
-      //delay(200);
-      //digitalWrite(red_status_led, LOW);
-      //delay(200);
-      Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
-      if(debugging_enabled)
-        writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
-    }
-    else{
-      ads2.setGain(GAIN_TWOTHIRDS);
-    }
+    // if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    // {
+    //       Serial.println("Couldn't communicate with LMP91000 for 2");
+    //       writeLogFile("Couldn't communicate with LMP91000 for 2");
+    // }else{
+    //       Serial.println("Initialized LMP91000 for 2");
+    //       if(debugging_enabled)
+    //         writeLogFile("Initialized LMP91000 for 2");
+    //       /*Serial.print("STATUS: ");
+    //       Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
+    //       Serial.print("TIACN: ");
+    //       Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
+    //       Serial.print("REFCN: ");
+    //       Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
+    //       Serial.print("MODECN: ");
+    //       Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
+    //       digitalWrite(lmp91000_2_en, HIGH);  //disable
+    // }
+    // ads2.begin();
+    // if(Wire.requestFrom(0x4A,1) == 0) { //if can't get 1 byte from ADC1, add it to the init error log
+    //   //init_log += "AD1,";
+    //   //digitalWrite(red_status_led, HIGH);
+    //   //delay(200);
+    //   //digitalWrite(red_status_led, LOW);
+    //   //delay(200);
+    //   Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
+    //   if(debugging_enabled)
+    //     writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
+    // }
+    // else{
+    //   ads2.setGain(GAIN_TWOTHIRDS);
+    // }
     //#endif
 
     // if (!bme.begin()) {
@@ -959,6 +953,7 @@ void setup()
     manager->addSensor(&t6713);
     manager->addSensor(&tph_fusion);
     manager->addSensor(&plantower);
+    manager->addSensor(&pamco);
 
     char *csv_header = manager->csvHeader();
     Serial.println(csv_header);
@@ -1025,7 +1020,7 @@ void loop() {
 
 
     //read CO values and apply calibration factors
-    CO_float = readCO();
+    // CO_float = readCO();
 
 
 
@@ -1574,7 +1569,7 @@ double readSound(void){
     double sum = 0;
     float average = 0;
     for(int i=0; i< 10;i++){
-        val = analogRead(sound_input);
+        val = analogRead(SOUND_INPUT);
         sum += val;
         //Serial.print("Sound level: ");
         //Serial.println(val);
@@ -1585,23 +1580,23 @@ double readSound(void){
     return sum;
 }
 //read Carbon monoxide alphasense sensor
-float readCO(void){
-    float float_offset;
+// float readCO(void){
+//     float float_offset;
 
-    if(CO_socket == 0){
-        CO_float = readAlpha1();
-    }else{
-        CO_float = readAlpha2();
-    }
+//     if(CO_socket == 0){
+//         CO_float = readAlpha1();
+//     }else{
+//         CO_float = readAlpha2();
+//     }
 
-    float_offset = CO_zero;
-    float_offset /= 1000;
+//     float_offset = CO_zero;
+//     float_offset /= 1000;
 
-    CO_float *= CO_slope;
-    CO_float += float_offset;
+//     CO_float *= CO_slope;
+//     CO_float += float_offset;
 
-    return CO_float;
-}
+//     return CO_float;
+// }
 
 float readCO2(void){
     //read CO2 values and apply calibration factors
@@ -1630,7 +1625,7 @@ float readCO2(void){
     }
     return CO2_float;
 }
-float readAlpha1(void){
+/* float readAlpha1(void){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -1648,7 +1643,7 @@ float readAlpha1(void){
     if(debugging_enabled){
         Serial.println("Start of alpha read");
     }
-    digitalWrite(lmp91000_1_en, LOW);   //enable
+    // digitalWrite(lmp91000_1_en, LOW);   //enable
 
     if(Wire.requestFrom(0x49,1) == 0){
       if(debugging_enabled){
@@ -1740,9 +1735,9 @@ float readAlpha1(void){
 
       }
       return alpha1_ppmraw;
-}
+} */
 
-float readAlpha2(void){
+/* float readAlpha2(void){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -1856,9 +1851,9 @@ float readAlpha2(void){
 
       Serial.print("Volt1 Aux:");
       Serial.print(volt1_aux);
-      Serial.println("Volts");*/
+      Serial.println("Volts"); * /
       return alpha2_ppmraw;
-}
+} */
 
 void readOzone(void){
     int tempValue = 0;
@@ -1933,8 +1928,10 @@ void outputDataToESP(void){
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
     csv_output_string += String(DEVICE_id) + ",";
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
-    csv_output_string += String(CO_float, 3) + ",";
+    // cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(pamco.co.adj_value, 3);
+    // csv_output_string += String(CO_float, 3) + ",";
+    csv_output_string += String(pamco.co.adj_value, 3) + ",";
     #if AFE2_en
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_2, 3);
     csv_output_string += String(CO_float_2, 3) + ",";
@@ -2099,7 +2096,8 @@ void outputDataToESP(void){
         */
         if(i == 0){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = CO_float;
+            // floatBytes.myFloat = CO_float;
+            floatBytes.myFloat = pamco.co.adj_value;
         }else if(i == 1){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
             floatBytes.myFloat = CO2_float;
@@ -2479,41 +2477,41 @@ void outputParticles(){
 
 void goToSleep(void){
     //Serial.println("Going to sleep:)");
-    digitalWrite(power_led_en, LOW);
-    digitalWrite(plantower_en, LOW);
-    digitalWrite(esp_wroom_en, LOW);
-    digitalWrite(blower_en, LOW);
-    digitalWrite(co2_en, LOW);
-    digitalWrite(fiveVolt_en, LOW);
+    digitalWrite(POWER_LED_EN, LOW);
+    digitalWrite(PLANTOWER_EN, LOW);
+    digitalWrite(ESP_WROOM_EN, LOW);
+    digitalWrite(BLOWER_EN, LOW);
+    digitalWrite(CO2_EN, LOW);
+    digitalWrite(FIVE_VOLT_EN, LOW);
     enableLowPowerGPS();
     System.sleep(D4, FALLING, sleepInterval * 2);     //every 2 minutes wake up and check if battery voltage is too low
     System.reset();
 }
 
 void goToSleepBattery(void){
-    digitalWrite(power_led_en, HIGH);   // Sets the LED on
+    digitalWrite(POWER_LED_EN, HIGH);   // Sets the LED on
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, HIGH);   // Sets the LED on
+    digitalWrite(POWER_LED_EN, HIGH);   // Sets the LED on
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, HIGH);   // Sets the LED on
+    digitalWrite(POWER_LED_EN, HIGH);   // Sets the LED on
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, HIGH);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, HIGH);    // Sets the LED off
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, HIGH);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, HIGH);    // Sets the LED off
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, HIGH);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, HIGH);    // Sets the LED off
     delay(250);                   // waits for a second
-    digitalWrite(power_led_en, LOW);    // Sets the LED off
+    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
 
     //Serial.println("Turning off batfet");
     writeRegister(7, 0b01101011);   //turn off batfet
@@ -2540,15 +2538,15 @@ void goToSleepBattery(void){
 }
 
 void resetESP(void){
-  digitalWrite(esp_wroom_en, LOW);
-  digitalWrite(plantower_en, LOW);
-  digitalWrite(blower_en, LOW);
-  digitalWrite(co2_en, LOW);
+  digitalWrite(ESP_WROOM_EN, LOW);
+  digitalWrite(PLANTOWER_EN, LOW);
+  digitalWrite(BLOWER_EN, LOW);
+  digitalWrite(CO2_EN, LOW);
   delay(1000);
-  digitalWrite(esp_wroom_en, HIGH);
-  digitalWrite(plantower_en, HIGH);
-  digitalWrite(blower_en, HIGH);
-  digitalWrite(co2_en, HIGH);
+  digitalWrite(ESP_WROOM_EN, HIGH);
+  digitalWrite(PLANTOWER_EN, HIGH);
+  digitalWrite(BLOWER_EN, HIGH);
+  digitalWrite(CO2_EN, HIGH);
   delay(1000);
 }
 
@@ -3579,9 +3577,10 @@ void serialGetUpperLimit(void){
 }
 
 void readAlpha1Constantly(void){
-    while(!Serial.available()){
-        CO_float = readCO();
-        Serial.printf("CO: %1.3f ppm\n\r", CO_float);
+    while(!Serial.available()) {
+        // CO_float = readCO();
+        float value = pamco.co.adj_value;
+        Serial.printf("CO: %1.3f ppm\n\r", value);
     }
 }
 void outputSerialMenuOptions(void){

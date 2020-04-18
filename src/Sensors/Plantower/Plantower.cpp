@@ -60,6 +60,7 @@ void Plantower::loop()
                 this->pm10.raw_value = (this->buff[7] << 8) + this->buff[8];
                 this->pm10.adj_value = (this->pm10.slope * this->pm10.raw_value) + this->pm10.zero;
             }
+            Serial.println('[Plantower]::loop\tFound serial packet!');
         }
     } else {
         while(this->serial->available()) {
