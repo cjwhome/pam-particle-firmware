@@ -2,7 +2,6 @@
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME680.h"
 #include "Telaire_T6713.h"
-// #include "Adafruit_ADS1X15.h"
 #include "LMP91000.h"
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
@@ -20,8 +19,6 @@
 
 #include "PAMSensorManager/PAMSensorManager.h"
 #include "Sensors/T6713/T6713.h"
-// #include "Sensors/BME680/BME680.h"
-// #include "Sensors/HIH8120/HIH8120.h"
 #include "Sensors/TPHFusion/TPHFusion.h"
 #include "Sensors/Plantower/Plantower.h"
 #include "Sensors/PAMCO/PAMCO.h"
@@ -45,9 +42,6 @@ GoogleMapsDeviceLocator locator;
 
 //google maps API key:
 #define GOOGLE_API_KEY "AIzaSyAfgY0VX3KSMkVoIVvWAr9oVlT-AoQ68e0"
-
-// float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
-//float ads_bitmv = 0.1920;
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
 #define sd_en 1
@@ -156,19 +150,12 @@ SYSTEM_THREAD(ENABLED);
 //global objects
 
 // PAM Sensors
-// Telaire_T6713 t6713;  //CO2 sensor
 T6713 t6713;
-// Adafruit_BME680 bme; // I2C
-// BME680 bme680;
-// HIH61XX hih(0x27);
-// HIH8120 hih8120(0x27);
 TPHFusion tph_fusion(0x27, false);
 Plantower plantower(Serial4);
 PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
 
-// LMP91000 lmp91000;
-// Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
-// Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
+
 FuelGauge fuel;
 GPS gps;
 PMIC pmic;
@@ -194,8 +181,6 @@ String password; //wifi network password
 
 //global variables
 int counter = 0;
-// float CO_float = 0;
-// float CO_float_2 = 0;
 float CO2_float = 0;
 float CO2_float_previous = 0;
 int CO2_value = 0;
@@ -269,13 +254,6 @@ int addr;
 uint16_t value;
 char recieveStr[5];
 
-//plantower PMS5003 vars
-// int PM01Value=0;
-// int PM2_5Value=0;
-// int PM10Value=0;
-// float corrected_PM_25 = 0;
-#define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
-char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
 char incomingByte;  //serial connection from user
 
 //Air quality index variables for calculating from humidity and VOC from BME680
@@ -697,8 +675,6 @@ void setup()
 
     setADCSampleTime(ADC_SampleTime_480Cycles);
     //setup i/o
-    // pinMode(lmp91000_1_en, OUTPUT);
-    // pinMode(lmp91000_2_en, OUTPUT);
     pinMode(FIVE_VOLT_EN, OUTPUT);
     pinMode(PLANTOWER_EN, OUTPUT);
     pinMode(POWER_LED_EN, OUTPUT);
@@ -731,8 +707,6 @@ void setup()
       goToSleep();
     }
 
-    // digitalWrite(lmp91000_1_en, HIGH);
-    // digitalWrite(lmp91000_2_en, HIGH);
     digitalWrite(POWER_LED_EN, HIGH);
     digitalWrite(PLANTOWER_EN, HIGH);
     digitalWrite(ESP_WROOM_EN, HIGH);
@@ -807,130 +781,7 @@ void setup()
         Serial.println("No uSD card detected.");
     }
     #endif
-
-
-    //setup the AFE
-    // Serial.println("Starting LMP91000 CO initialization");
-    // if(debugging_enabled)
-    //     writeLogFile("Starting LMP91000 CO initialization");
-    // Wire.begin();   //this must be done for the LMP91000
-    // digitalWrite(lmp91000_1_en, LOW); //enable the chip
-
-    // if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
-    // {
-    //       Serial.println("Couldn't communicate with LMP91000 for CO");
-    //       if(debugging_enabled){
-    //         writeLogFile("Couldn't communicate with LMP91000 for CO");
-    //       }
-    // }else{
-    //       Serial.println("Initialized LMP91000 for CO");
-    //       if(debugging_enabled){
-    //         writeLogFile("Initialized LMP91000 for CO");
-    //       }
-    //       /*Serial.print("STATUS: ");
-    //       Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
-    //       Serial.print("TIACN: ");
-    //       Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
-    //       Serial.print("REFCN: ");
-    //       Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
-    //       Serial.print("MODECN: ");
-    //       Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
-    //       digitalWrite(lmp91000_1_en, HIGH);  //disable
-    // }
-    // ads1.begin();
-    // if(Wire.requestFrom(0x49,1) == 0) { //if can't get 1 byte from ADC1, add it to the init error log
-    //   //init_log += "AD1,";
-    //   //digitalWrite(red_status_led, HIGH);
-    //   //delay(200);
-    //   //digitalWrite(red_status_led, LOW);
-    //   //delay(200);
-    //   Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
-    //   if(debugging_enabled)
-    //     writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
-    // }
-    // else{
-    //   ads1.setGain(GAIN_TWOTHIRDS);
-    // }
-
-    // //AFE 2 setup
-    // //#if AFE2_en
-    // Serial.println("Starting LMP91000 2 initialization");
-    // if(debugging_enabled)
-    //     writeLogFile("Starting LMP91000 2 initialization");
-    // Wire.begin();   //this must be done for the LMP91000
-    // digitalWrite(lmp91000_2_en, LOW); //enable the chip
-
-    // if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
-    // {
-    //       Serial.println("Couldn't communicate with LMP91000 for 2");
-    //       writeLogFile("Couldn't communicate with LMP91000 for 2");
-    // }else{
-    //       Serial.println("Initialized LMP91000 for 2");
-    //       if(debugging_enabled)
-    //         writeLogFile("Initialized LMP91000 for 2");
-    //       /*Serial.print("STATUS: ");
-    //       Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
-    //       Serial.print("TIACN: ");
-    //       Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
-    //       Serial.print("REFCN: ");
-    //       Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
-    //       Serial.print("MODECN: ");
-    //       Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
-    //       digitalWrite(lmp91000_2_en, HIGH);  //disable
-    // }
-    // ads2.begin();
-    // if(Wire.requestFrom(0x4A,1) == 0) { //if can't get 1 byte from ADC1, add it to the init error log
-    //   //init_log += "AD1,";
-    //   //digitalWrite(red_status_led, HIGH);
-    //   //delay(200);
-    //   //digitalWrite(red_status_led, LOW);
-    //   //delay(200);
-    //   Serial.println("Could not communicate with Adafruit_ADS1115 for CO");
-    //   if(debugging_enabled)
-    //     writeLogFile("Could not communicate with Adafruit_ADS1115 for CO");
-    // }
-    // else{
-    //   ads2.setGain(GAIN_TWOTHIRDS);
-    // }
-    //#endif
-
-    // if (!bme.begin()) {
-    //   Serial.println("Could not find a valid BME680 sensor, check wiring!");
-    //   if(debugging_enabled)
-    //       writeLogFile("Could not find a valid BME680 sensor, check wiring!");
-    //   //while (1);
-    // }else{
-    //   Serial.println("Initialized BME Sensor");
-    //   if(debugging_enabled)
-    //     writeLogFile("Initialized BME Sensor");
-    // }
-
-    // if(!t6713.begin()){
-    //   Serial.println("Could not find a valid T6713 sensor, check wiring!");
-    //   if(debugging_enabled)
-    //       writeLogFile("Could not find a valid T6713");
-    // }
-  //Serial.println("before bme setup");
-    // Set up oversampling and filter initialization
-    // bme.setTemperatureOversampling(BME680_OS_8X);
-    // bme.setHumidityOversampling(BME680_OS_2X);
-    // bme.setPressureOversampling(BME680_OS_4X);
-    // bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    // bme.setGasHeater(320, 150); // 320*C for 150 ms
-//Serial.println("After bme setup");
-    //output current time
-
-    //Serial.printf("Time now: %u\n\r", Time.now());
-    //Serial.println(Time.timeStr());
-    /*Serial.println(String(HEADER_STRING));
-    if (sd.begin(CS)){
-        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
-        file.println("File Start timestamp: ");
-        file.println(Time.timeStr());
-        file.println(String(HEADER_STRING));
-        file.close();
-        file_started = 1;
-    }*/
+    
     resetESP();
 
     Serial.println("ESP reset!");
@@ -999,34 +850,7 @@ void loop() {
     if(output_only_particles == 1){
         outputParticles();
     }
-    //read temp, press, humidity, and TVOCs
-    // if(debugging_enabled){
-    //   Serial.println("Before reading bme");
-    //   writeLogFile("before reading bme");
-    // }
-    // if (! bme.performReading()) {
-    //   Serial.println("Failed to read BME680");
-    //   writeLogFile("Failed to read BME680");
-    //   return;
-    // }else{
-    //   if(debugging_enabled){
-    //     Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
-    //   }
-    // }
-    // if(hih8120_enabled){
-    //     readHIH8120();
-    // }
     readGpsStream();
-
-
-    //read CO values and apply calibration factors
-    // CO_float = readCO();
-
-
-
-
-    //CO_float_2 += CO_zero_2;
-    //CO_float_2 *= CO_slope_2;
 
     CO2_float = readCO2();
 
@@ -1056,16 +880,6 @@ void loop() {
     //sound_average = 0;
     calculateAQI();
     sound_average = readSound();
-    //read PM values and apply calibration factors
-    // readPlantower();
-
-    // pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-    // if(debugging_enabled){
-    //     Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
-    // }
-    // corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
-    // corrected_PM_25 = corrected_PM_25 + PM_25_zero;
-    // corrected_PM_25 = corrected_PM_25 * PM_25_slope;
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -1133,15 +947,6 @@ void loop() {
         Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
-
-    // CRAIG: What is the purpose of this?
-    // It looks like it will read the status of the CO2 module while the time is active, which is 180 cycles
-    // if(co2_calibration_timer){
-    //     co2_calibration_timer--;
-    //     if(debugging_enabled){
-    //         t6713.readStatus(1);
-    //     }
-    // }
 
 }
 
@@ -1579,281 +1384,15 @@ double readSound(void){
     sum *= 100;
     return sum;
 }
-//read Carbon monoxide alphasense sensor
-// float readCO(void){
-//     float float_offset;
 
-//     if(CO_socket == 0){
-//         CO_float = readAlpha1();
-//     }else{
-//         CO_float = readAlpha2();
-//     }
-
-//     float_offset = CO_zero;
-//     float_offset /= 1000;
-
-//     CO_float *= CO_slope;
-//     CO_float += float_offset;
-
-//     return CO_float;
-// }
 
 float readCO2(void){
-    //read CO2 values and apply calibration factors
-    // if(debugging_enabled){
-    //     t6713.readStatus(1);
-    // }
-    // CO2_float = t6713.readPPM();
-
-    // if(CO2_float == 0){
-    //     CO2_float = CO2_float_previous;
-    // }else{
-    //     CO2_float_previous = CO2_float;
-    // }
-
-    // CO2_float *= CO2_slope;
-    // CO2_float += CO2_zero;
-    
-    // return CO2_float;
-    // PAMSpecie *specie;
-    // if ((specie = PAMSensorManager::GetInstance()->findSpeciesForName("CO2")->front()) != nullptr) {
-    //     CO2_float = specie->adj_value;
-    // }
     t6713.measure();
     if (t6713.CO2.adj_value != 0 && t6713.CO2.adj_value != VALUE_UNKNOWN) {
         CO2_float = t6713.CO2.adj_value;
     }
     return CO2_float;
 }
-/* float readAlpha1(void){
-    //read from CO sensor
-    int32_t A0_gas; //gas
-    int32_t A1_aux; //aux out
-    int32_t A2_temperature; //temperature
-    int32_t half_Vref; //half of Vref
-    float volt0_gas;
-    float volt1_aux;
-    float volt2_temperature; //need to code to be able to ensure correct sigfigs..
-    float volt_half_Vref;
-    float sensorCurrent; // Working Electrode current in microamps (millivolts / Kohms)
-    float auxCurrent;
-    float correctedCurrent;
-    float alpha1_ppmraw;
-    String alpha1_ppmRounded;
-    if(debugging_enabled){
-        Serial.println("Start of alpha read");
-    }
-    // digitalWrite(lmp91000_1_en, LOW);   //enable
-
-    if(Wire.requestFrom(0x49,1) == 0){
-      if(debugging_enabled){
-        Serial.println("Couldn't communicate with LMP91000");
-        writeLogFile("Couldn't communicate with LMP91000");
-      }
-        //operation_log += "AD1,";
-        //digitalWrite(red_status_led, HIGH);
-        //delay(200);
-        //digitalWrite(red_status_led, LOW);
-        //delay(200);
-    }else{
-        half_Vref = ads1.readADC_SingleEnded(3); //half of Vref
-        volt_half_Vref = half_Vref * ads_bitmv;
-        if(abs((volt_half_Vref)/1000 - 1.25) > 0.5){
-          if(debugging_enabled){
-            Serial.printf("Halfvolt: %1.2f\n\r", volt_half_Vref/1000);
-            writeLogFile("Halfvolt higher than 0.5");
-          }
-        }
-    }
-
-    if(lmp91000.read(LMP91000_STATUS_REG) == 0){
-        if(debugging_enabled){
-            Serial.println("Status = 0 from LMP91000 status reg");
-            writeLogFile("LMP1000 status = 0");
-          }
-        //operation_log += "AFE1,";
-      //  digitalWrite(red_status_led, HIGH);
-        //delay(200);
-        //digitalWrite(red_status_led, LOW);
-        //delay(200);
-    }
-
-    //if(Wire.requestFrom(0x49,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0 || (abs((volt_half_Vref)/1000 - 1.25) > 0.5)){
-    if(Wire.requestFrom(0x49,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0){
-        alpha1_ppmRounded = "-99";
-        volt0_gas = -99;
-        volt1_aux = -99;
-        volt_half_Vref = -99;
-        sensorCurrent = -99;
-        auxCurrent = -99;
-    }else{
-        A0_gas = 0;
-        A1_aux = 0;
-        A2_temperature = 0;
-        half_Vref = 0;
-        for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
-          A0_gas += ads1.readADC_SingleEnded(0); //gas
-          A1_aux += ads1.readADC_SingleEnded(1); //aux out
-          A2_temperature += ads1.readADC_SingleEnded(2); //temperature
-          half_Vref += ads1.readADC_SingleEnded(3); //half of Vref
-        }
-
-        A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
-        A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
-        half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
-
-        volt0_gas = A0_gas * ads_bitmv;
-        volt1_aux = A1_aux * ads_bitmv;
-        volt2_temperature = A2_temperature * ads_bitmv;
-        volt_half_Vref = half_Vref * ads_bitmv;
-
-        sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
-        auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
-        //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
-          correctedCurrent = ((sensorCurrent) - (auxCurrent));
-        }
-        else if(readTemperature() <= 25){
-          correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
-        }
-        else{
-          correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
-        }
-        alpha1_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
-        alpha1_ppmRounded = String(alpha1_ppmraw, 2);
-      }
-
-      digitalWrite(lmp91000_1_en, HIGH);  //disable
-
-      if(debugging_enabled){
-          Serial.print("CO measurements:  \n\r");
-          Serial.printf("A0_gas: %d\n\r", A0_gas);
-          Serial.printf("A1_aux: %d\n\r", A1_aux);
-          Serial.printf("A2_temp: %d\n\r", A2_temperature);
-          Serial.printf("half_vref: %d\n\r", half_Vref);
-
-      }
-      return alpha1_ppmraw;
-} */
-
-/* float readAlpha2(void){
-    //read from CO sensor
-    int32_t A0_gas; //gas
-    int32_t A1_aux; //aux out
-    int32_t A2_temperature; //temperature
-    int32_t half_Vref; //half of Vref
-    float volt0_gas;
-    float volt1_aux;
-    float volt2_temperature; //need to code to be able to ensure correct sigfigs..
-    float volt_half_Vref;
-    float sensorCurrent; // Working Electrode current in microamps (millivolts / Kohms)
-    float auxCurrent;
-    float correctedCurrent;
-    float alpha2_ppmraw;
-    String alpha2_ppmRounded;
-    if(debugging_enabled){
-        Serial.println("Start of alpha 2 read");
-    }
-    digitalWrite(lmp91000_2_en, LOW);   //enable
-
-    if(Wire.requestFrom(0x4A,1) == 0){
-        Serial.println("Couldn't communicate with LMP91000 2");
-        //operation_log += "AD1,";
-        //digitalWrite(red_status_led, HIGH);
-        //delay(200);
-        //digitalWrite(red_status_led, LOW);
-        //delay(200);
-    }else{
-        half_Vref = ads2.readADC_SingleEnded(3); //half of Vref
-        volt_half_Vref = half_Vref * ads_bitmv;
-        if(abs((volt_half_Vref)/1000 - 1.25) > 0.5){
-          //operation_log += "AD1_VREF2,";
-          //digitalWrite(red_status_led, HIGH);
-          //delay(200);
-          //digitalWrite(red_status_led, LOW);
-          //delay(200);
-          Serial.print("half vref2 ads1");
-          Serial.println(volt_half_Vref/1000);
-
-        }
-    }
-
-    if(lmp91000.read(LMP91000_STATUS_REG) == 0){
-        if(debugging_enabled)
-            Serial.println("Status == 0 from LMP91000 2 status reg");
-        //operation_log += "AFE1,";
-      //  digitalWrite(red_status_led, HIGH);
-        //delay(200);
-        //digitalWrite(red_status_led, LOW);
-        //delay(200);
-    }
-
-    if(Wire.requestFrom(0x4A,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0 || (abs((volt_half_Vref)/1000 - 1.25) > 0.5)){
-        alpha2_ppmRounded = "-99";
-        volt0_gas = -99;
-        volt1_aux = -99;
-        volt_half_Vref = -99;
-        sensorCurrent = -99;
-        auxCurrent = -99;
-    }else{
-        A0_gas = 0;
-        A1_aux = 0;
-        A2_temperature = 0;
-        half_Vref = 0;
-        for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
-          A0_gas += ads2.readADC_SingleEnded(0); //gas
-          A1_aux += ads2.readADC_SingleEnded(1); //aux out
-          A2_temperature += ads2.readADC_SingleEnded(2); //temperature
-          half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
-        }
-
-        A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
-        A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
-        half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
-
-        volt0_gas = A0_gas * ads_bitmv;
-        volt1_aux = A1_aux * ads_bitmv;
-        volt2_temperature = A2_temperature * ads_bitmv;
-        volt_half_Vref = half_Vref * ads_bitmv;
-
-        sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
-        auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
-        //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
-          correctedCurrent = ((sensorCurrent) - (auxCurrent));
-        }
-        else if(readTemperature() <= 25){
-          correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
-        }
-        else if(readTemperature() > 25){
-          correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
-        }
-        alpha2_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
-        alpha2_ppmRounded = String(alpha2_ppmraw, 2);
-      }
-
-      digitalWrite(lmp91000_2_en, HIGH);  //disable
-
-
-      /*Serial.print("CO:  ");
-      Serial.print(volt0_gas);
-      Serial.print(", ");
-      Serial.print(volt2_temperature);
-      Serial.print(", ");
-      Serial.print(volt3_half_Vref);
-      Serial.print(", ");
-      Serial.print(sensorCurrent);
-      Serial.print(", ");
-      Serial.println(alpha4_ppmraw);
-      Serial.println();
-
-      Serial.print("Volt1 Aux:");
-      Serial.print(volt1_aux);
-      Serial.println("Volts"); * /
-      return alpha2_ppmraw;
-} */
 
 void readOzone(void){
     int tempValue = 0;
