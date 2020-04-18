@@ -1290,65 +1290,10 @@ void printPacket(byte *packet, byte len)
 }
 
 float readTemperature(void){
-    // float temperature = 0;
-    // if(hih8120_enabled){
-    //     // temperature = hih.temperature();
-    //     temperature = hih8120.temperature.adj_value;
-    //     if(debugging_enabled){
-    //         Serial.println("Temperature reading from HIH8120");
-    //     }
-    // }else if(new_temperature_sensor_enabled){
-    //     if(debugging_enabled){
-    //         Serial.println("Temperature reading from TMP36");
-    //     }
-    //     temperature = analogRead(A1);
-
-
-    //     temperature *= VOLTS_PER_UNIT;
-
-    //     temperature -= TMP36_OFFSET;
-    //     temperature /= TMP36_VPDC;
-    // }else{
-    //     if(debugging_enabled){
-    //         Serial.println("Temperature reading from BME for Alphasense");
-
-    //       }
-    //     // temperature = bme.temperature;
-    //     temperature = bme680.temperature.adj_value;
-    // }
-    // //temperature *= 100;
-
-    // temperature *= temp_slope;
-    // temperature += temp_zero;       //user input zero offset
-
     return tph_fusion.temperature->adj_value;
-    //temperature = temperature +
 }
 
 float readHumidity(void){
-    // float humidity;
-    // if(hih8120_enabled){
-    //     // humidity = hih.humidity();
-    //     humidity = hih8120.humidity.adj_value;
-    //     humidity *= 100;
-    //     if(debugging_enabled){
-    //         Serial.println("Humidity reading from HIH8120");
-    //     }
-    // }else{
-    //     // humidity = bme.humidity;
-    //     humidity = bme680.humidity.adj_value;
-    //     if(debugging_enabled){
-    //         Serial.println("Humidity reading from BME");
-    //     }
-    // }
-
-
-    // humidity *= rh_slope;
-    // humidity += rh_zero;       //user input zero offset
-    // if(humidity > 100)
-    //     humidity = 100;
-    // return humidity;
-    //temperature = temperature +
     return tph_fusion.humidity->adj_value;
 }
 //read sound from
