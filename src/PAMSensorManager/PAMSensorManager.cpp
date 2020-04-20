@@ -2,7 +2,9 @@
 
 PAMSensorManager *PAMSensorManager::instance = nullptr;
 
-PAMSensorManager::PAMSensorManager() { Serial.println("[PAMSensorManager]::init"); }
+PAMSensorManager::PAMSensorManager() { 
+    this-> serial_menu_rd = PAMSerial.registerResponder(&this->serial_menu);
+}
 PAMSensorManager::~PAMSensorManager() {}
 
 PAMSensorManager* PAMSensorManager::GetInstance()
@@ -21,6 +23,14 @@ void PAMSensorManager::addSensor(PAMSensor *sensor)
     } else {
         sensor->state = PAMSensor::SensorState::ERROR;
     }
+
+    sensor->registerSpecieSettings();
+
+    size_t device_setting_name_length = strlen(sensor->name) + 10;
+    char *device_setting_name = (char *) malloc(device_setting_name_length);
+    memset(device_setting_name, 0, device_setting_name_length);
+    snprintf(device_setting_name, device_setting_name_length, "%s Settings", sensor->name);
+    this->serial_menu.addResponder(sensor->serial_menu_rd, device_setting_name);
 }
 
 char *PAMSensorManager::csvHeader()

@@ -2,6 +2,8 @@
 
 Plantower::Plantower(USARTSerial &_serial)
 {
+    this->name = "Plantower";
+
     this->serial = &_serial;
 
     this->serial->begin(9600);

@@ -40,7 +40,7 @@ void PAMSerialMenu::onData(uint16_t rd, uint8_t *data, uint8_t length)
                 PAMSerial.printf(rd, "The selection is out of range. Please enter a different option.\n\r");
             }
         } else {
-            PAMSerial.printf(rd, "Could not read the input. Please try again.\n\r");
+            PAMSerial.printf(rd, "[PAMSerialMenu]::%d Could not read the input. Please try again.\n\r", rd);
         }
     }
 }

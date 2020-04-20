@@ -24,6 +24,11 @@
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 #define DONT_ADVERTISE_CONSTANT '\0'
 
+// #include "../../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
+// #include "../../PAMSerial/PAMSerialEditValue/PAMSerialEditValue.h"
+#include "../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
+#include "../PAMSerial/PAMSerialEditValue/PAMSerialEditValue.h"
+
 class PAMSpecie {
 
 public:
@@ -40,6 +45,18 @@ public:
     float adj_value = VALUE_UNKNOWN;
 
     char packet_constant;
+
+    uint16_t serial_menu_rd;
+
+private:
+    PAMSerialMenu serial_menu;
+
+    PAMSerialEditValue<float> *slope_responder; // { this->slope };
+    uint16_t slope_rd;
+
+    PAMSerialEditValue<float> *zero_responder; // { this->zero };
+    uint16_t zero_rd;
+
 };
 
 #endif // __PAM_SPECIE_H__

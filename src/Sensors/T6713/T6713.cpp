@@ -2,6 +2,8 @@
 
 T6713::T6713()
 {
+    this->name = "T6713";
+
     this->CO2.name = "CO2";
     this->CO2.units = "PPM";
     this->CO2.packet_constant = CO2_PACKET_CONSTANT;

@@ -769,7 +769,8 @@ void setup()
     Serial.begin(9600);
 
     rd = PAMSerial.registerResponder(new TestSerialConnector());
-    PAMSerial.printf(0, "TESTING FROM PAM SERIAL\n\r");
+    PAMSerial.pushResponder(rd);
+    PAMSerial.printf(rd, "TESTING FROM PAM SERIAL\n\r");
     serial_menu_rd = PAMSerial.registerResponder(&serial_menu);
 
 
@@ -821,6 +822,7 @@ void setup()
     manager->addSensor(&tph_fusion);
     manager->addSensor(&plantower);
     manager->addSensor(&pamco);
+    serial_menu.addResponder(PAMSensorManager::GetInstance()->serial_menu_rd, "Sensor Settings");
 
     char *csv_header = manager->csvHeader();
     Serial.println(csv_header);

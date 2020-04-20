@@ -2,6 +2,8 @@
 
 BME680::BME680()
 {
+    this->name = "BME680";
+
     this->temperature.name = "Temperature";
     this->temperature.units = "C";
     this->temperature.packet_constant = TEMPERATURE_PACKET_CONSTANT;

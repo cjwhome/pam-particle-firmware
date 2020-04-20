@@ -14,10 +14,6 @@ uint16_t PAMSerialManager::registerResponder(PAMSerialResponder *responder)
     this->serial->printf("[PAMSerialManager]::registerResponder\trd: %d\n\r", this->responders.size());
     this->responders.push_back(responder);
     uint16_t rd = this->responders.size() - 1;
-    if (rd == 0) {
-        this->active_responders.push(rd);
-        responder->becomesResponder(rd, false);
-    }
     return this->responders.size() - 1;
 }
 
@@ -29,6 +25,7 @@ uint16_t PAMSerialManager::registerResponder(PAMSerialResponder *responder)
 
 void PAMSerialManager::pushResponder(uint16_t responder)
 {
+    Serial.printf("[PAMSerialManager]::pushResponder(%d)\n\r", responder);
     if (responder < this->responders.size()) {
         this->active_responders.push(responder);
         this->clear_data();
@@ -39,6 +36,7 @@ void PAMSerialManager::pushResponder(uint16_t responder)
 
 void PAMSerialManager::popResponder()
 {
+    Serial.println("[PAMSerialManager]::popResponder");
     if (this->active_responders.size() > 1) {
         this->active_responders.pop();
         this->clear_data();
@@ -62,10 +60,12 @@ void PAMSerialManager::loop()
     while (this->serial->available() > 0) {
         uint8_t new_byte = this->serial->read();
         if (responder->getReadType() == PAMSerialResponder::BYTE) {
+            PAMSerial.printf(rd, "onData::byte(%d,,)\n\r", rd);
             responder->onData(rd, &new_byte, 1);
         } else if (responder->getReadType() == PAMSerialResponder::LINE) {
             if (new_byte == '\r') {
                 // User has finished typing a line, so send it to the responder
+                PAMSerial.printf(rd, "onData::line(%d,,)\n\r", rd);
                 this->data[this->data_index++] =  '\0';
                 responder->onData(rd, this->data, this->data_index);
                 this->clear_data();

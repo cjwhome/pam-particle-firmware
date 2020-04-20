@@ -1,6 +1,10 @@
 #include "PAMSensor.h"
 
-PAMSensor::PAMSensor() {}
+PAMSensor::PAMSensor()
+{
+    this->serial_menu_rd = PAMSerial.registerResponder(&this->serial_menu);
+}
+
 PAMSensor::~PAMSensor() {}
 
 char *PAMSensor::csvHeader() {
@@ -19,4 +23,18 @@ char *PAMSensor::csvHeader() {
     }
 
     return header;
+}
+
+void PAMSensor::registerSpecieSettings()
+{
+    for (uint8_t i = 0; i < this->species.size(); i++) {
+        PAMSpecie *specie = this->species[i];
+
+        size_t setting_name_length = strlen(specie->name) + 32;
+        char *name = (char *) malloc(setting_name_length);
+        memset(name, 0, setting_name_length);
+        snprintf(name, setting_name_length, "%s Settings", specie->name);
+
+        this->serial_menu.addResponder(specie->serial_menu_rd, name);
+    }
 }

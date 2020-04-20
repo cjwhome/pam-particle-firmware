@@ -14,6 +14,9 @@
 #include "../PAMSensor/PAMSensor.h"
 #include "../PAMSpecie/PAMSpecie.h"
 
+#include "../PAMSerial/PAMSerial.h"
+#include "../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
+
 class PAMSensorManager {
 
 private:
@@ -24,6 +27,8 @@ private:
     std::vector<PAMSensor *> sensors;
 
     uint64_t last_loop_ms = 0;
+    
+    PAMSerialMenu serial_menu;
 
 public:
     static PAMSensorManager* GetInstance();
@@ -37,6 +42,8 @@ public:
 
     void loop();
     uint16_t measurement_period_ms = 5000;
+
+    uint16_t serial_menu_rd;
 
 };
 

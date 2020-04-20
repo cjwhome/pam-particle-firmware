@@ -17,7 +17,9 @@
 #include "../../Sensors/BME680/BME680.h"
 #include "../../Sensors/HIH8120/HIH8120.h"
 
-class TPHFusion: public PAMSensor {
+#include "../../PAMSerial/PAMSerialResponder.h"
+
+class TPHFusion: public PAMSensor, public PAMSerialResponder {
 
 public:
     TPHFusion(uint8_t hih_address, bool hih_enabled = false);
@@ -25,6 +27,10 @@ public:
 
     bool start();
     bool measure();
+    void registerSpecieSettings() {}; // Override the default to prevent the fused species from being used
+
+    void becomesResponder(uint16_t rd, bool child_returned);
+    void onData(uint16_t rd, uint8_t *data, uint8_t length);
 
     bool enable_hih();
     bool disable_hih();

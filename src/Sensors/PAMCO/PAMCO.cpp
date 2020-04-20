@@ -2,6 +2,8 @@
 
 PAMCO::PAMCO(uint8_t _ads_address, uint8_t _enable_pin)
 {
+    this->name = "CO Sensor";
+
     this->enable_pin = _enable_pin;
     pinMode(this->enable_pin, OUTPUT);
     digitalWrite(this->enable_pin, HIGH);

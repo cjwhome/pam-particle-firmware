@@ -13,6 +13,9 @@
 
 #include "../PAMSpecie/PAMSpecie.h"
 
+#include "../PAMSerial/PAMSerial.h"
+#include "../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
+
 class PAMSensor {
 
 public:
@@ -23,6 +26,7 @@ public:
     SensorState state = SensorState::UNINITIALIZED;
 
     char *name = "";
+    virtual void registerSpecieSettings();
 
     // Lifecycle Methods
     virtual bool start() { /* Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); */ return false; };
@@ -36,8 +40,12 @@ public:
 
     std::vector<PAMSpecie *>* getSpecies() { return &(this->species); }
 
+    uint16_t serial_menu_rd;
+
 protected:
     std::vector<PAMSpecie *> species;
+
+    PAMSerialMenu serial_menu;
 
 private:
     

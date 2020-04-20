@@ -2,9 +2,14 @@
 
 TPHFusion::TPHFusion(uint8_t hih_address, bool _hih_enabled)
 {
+    this->name = "Temp/Press/RH Fusion";
+
+    this->serial_menu.addResponder(this, "Fusion Settings");
+    this->serial_menu.addResponder(this->bme680.serial_menu_rd, "BME680 Settings");
     if (hih_address != 0x00) {
         this->hih8120 = new HIH8120(hih_address);
         this->hih_enabled = _hih_enabled;
+        this->serial_menu.addResponder(this->hih8120->serial_menu_rd, "HIH8120 Settings");
     }
 
     if (this->hih_enabled) {

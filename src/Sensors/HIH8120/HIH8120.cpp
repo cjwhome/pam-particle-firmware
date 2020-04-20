@@ -2,6 +2,8 @@
 
 HIH8120::HIH8120(uint8_t i2c_address)
 {
+    this->name = "HIH8120";
+
     this->_hih = new HIH61XX(i2c_address);
 
     this->temperature.name = "Temperature";
