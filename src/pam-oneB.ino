@@ -17,6 +17,9 @@
 #include "Wiring.h"
 #include "Constants.h"
 
+#include "PAMSerial/PAMSerial.h"
+#include "PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
+
 #include "PAMSensorManager/PAMSensorManager.h"
 #include "Sensors/T6713/T6713.h"
 #include "Sensors/TPHFusion/TPHFusion.h"
@@ -285,6 +288,32 @@ Bits 1-0: Mask 0b11
 	0b10: TBD
 
 */
+
+PAMSerialMenu serial_menu;
+uint16_t serial_menu_rd;
+uint16_t rd = 0;
+
+void testSerialOnData(uint16_t rd, uint8_t *data, uint8_t length) 
+{
+    PAMSerial.printf(rd, "Main received Data!\n\r");
+    if (length == 1 && *data == 'm') {
+        PAMSerial.pushResponder(serial_menu_rd);
+    }
+}
+
+void testSerialBecomesResponder(uint16_t rd, bool child_returned)
+{
+    PAMSerial.printf(rd, "Main became responder!\n\r");
+}
+
+class TestSerialConnector: public PAMSerialResponder {
+
+public:
+    TestSerialConnector(): PAMSerialResponder(BYTE) {};
+    ~TestSerialConnector() {};
+    void onData(uint16_t rd, uint8_t *data, uint8_t length) { testSerialOnData(rd, data, length); };
+    void becomesResponder(uint16_t rd, bool child_returned) { testSerialBecomesResponder(rd, child_returned); };
+};
 
 
 
@@ -739,6 +768,10 @@ void setup()
     //initialize main serial port for debug output
     Serial.begin(9600);
 
+    rd = PAMSerial.registerResponder(new TestSerialConnector());
+    PAMSerial.printf(0, "TESTING FROM PAM SERIAL\n\r");
+    serial_menu_rd = PAMSerial.registerResponder(&serial_menu);
+
 
     #if sd_en
      fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
@@ -828,6 +861,7 @@ void loop() {
     locator.loop();
 
     PAMSensorManager::GetInstance()->loop();
+    PAMSerial.loop();
 
 
     if(output_only_particles == 1){
@@ -872,7 +906,8 @@ void loop() {
           sample_counter = 0;
     }
 
-    if (Serial.available() > 0) {
+    // if (Serial.available() > 0) {
+    if (false) {
         // read the incoming byte:
         incomingByte = Serial.read();
         if(debugging_enabled){
@@ -1496,7 +1531,7 @@ void outputDataToESP(void){
           }
         Serial1.println(cloud_output_string);
     }
-    Serial.println(csv_output_string);
+    PAMSerial.println(rd, csv_output_string);
 
     //write data to file
     if (sd.begin(CS)){

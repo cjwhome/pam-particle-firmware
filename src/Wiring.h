@@ -1,4 +1,5 @@
 #ifndef __WIRING_H__
+#define __WIRING_H__
 
 #include "Particle.h"
 
