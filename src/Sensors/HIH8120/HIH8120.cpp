@@ -26,7 +26,6 @@ bool HIH8120::start()
 
 bool HIH8120::measure()
 {
-    Serial.println("[HIH8120]::measure");
     if (this->_hih->update() != this->_hih->NoError) {
         // return false;
     }

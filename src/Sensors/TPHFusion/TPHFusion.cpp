@@ -46,8 +46,6 @@ bool TPHFusion::start()
 
 bool TPHFusion::measure()
 {
-    Serial.println("[TPHFusion]::measure");
-
     bool success = this->bme680.measure();
     if (this->hih_enabled) {
         success &= this->hih8120->measure();
