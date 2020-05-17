@@ -39,6 +39,7 @@ bool Plantower::verifyPacket(char *packet)
 
 void Plantower::loop()
 {
+    PAMSensor::loop();
     memset(this->buff, 0, PLANTOWER_SERIAL_PACKET_LENGTH);
 
     if (this->serial->find("B")) {

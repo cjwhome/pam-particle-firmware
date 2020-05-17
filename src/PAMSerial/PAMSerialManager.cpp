@@ -71,6 +71,7 @@ void PAMSerialManager::loop()
                 this->clear_data();
             } else {
                 this->data[this->data_index++] = new_byte;
+                this->serial->print((char) new_byte);
             }
         }
     }

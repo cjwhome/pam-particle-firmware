@@ -16,6 +16,8 @@
 #include "../PAMSerial/PAMSerial.h"
 #include "../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
 
+class PAMSensorFeed;
+
 class PAMSensor {
 
 public:
@@ -31,7 +33,7 @@ public:
     // Lifecycle Methods
     virtual bool start() { /* Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); */ return false; };
     virtual bool stop() { /* Serial.println("[PAMSensor]::start\tNOT IMPLEMENTED"); */ return false; };
-    virtual void loop() { /* Serial.println("[PAMSensor]::loop\tNOT IMPLEMENTED"); */ };
+    virtual void loop();
     virtual bool measure() { /* Serial.println("[PAMSensor]::measure\tNOT IMPLEMENTED"); */ return false; };
     virtual bool sleep() { /* Serial.println("[PAMSensor]::sleep\tNOT IMPLEMENTED"); */ return false; };
     virtual bool wakeup() { /* Serial.println("[PAMSensor]::wakeup\tNOT IMPLEMENTED"); */ return false; };
@@ -46,9 +48,24 @@ protected:
     std::vector<PAMSpecie *> species;
 
     PAMSerialMenu serial_menu;
+    PAMSensorFeed *sensor_feed;
+};
+
+class PAMSensorFeed: public PAMSerialResponder {
+
+public:
+    PAMSensorFeed(PAMSensor *sensor);
+    ~PAMSensorFeed();
+
+    void becomesResponder(uint16_t rd, bool child_returned);
+    void onData(uint16_t rd, uint8_t *data, uint8_t length);
+
+    void loop();
 
 private:
-    
+    PAMSensor *sensor;
+    uint16_t rd = -1;
+    uint64_t last_feed = 0;
 
 };
 

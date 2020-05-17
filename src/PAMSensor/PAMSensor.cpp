@@ -3,6 +3,8 @@
 PAMSensor::PAMSensor()
 {
     this->serial_menu_rd = PAMSerial.registerResponder(&this->serial_menu);
+    this->sensor_feed = new PAMSensorFeed(this);
+    this->serial_menu.addResponder(this->sensor_feed, "Output species constantly and rapidly");
 }
 
 PAMSensor::~PAMSensor() {}
@@ -37,4 +39,8 @@ void PAMSensor::registerSpecieSettings()
 
         this->serial_menu.addResponder(specie->serial_menu_rd, name);
     }
+}
+
+void PAMSensor::loop() {
+    this->sensor_feed->loop();
 }
