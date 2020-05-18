@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 8
+#define BUILD_VERSION 9
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -101,7 +101,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define HIH8120_ENABLE_MEM_ADDRESS 128
 #define CO_SOCKET_MEM_ADDRESS 132
 #define GOOGLE_LOCATION_MEM_ADDRESS 136
-#define MAX_MEM_ADDRESS 136
+#define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
+#define MAX_MEM_ADDRESS 140
 
 
 //max and min values
@@ -234,6 +235,7 @@ bool tried_cellular_connect = false;
 int battery_threshold_enable;
 int CO_socket = 0;
 int google_location_en = 0;
+int sensible_iot_en = 0;
 
 char geolocation_latitude[12] = "111.1111111";
 char geolocation_longitude[13] = "22.22222222";
@@ -381,7 +383,7 @@ void sendPacket(byte *packet, byte len);
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
 
-
+//void testsensible();
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -393,9 +395,17 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 }
 
+/*void testsensible(){
+    float lat = 39.73915360;
+    float lng = -104.98470340;
 
+    char data[256];
+    snprintf(data, sizeof(data), "{\"lat\":%f, \"lng\":%f}", lat, lng);
+
+    Particle.publish("testJson", data, PRIVATE);
+}*/
 //todo: average everything except ozone
-void outputToCloud(String data){
+void outputToCloud(String data, String sensible_data){
     String webhook_data = " ";
     CO_sum += CO_float;
     CO2_sum += CO2_float;
@@ -416,8 +426,17 @@ void outputToCloud(String data){
             Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
-              Serial.println("Published data!");
-              writeLogFile("Published data!");
+              Serial.println("Published pamup data!");
+              writeLogFile("Published pamup data!");
+            }
+            if(sensible_iot_en){
+                Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
+                //testsensible();
+                Particle.process();
+               // if(debugging_enabled){
+                    Serial.println("Published sensible data!");
+                    writeLogFile("Published sensible data!");
+               // }
             }
         }else{
             if(serial_cellular_enabled == 0){
@@ -439,6 +458,7 @@ void outputToCloud(String data){
         O3_sum = 0;
     }
 }
+
 
 //send memory address and value separated by a comma
 int remoteWriteStoredVars(String addressAndValue){
@@ -542,6 +562,7 @@ void readStoredVars(void){
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
+    EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
 
     //measurements_to_average = 5;
     if(measurements_to_average < 1 || measurements_to_average > 5000)
@@ -611,6 +632,7 @@ void writeDefaultSettings(void){
     EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, 1);
     EEPROM.put(CO_SOCKET_MEM_ADDRESS, 0);
     EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, 0);
+    EEPROM.put(SENSIBLEIOT_ENABLE_MEM_ADDRESS, 0);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -1891,17 +1913,51 @@ void outputDataToESP(void){
     time_t time = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
-
+    /*Sensible Iot data format:
+    {
+    "instrumentkey": "3504deb9-5f1f-45fc-9eea-c407e5090e7f",
+    "datetime": "2020-05-07T20:43:13.921Z",
+    "PM2_5": 1.17,
+    "PM1_0": 2.15,
+    "Temp": 87.1,
+    "Hmdty": 65.4
+    }*/
 
     //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/
     //This is different than the ble packet in that we are putting all of the data that we have in one packet
     //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
     String cloud_output_string = "";    //create a clean string
     String csv_output_string = "";
+    String sensible_string = "";
+    char sensible_buf[256];
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
     csv_output_string += String(DEVICE_id) + ",";
+
+
+
+
+    JSONBufferWriter writer(sensible_buf, sizeof(sensible_buf) - 1);
+    writer.beginObject();
+    String device_string = "PAM-" + String(DEVICE_id);
+    //String device_time = String(Time.format(time, "%Y/%m/%dT%H:%M:%SZ"));
+    //String co2_string = String(CO2_float, 0);
+    //String co_string = String(CO_float, 3);
+    writer.name("instrumentKey").value(device_string);
+    writer.name("datetime").value(String(Time.format(time, "%Y/%m/%dT%H:%M:%SZ")));
+    writer.name("CO2").value(String(CO2_float, 0));
+    writer.name("CO").value(String(CO_float, 3));
+    writer.name("PM1_0").value(String(PM01Value));
+    writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
+    writer.name("Temp").value(String(readTemperature(), 1));
+    writer.name("Press").value(String(bme.pressure / 100.0, 1));
+    writer.name("Hmdty").value(String(readHumidity(), 1));
+    
+    
+    writer.endObject();
+    writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0;
+
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
     csv_output_string += String(CO_float, 3) + ",";
     #if AFE2_en
@@ -1910,6 +1966,7 @@ void outputDataToESP(void){
     #endif
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
+
     if(voc_enabled){
         cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
         csv_output_string += String(air_quality_score, 1) + ",";
@@ -1980,12 +2037,10 @@ void outputDataToESP(void){
         Serial.println("Line to write to cloud:");
         Serial.println(cloud_output_string);
     }
-    if(!esp_wifi_connection_status){
-        if(debugging_enabled){
-            Serial.println("No wifi from esp so trying cellular function...");
-          }
-        outputToCloud(cloud_output_string);
-    }else{
+    
+    outputToCloud(cloud_output_string, sensible_buf);
+    
+    if(esp_wifi_connection_status){
         if(debugging_enabled){
             Serial.println("Sending data to esp to upload via wifi...");
             writeLogFile("Sending data to esp to upload via wifi");
@@ -2874,6 +2929,16 @@ void serialMenu(){
                 Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
             }
         }
+    }else if(incomingByte == '@'){
+        if(sensible_iot_en == 1){
+            Serial.println("Disabling sensible iot data push.");
+            sensible_iot_en = 0;
+            EEPROM.put(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
+        }else{
+            serialSetSensibleIotEnable();
+            
+        }
+    
     }else if(incomingByte == 'W'){
         if(google_location_en == 1){
             Serial.println("Disabling google location services.");
@@ -3066,6 +3131,19 @@ void serialGetWifiCredentials(void){
             Serial.println("okay, no problem\n\r");
             return;
         }
+    }
+}
+void serialSetSensibleIotEnable(void){
+    Serial.println("Please enter password in order to enable data push to Sensible Iot");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    if(tempString == "imsensible"){
+        Serial.println("Password correct!");
+        Serial.println("Enabling sensible iot data push.");
+        sensible_iot_en = 1;
+        EEPROM.put(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
+    }else{
+        Serial.println("\n\rIncorrect password!");
     }
 }
 
@@ -3659,10 +3737,12 @@ void outputSerialMenuOptions(void){
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
+    
     Serial.println("W:  Enable/Disable google location services");
-    Serial.println("X:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
+    Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
     Serial.println("!:  Continuous serial output of VOC's");
+    Serial.println("@   Enable/Disable Sensible-iot data push");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
