@@ -1,0 +1,16 @@
+{
+  "event": "{{{PARTICLE_EVENT_NAME}}}",
+  "data": {
+    "instrumentKey": "{{instrumentKey}}",
+    "datetime": "{{datetime}}",
+    "CO2": "{{CO2}}",
+    "CO": "{{CO}}",
+    "PM1_0": "{{PM1_0}}",
+    "PM2_5": "{{PM2_5}}",
+    "Temp": "{{Temp}}",
+    "Press": "{{Press}}",
+    "Hmdty": "{{Hmdty}}"
+  },
+  "coreid": "{{{PARTICLE_DEVICE_ID}}}",
+  "published_at": "{{{PARTICLE_PUBLISHED_AT}}}"
+}
