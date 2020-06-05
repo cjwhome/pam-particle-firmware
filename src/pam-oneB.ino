@@ -1944,6 +1944,9 @@ void outputDataToESP(void){
     String cloud_output_string = "";    //create a clean string
     String csv_output_string = "";
     String sensible_string = "";
+    String latitude_string = "";
+    String longitude_string = "";
+
     char sensible_buf[256];
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
@@ -1968,6 +1971,27 @@ void outputDataToESP(void){
     writer.name("Temp").value(String(readTemperature(), 1));
     writer.name("Press").value(String(bme.pressure / 100.0, 1));
     writer.name("Hmdty").value(String(readHumidity(), 1));
+    //add gps coordinates to json:
+    if(gps.get_latitude() != 0){
+        if(gps.get_nsIndicator() == 0){
+            latitude_string += "-";
+        }
+    
+        latitude_string += String(gps.get_latitude());
+    }else{
+        latitude_string = "";
+    }
+    writer.name("Lat").value(latitude_string);
+
+    if(gps.get_longitude() != 0){
+        if(gps.get_ewIndicator() == 0x01){
+            longitude_string += "-";
+            
+        }
+        longitude_string += String(gps.get_longitude()) + ",";
+    }  
+      
+    writer.name("Long").value(longitude_string);
     
     
     writer.endObject();
