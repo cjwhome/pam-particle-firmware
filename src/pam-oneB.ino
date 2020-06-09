@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 10
+#define BUILD_VERSION 12
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -239,6 +239,7 @@ int google_location_en = 0;
 int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 
+
 char geolocation_latitude[12] = "111.1111111";
 char geolocation_longitude[13] = "22.22222222";
 char geolocation_accuracy[6] = "255.0";
@@ -435,10 +436,10 @@ void outputToCloud(String data, String sensible_data){
                 Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
                 //testsensible();
                 Particle.process();
-               // if(debugging_enabled){
+                if(debugging_enabled){
                     Serial.println("Published sensible data!");
                     writeLogFile("Published sensible data!");
-               // }
+                }
             }
         }else{
             if(serial_cellular_enabled == 0){
@@ -566,6 +567,10 @@ void readStoredVars(void){
     EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
+
+    if(sensible_iot_en){
+        Time.zone(0);       //use UTC if using sensible iot upload
+    }
 
     //measurements_to_average = 5;
     if(measurements_to_average < 1 || measurements_to_average > 5000)
@@ -751,8 +756,9 @@ void setup()
     powerCheck.loop();
 
     
-
-    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
+    if(car_topper_power_en && powerCheck.getHasPower() == 0){
+        goToSleepBattery();
+    }else if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
             //Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
@@ -983,10 +989,7 @@ void setup()
 
     
     Log.info("System version: %s", (const char*)System.version());
-    if(car_topper_power_en == 1){
-        Serial.println("Cartopper power enabled, cellular will turn off if no charger is connected.");
-        Serial.println("To disable this feature, enter the serial menu and press #.");
-    }
+    
 
 }
 
@@ -1015,15 +1018,13 @@ void locationCallback(float lat, float lon, float accuracy) {
 
 void loop() {
 
-
+    if(car_topper_power_en && powerCheck.getHasPower() == 0){
+        
+        goToSleepBattery();
+    }
     //Serial.println("locator loop");
     locator.loop();
-    if(car_topper_power_en == 1 && serial_cellular_enabled == 1){
-        if(powerCheck.getHasPower() == 0){
-            serial_cellular_enabled = 0;
-            Cellular.off();
-        }
-    }
+    
 
     if(output_only_particles == 1){
         outputParticles();
@@ -1963,7 +1964,7 @@ void outputDataToESP(void){
     //String co2_string = String(CO2_float, 0);
     //String co_string = String(CO_float, 3);
     writer.name("instrumentKey").value(device_string);
-    writer.name("datetime").value(String(Time.format(time, "%Y/%m/%dT%H:%M:%SZ")));
+    writer.name("datetime").value(String(Time.format(time, "%Y-%m-%dT%H:%M:%SZ")));
     writer.name("CO2").value(String(CO2_float, 0));
     writer.name("CO").value(String(CO_float, 3));
     writer.name("PM1_0").value(String(PM01Value));
@@ -1988,7 +1989,7 @@ void outputDataToESP(void){
             longitude_string += "-";
             
         }
-        longitude_string += String(gps.get_longitude()) + ",";
+        longitude_string += String(gps.get_longitude());
     }  
       
     writer.name("Long").value(longitude_string);
@@ -2980,11 +2981,11 @@ void serialMenu(){
     }else if(incomingByte == '#'){
         if(car_topper_power_en == 1){
             car_topper_power_en = 0;
-            Serial.println("Disabling car topper power.  If cellular is enabled, it will not turn off when charger is disconnected.");
+            Serial.println("Disabling car topper power.  ");
             EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
         }else{
             car_topper_power_en = 1;
-            Serial.println("Enabling car topper power.  If no external power, cellular will be disabled.");
+            Serial.println("Enabling car topper power.  If no external power, system will turn off.");
             EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
         }
     
@@ -3791,7 +3792,7 @@ void outputSerialMenuOptions(void){
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
     Serial.println("!:  Continuous serial output of VOC's");
-    Serial.println("@   Enable/Disable Sensible-iot data push");
+    Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
     Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
