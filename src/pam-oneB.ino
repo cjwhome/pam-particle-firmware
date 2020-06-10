@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 12
+#define BUILD_VERSION 13
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -103,7 +103,10 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define GOOGLE_LOCATION_MEM_ADDRESS 136
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
-#define MAX_MEM_ADDRESS 144
+#define NO2_ENABLE_MEM_ADDRESS 148
+#define NO2_SLOPE_MEM_ADDRESS 152
+#define NO2_ZERO_MEM_ADDRESS 156
+#define MAX_MEM_ADDRESS 156
 
 
 //max and min values
@@ -122,6 +125,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define DEVICE_ID_PACKET_CONSTANT 'Z'       //instrument ID number as INTEGER
 #define VOC_PACKET_CONSTANT 'g'             //VOCs as IAQ
 #define CARBON_MONOXIDE_PACKET_CONSTANT 'M' //CO as PPM
+#define NO2_PACKET_CONSTANT 'N'             //NO2 as PPM
 #define CARBON_DIOXIDE_PACKET_CONSTANT 'C'  //CO2 as PPM
 #define PM1_PACKET_CONSTANT 'r'             //PM1 as UG/M3
 #define PM2PT5_PACKET_CONSTANT 'R'          //PM2.5 as UG/M3
@@ -211,6 +215,7 @@ String password; //wifi network password
 //global variables
 int counter = 0;
 float CO_float = 0;
+float NO2_float = 0;
 float CO_float_2 = 0;
 float CO2_float = 0;
 float CO2_float_previous = 0;
@@ -238,6 +243,7 @@ int CO_socket = 0;
 int google_location_en = 0;
 int sensible_iot_en = 0;
 int car_topper_power_en = 0;
+int no2_measurement_en = 0;
 
 
 char geolocation_latitude[12] = "111.1111111";
@@ -260,6 +266,8 @@ float CO2_slope;
 int CO2_zero;
 float CO_slope;
 int CO_zero;
+float NO2_slope;
+int NO2_zero;
 float PM_1_slope;
 float PM_25_slope;
 float PM_10_slope;
@@ -354,9 +362,10 @@ void checkWifiFile(void);
 void serialMenu();
 void serialGetDeviceId(void);
 void serialGetCo2Zero(void);
-void serialGetCo2Zero(void);
 void serialGetCoZero(void);
-void serialGetCoZero(void);
+
+void serialGetNO2Zero(void);
+void serialGetNO2Slope(void);
 void serialGetOzoneOffset(void);
 void serialResetSettings(void);
 void serialTestRemoteFunction(void);
@@ -368,6 +377,7 @@ void outputToCloud(void);
 void echoGps();
 void readOzone(void);
 float readCO(void);
+float readNO2(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
@@ -518,6 +528,9 @@ void readStoredVars(void){
     EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempValue);
     CO_slope = tempValue;
     CO_slope /= 100;
+    EEPROM.get(NO2_SLOPE_MEM_ADDRESS, tempValue);
+    NO2_slope = tempValue;
+    NO2_slope /= 100;
     EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, tempValue);
     PM_1_slope = tempValue;
     PM_1_slope /= 100;
@@ -539,6 +552,7 @@ void readStoredVars(void){
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
+    EEPROM.get(NO2_ZERO_MEM_ADDRESS, NO2_zero);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
     EEPROM.get(PM_10_ZERO_MEM_ADDRESS, PM_10_zero);
@@ -585,6 +599,10 @@ void readStoredVars(void){
     {
         CO_slope = 1;
     }
+    if(!NO2_slope)
+    {
+        NO2_slope = 1;
+    }
     if(!PM_1_slope)
     {
         PM_1_slope = 1;
@@ -605,6 +623,7 @@ void writeDefaultSettings(void){
 
     EEPROM.put(CO2_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(CO_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(NO2_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, 100);
@@ -614,6 +633,7 @@ void writeDefaultSettings(void){
 
     EEPROM.put(CO2_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(CO_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(NO2_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_1_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_25_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_10_ZERO_MEM_ADDRESS, 0);
@@ -848,9 +868,9 @@ void setup()
 
 
     //setup the AFE
-    Serial.println("Starting LMP91000 CO initialization");
+    Serial.println("Starting LMP91000_1 for NO2 initialization");
     if(debugging_enabled)
-        writeLogFile("Starting LMP91000 CO initialization");
+        writeLogFile("Starting LMP91000 NO2 initialization");
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_1_en, LOW); //enable the chip
 
@@ -892,7 +912,7 @@ void setup()
 
     //AFE 2 setup
     //#if AFE2_en
-    Serial.println("Starting LMP91000 2 initialization");
+    Serial.println("Starting LMP91000_2 initialization for CO");
     if(debugging_enabled)
         writeLogFile("Starting LMP91000 2 initialization");
     Wire.begin();   //this must be done for the LMP91000
@@ -1052,6 +1072,7 @@ void loop() {
     //read CO values and apply calibration factors
     CO_float = readCO();
 
+    NO2_float = readNO2();
 
 
 
@@ -1619,6 +1640,23 @@ float readCO(void){
     return CO_float;
 }
 
+//read Carbon monoxide alphasense sensor
+float readNO2(void){
+    float float_offset;
+
+    
+    NO2_float = readAlpha1();
+    
+
+    float_offset = NO2_zero;
+    float_offset /= 1000;
+
+    NO2_float *= NO2_slope;
+    NO2_float += float_offset;
+
+    return NO2_float;
+}
+
 float readCO2(void){
     //read CO2 values and apply calibration factors
     if(debugging_enabled){
@@ -1723,23 +1761,23 @@ float readAlpha1(void){
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
+        if(A2_temperature <= 15){
           correctedCurrent = ((sensorCurrent) - (auxCurrent));
         }
-        else if(readTemperature() <= 25){
+        else if(A2_temperature <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
         else{
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
-        alpha1_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        alpha1_ppmraw = (correctedCurrent / (-0.138)); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha1_ppmRounded = String(alpha1_ppmraw, 2);
       }
 
       digitalWrite(lmp91000_1_en, HIGH);  //disable
 
       if(debugging_enabled){
-          Serial.print("CO measurements:  \n\r");
+          Serial.print("NO2 measurements:  \n\r");
           Serial.printf("A0_gas: %d\n\r", A0_gas);
           Serial.printf("A1_aux: %d\n\r", A1_aux);
           Serial.printf("A2_temp: %d\n\r", A2_temperature);
@@ -1967,6 +2005,7 @@ void outputDataToESP(void){
     writer.name("datetime").value(String(Time.format(time, "%Y-%m-%dT%H:%M:%SZ")));
     writer.name("CO2").value(String(CO2_float, 0));
     writer.name("CO").value(String(CO_float, 3));
+    writer.name("NO2").value(String(NO2_float, 3));
     writer.name("PM1_0").value(String(PM01Value));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
     writer.name("Temp").value(String(readTemperature(), 1));
@@ -2004,6 +2043,10 @@ void outputDataToESP(void){
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_2, 3);
     csv_output_string += String(CO_float_2, 3) + ",";
     #endif
+    if(no2_measurement_en){
+        //cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
+        csv_output_string += String(NO2_float, 3) + ",";
+    }
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
 
@@ -2185,10 +2228,10 @@ void outputDataToESP(void){
         }else if(i == 10){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
             floatBytes.myFloat = air_quality_score;
-        }/*else if(i == 11){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
-            floatBytes.myFloat = O3_float;
-        }*/
+        }//else if(i == 11){
+         //   ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = NO2_PACKET_CONSTANT;
+         //   floatBytes.myFloat = NO2_float;
+        //}
 
         //bytes 5,6,7,8 - Measurement Value
         ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
@@ -2699,9 +2742,9 @@ void serialMenu(){
     }else if(incomingByte == 'h'){
         serialGetPm25Zero();
     }else if(incomingByte == 'i'){
-        serialGetPm10Slope();
+        serialGetNO2Slope();
     }else if(incomingByte == 'j'){
-        serialGetPm10Zero();
+        serialGetNO2Zero();
     }else if(incomingByte == 'k'){
         serialGetTemperatureSlope();
     }else if(incomingByte == 'l'){
@@ -2987,6 +3030,17 @@ void serialMenu(){
             car_topper_power_en = 1;
             Serial.println("Enabling car topper power.  If no external power, system will turn off.");
             EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
+        }
+    
+    }else if(incomingByte == '%'){
+        if(no2_measurement_en == 1){
+            no2_measurement_en = 0;
+            Serial.println("Disabling NO2 measurement.  ");
+            EEPROM.put(NO2_ENABLE_MEM_ADDRESS, no2_measurement_en);
+        }else{
+            no2_measurement_en = 1;
+            Serial.println("Enabling NO2 measurement.  ");
+            EEPROM.put(NO2_ENABLE_MEM_ADDRESS, no2_measurement_en);
         }
     
     }else if(incomingByte == 'W'){
@@ -3472,45 +3526,45 @@ void serialGetPm25Zero(void){
     }
 }
 
-void serialGetPm10Slope(void){
+void serialGetNO2Slope(void){
     Serial.println();
-    Serial.print("Current PM10 slope:");
-    Serial.print(String(PM_10_slope, 2));
+    Serial.print("Current NO2 slope:");
+    Serial.print(String(NO2_slope, 2));
     Serial.println(" ");
-    Serial.print("Enter new PM10 slope\n\r");
+    Serial.print("Enter new NO2 slope\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
     int tempValue;
 
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
-        PM_10_slope = tempfloat;
+    if(tempfloat >= 0.1 && tempfloat < 3.5){
+        NO2_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
-        Serial.print("\n\rNew PM10 slope: ");
-        Serial.println(String(PM_10_slope,2));
+        Serial.print("\n\rNew NO2 slope: ");
+        Serial.println(String(NO2_slope,2));
 
-        EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(NO2_SLOPE_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
 }
 
-void serialGetPm10Zero(void){
+void serialGetNO2Zero(void){
     Serial.println();
-    Serial.print("Current PM10 zero:");
-    Serial.print(PM_10_zero);
-    Serial.println(" um/m3");
-    Serial.print("Enter new PM10 Zero\n\r");
+    Serial.print("Current NO2 zero:");
+    Serial.print(NO2_zero);
+    Serial.println(" ppb");
+    Serial.print("Enter new NO2 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
     if(tempValue >= -1000 && tempValue < 1000){
-        Serial.print("\n\rNew PM10 zero: ");
+        Serial.print("\n\rNew NO2 zero: ");
         Serial.println(tempValue);
-        PM_10_zero = tempValue;
-        EEPROM.put(PM_10_ZERO_MEM_ADDRESS, tempValue);
+        NO2_zero = tempValue;
+        EEPROM.put(NO2_ZERO_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3739,8 +3793,8 @@ void outputSerialMenuOptions(void){
     Serial.println("f:  Adjust PM1 zero");
     Serial.println("g:  Adjust PM2.5 slope");
     Serial.println("h:  Adjust PM2.5 zero");
-    Serial.println("i:  Adjust PM10 slope");
-    Serial.println("j:  Adjust PM10 zero");
+    Serial.println("i:  Adjust NO2 slope");
+    Serial.println("j:  Adjust NO2 zero");
     Serial.println("k:  Adjust Temperature slope");
     Serial.println("l:  Adjust Temperature zero");
     Serial.println("m:  Adjust Pressure slope");
@@ -3794,6 +3848,7 @@ void outputSerialMenuOptions(void){
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
     Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
+    Serial.println("%   Enable/Disable NO2 measurement on Alpha port 1.");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
