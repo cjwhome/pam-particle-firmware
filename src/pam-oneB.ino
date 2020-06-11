@@ -1072,12 +1072,10 @@ void loop() {
     //read CO values and apply calibration factors
     CO_float = readCO();
 
-    NO2_float = readNO2();
-
-
-
-    //CO_float_2 += CO_zero_2;
-    //CO_float_2 *= CO_slope_2;
+    if(no2_measurement_en){
+        NO2_float = readNO2();
+    }
+    
 
     CO2_float = readCO2();
 
