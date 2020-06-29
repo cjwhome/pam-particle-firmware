@@ -7,6 +7,7 @@
 
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
+#include "../../PAMEEPROM/EEPROMAddresses.h"
 
 class T6713: public PAMSensor {
 

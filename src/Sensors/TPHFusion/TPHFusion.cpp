@@ -44,6 +44,11 @@ bool TPHFusion::start()
     return success;
 }
 
+void TPHFusion::registerSpecieSettings() {
+    this->hih8120->registerSpecieSettings();
+    this->bme680.registerSpecieSettings();
+}
+
 bool TPHFusion::measure()
 {
     bool success = this->bme680.measure();

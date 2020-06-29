@@ -24,15 +24,13 @@
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 #define DONT_ADVERTISE_CONSTANT '\0'
 
-// #include "../../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
-// #include "../../PAMSerial/PAMSerialEditValue/PAMSerialEditValue.h"
 #include "../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
-#include "../PAMSerial/PAMSerialEditValue/PAMSerialEditValue.h"
+#include "../PAMSerial/PAMSerialEditEEPROMValue/PAMSerialEditEEPROMValue.h"
 
 class PAMSpecie {
 
 public:
-    PAMSpecie();
+    PAMSpecie(uint16_t slope_address, uint16_t zero_address, float default_slope = 1, float default_zero = 0);
     ~PAMSpecie();
 
     char *name;
@@ -51,10 +49,10 @@ public:
 private:
     PAMSerialMenu serial_menu;
 
-    PAMSerialEditValue<float> *slope_responder; // { this->slope };
+    PAMSerialEditEEPROMValue<float> *slope_responder;
     uint16_t slope_rd;
 
-    PAMSerialEditValue<float> *zero_responder; // { this->zero };
+    PAMSerialEditEEPROMValue<float> *zero_responder;
     uint16_t zero_rd;
 
 };

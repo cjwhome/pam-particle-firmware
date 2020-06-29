@@ -11,6 +11,7 @@
 
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
+#include "../../PAMEEPROM/EEPROMAddresses.h"
 
 class HIH8120: public PAMSensor {
 

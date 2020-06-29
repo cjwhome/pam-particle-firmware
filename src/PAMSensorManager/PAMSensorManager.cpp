@@ -98,6 +98,7 @@ void PAMSensorManager::loop() {
                 sprintf(serial_line, "%s,%0.2f", serial_line, specie->adj_value);
             }
         }
-        Serial.println(serial_line);
+        // Serial.println(serial_line);
+        PAMSerial.println(0, serial_line);
     }
 }

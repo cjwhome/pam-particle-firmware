@@ -27,7 +27,7 @@ public:
 
     bool start();
     bool measure();
-    void registerSpecieSettings() {}; // Override the default to prevent the fused species from being used
+    void registerSpecieSettings();
 
     void becomesResponder(uint16_t rd, bool child_returned);
     void onData(uint16_t rd, uint8_t *data, uint8_t length);

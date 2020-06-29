@@ -1,6 +1,7 @@
 #include "Plantower.h"
 
 Plantower::Plantower(USARTSerial &_serial)
+    : pm1(PM_1_SLOPE_MEM_ADDRESS, PM_1_ZERO_MEM_ADDRESS), pm2_5(PM_25_SLOPE_MEM_ADDRESS, PM_25_ZERO_MEM_ADDRESS), pm10(PM_10_SLOPE_MEM_ADDRESS, PM_10_ZERO_MEM_ADDRESS)
 {
     this->name = "Plantower";
 

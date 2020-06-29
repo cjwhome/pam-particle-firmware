@@ -25,18 +25,20 @@ void PAMSerialEditValue<float>::becomesResponder(uint16_t rd, bool child_returne
 template<>
 void PAMSerialEditValue<float>::onData(uint16_t rd, uint8_t *data, uint8_t length)
 {
-    float temp;
     if (*data == 'x') {
         PAMSerial.popResponder();
-    } else if ((sscanf((char *) data, "%f ", &temp)) == 1) {
-        PAMSerial.printf(rd, "Setting new value to: %f\n\r", temp);
-        *(this->ptr) = temp;
-        if (this->callback != nullptr) {
-            this->callback(rd, this->ptr);
-        }
-        PAMSerial.popResponder();
     } else {
-        PAMSerial.println(rd, "Could not read setting. Try again, or press 'x' to exit.");
+        float temp = String((char *) data).toFloat();
+        if (temp != 0 || (temp == 0 && data[0] == '0')) {
+            PAMSerial.printf(rd, "Setting new value to: %f\n\r", temp);
+            *(this->ptr) = temp;
+            if (this->callback != nullptr) {
+                this->callback(rd, this->ptr);
+            }
+            PAMSerial.popResponder();
+        } else {
+            PAMSerial.println(rd, "Could not read setting. Try again, or press 'x' to exit.");
+        }
     }
 }
 

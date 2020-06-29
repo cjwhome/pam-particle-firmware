@@ -13,6 +13,7 @@
 
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
+#include "../../PAMEEPROM/EEPROMAddresses.h"
 
 class BME680: public PAMSensor {
 

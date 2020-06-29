@@ -1,6 +1,7 @@
 #include "HIH8120.h"
 
 HIH8120::HIH8120(uint8_t i2c_address)
+    : temperature(TEMP_SLOPE_MEM_ADDRESS, TEMP_ZERO_MEM_ADDRESS), humidity(RH_SLOPE_MEM_ADDRESS, RH_ZERO_MEM_ADDRESS)
 {
     this->name = "HIH8120";
 

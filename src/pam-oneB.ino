@@ -53,42 +53,7 @@ GoogleMapsDeviceLocator locator;
 #define AFE2_en 0
 
 //define addresses of eeprom stored variables
-#define DEVICE_ID_MEM_ADDRESS 0
-#define CO2_ZERO_MEM_ADDRESS 4
-#define CO2_SLOPE_MEM_ADDRESS 8
-#define CO_ZERO_MEM_ADDRESS 12
-#define CO_SLOPE_MEM_ADDRESS 16
-#define PM_1_ZERO_MEM_ADDRESS 20
-#define PM_1_SLOPE_MEM_ADDRESS 24
-#define PM_25_ZERO_MEM_ADDRESS 28
-#define PM_25_SLOPE_MEM_ADDRESS 32
-#define PM_10_ZERO_MEM_ADDRESS 36
-#define PM_10_SLOPE_MEM_ADDRESS 40
-#define TEMP_ZERO_MEM_ADDRESS 44
-#define TEMP_SLOPE_MEM_ADDRESS 48
-#define PRESSURE_ZERO_MEM_ADDRESS 52
-#define PRESSURE_SLOPE_MEM_ADDRESS 56
-#define RH_ZERO_MEM_ADDRESS 60
-#define RH_SLOPE_MEM_ADDRESS 64
-#define SERIAL_CELLULAR_EN_MEM_ADDRESS 68
-#define DEBUGGING_ENABLED_MEM_ADDRESS  72
-#define GAS_LOWER_LIMIT_MEM_ADDRESS 76
-#define GAS_UPPER_LIMIT_MEM_ADDRESS 80
-#define TIME_ZONE_MEM_ADDRESS 84
-#define OZONE_EN_MEM_ADDRESS 88
-#define VOC_EN_MEM_ADDRESS 92
-#define TEMPERATURE_UNITS_MEM_ADDRESS 96
-#define OUTPUT_PARTICLES_MEM_ADDRESS 100
-#define TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS 104
-#define OZONE_A_OR_D_MEM_ADDRESS 108
-#define OZONE_OFFSET_MEM_ADDRESS 112
-#define MEASUREMENTS_TO_AVG_MEM_ADDRESS 116
-#define BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS 120
-#define ABC_ENABLE_MEM_ADDRESS 124
-#define HIH8120_ENABLE_MEM_ADDRESS 128
-#define CO_SOCKET_MEM_ADDRESS 132
-#define GOOGLE_LOCATION_MEM_ADDRESS 136
-#define MAX_MEM_ADDRESS 136
+#include "PAMEEPROM/PAMEEPROM.h"
 
 
 //max and min values
@@ -330,7 +295,7 @@ void serialGetCoZero(void);
 void serialGetCoZero(void);
 void serialGetOzoneOffset(void);
 void serialResetSettings(void);
-void serialTestRemoteFunction(void);
+// void serialTestRemoteFunction(void);
 void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
 
@@ -342,8 +307,8 @@ void readOzone(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
-int remoteWriteStoredVars(String addressAndValue);
-int remoteReadStoredVars(String mem_address);
+// int remoteWriteStoredVars(String addressAndValue);
+// int remoteReadStoredVars(String mem_address);
 void writeDefaultSettings(void);
 void readHIH8120(void);
 
@@ -420,42 +385,43 @@ void outputToCloud(String data){
 }
 
 //send memory address and value separated by a comma
-int remoteWriteStoredVars(String addressAndValue){
-    uint16_t tempValue = 0;
+// int remoteWriteStoredVars(String addressAndValue){
+//     uint16_t tempValue = 0;
 
-    int index_of_comma = addressAndValue.indexOf(',');
-    Serial.print("Full address and value substring: ");
-    Serial.println(addressAndValue);
-    String addressString = addressAndValue.substring(0, index_of_comma);
-    String valueString = addressAndValue.substring(index_of_comma + 1);
+//     int index_of_comma = addressAndValue.indexOf(',');
+//     Serial.print("Full address and value substring: ");
+//     Serial.println(addressAndValue);
+//     String addressString = addressAndValue.substring(0, index_of_comma);
+//     String valueString = addressAndValue.substring(index_of_comma + 1);
 
-    Serial.printf("address substring: %s\n\r", addressString);
-    Serial.printf("Value substring: %s\n\r", valueString);
+//     Serial.printf("address substring: %s\n\r", addressString);
+//     Serial.printf("Value substring: %s\n\r", valueString);
 
-    int numerical_mem_address = addressString.toInt();
-    int numerical_value = valueString.toInt();
+//     int numerical_mem_address = addressString.toInt();
+//     int numerical_value = valueString.toInt();
 
-    if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
-        EEPROM.put(numerical_mem_address, numerical_value);
-        return 1;
-    }else{
-        return -1;
-    }
+//     if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
+//         EEPROM.put(numerical_mem_address, numerical_value);
+//         return 1;
+//     }else{
+//         return -1;
+//     }
 
-}
+// }
 
-int remoteReadStoredVars(String mem_address){
-    uint16_t tempValue = 0;
-    int numerical_mem_address = mem_address.toInt();
-    if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
-        EEPROM.get(numerical_mem_address, tempValue);
-        return tempValue;
-    }else{
-        return -1;
-    }
-}
+// int remoteReadStoredVars(String mem_address){
+//     uint16_t tempValue = 0;
+//     int numerical_mem_address = mem_address.toInt();
+//     if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
+//         EEPROM.get(numerical_mem_address, tempValue);
+//         return tempValue;
+//     }else{
+//         return -1;
+//     }
+// }
 //read all eeprom stored variables
 void readStoredVars(void){
+    Serial.println("MAIN IS READING STORED VARS");
     int tempValue;
     //just changing the rh calibration for temporary!! -- remove me!!
     //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
@@ -555,6 +521,7 @@ void readStoredVars(void){
 }
 
 void writeDefaultSettings(void){
+    Serial.println("WRITING DEFAULT SETTINGS");
     EEPROM.put(DEVICE_ID_MEM_ADDRESS, 1555);
 
 
@@ -696,7 +663,7 @@ void setup()
     pinMode(CO2_EN, OUTPUT);
 
     //read all stored variables (calibration parameters)
-    readStoredVars();
+    // readStoredVars();
 
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
@@ -729,7 +696,7 @@ void setup()
 
 
     // register the cloud function
-    Particle.function("geteepromdata", remoteReadStoredVars);
+    // Particle.function("geteepromdata", remoteReadStoredVars);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -2399,19 +2366,19 @@ void serialMenu(){
 
 }
 
-void serialTestRemoteFunction(void){
+// void serialTestRemoteFunction(void){
 
-  Serial.println("Enter string (address,value)");
-  Serial.setTimeout(50000);
-  String tempString = Serial.readStringUntil('\r');
-  int response = remoteWriteStoredVars(tempString);
-  if(response){
-    Serial.println("sucess in writing");
-  }else{
-    Serial.println("failed writing string");
-  }
+//   Serial.println("Enter string (address,value)");
+//   Serial.setTimeout(50000);
+//   String tempString = Serial.readStringUntil('\r');
+//   int response = remoteWriteStoredVars(tempString);
+//   if(response){
+//     Serial.println("sucess in writing");
+//   }else{
+//     Serial.println("failed writing string");
+//   }
 
-}
+// }
 
 void serialIncreaseInputCurrent(void){
     int inputCurrent = pmic.getInputCurrentLimit();

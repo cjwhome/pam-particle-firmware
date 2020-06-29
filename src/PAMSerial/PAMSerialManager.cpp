@@ -25,7 +25,7 @@ uint16_t PAMSerialManager::registerResponder(PAMSerialResponder *responder)
 
 void PAMSerialManager::pushResponder(uint16_t responder)
 {
-    Serial.printf("[PAMSerialManager]::pushResponder(%d)\n\r", responder);
+    // Serial.printf("[PAMSerialManager]::pushResponder(%d)\n\r", responder);
     if (responder < this->responders.size()) {
         this->active_responders.push(responder);
         this->clear_data();
@@ -36,7 +36,7 @@ void PAMSerialManager::pushResponder(uint16_t responder)
 
 void PAMSerialManager::popResponder()
 {
-    Serial.println("[PAMSerialManager]::popResponder");
+    // Serial.println("[PAMSerialManager]::popResponder");
     if (this->active_responders.size() > 1) {
         this->active_responders.pop();
         this->clear_data();

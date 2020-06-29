@@ -1,6 +1,6 @@
 #include "T6713.h"
 
-T6713::T6713()
+T6713::T6713() : CO2(CO2_SLOPE_MEM_ADDRESS, CO2_ZERO_MEM_ADDRESS)
 {
     this->name = "T6713";
 

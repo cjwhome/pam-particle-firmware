@@ -1,6 +1,7 @@
 #include "PAMCO.h"
 
 PAMCO::PAMCO(uint8_t _ads_address, uint8_t _enable_pin)
+    : co(CO_SLOPE_MEM_ADDRESS, CO_ZERO_MEM_ADDRESS)
 {
     this->name = "CO Sensor";
 
@@ -58,7 +59,7 @@ bool PAMCO::measure()
     }
 
     if(this->lmp91000.read(LMP91000_STATUS_REG) == 0){
-        Serial.println("Status = 0 from LMP91000 status reg");
+        // Serial.println("Status = 0 from LMP91000 status reg");
         digitalWrite(this->enable_pin, HIGH);
         return false;
     }

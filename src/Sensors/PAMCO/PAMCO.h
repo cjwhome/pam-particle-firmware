@@ -15,6 +15,7 @@
 #include "../../PAMSensorManager/PAMSensorManager.h"
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
+#include "../../PAMEEPROM/EEPROMAddresses.h"
 
 #define ALPHA_ADC_READ_AMOUNT (10)
 

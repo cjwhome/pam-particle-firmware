@@ -11,6 +11,7 @@
 #include "../../PAMSensorManager/PAMSensorManager.h"
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
+#include "../../PAMEEPROM/EEPROMAddresses.h"
 
 #define PLANTOWER_SERIAL_PACKET_LENGTH (31)
 #define PM_25_CONSTANT_A (1.19)

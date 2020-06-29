@@ -13,7 +13,10 @@ template<typename T>
 class PAMSerialEditValue: public PAMSerialResponder {
 
 public:
-    PAMSerialEditValue(T &_ptr, void (*_callback)(uint16_t rd, T *new_value) = nullptr) { this->ptr = &_ptr; this->callback = _callback; };
+    PAMSerialEditValue(T &_ptr, void (*_callback)(uint16_t rd, T *new_value) = nullptr) { 
+        this->ptr = &_ptr;
+        this->callback = _callback;
+    };
     ~PAMSerialEditValue();
 
     void becomesResponder(uint16_t rd, bool child_returned) {
@@ -23,6 +26,8 @@ public:
     void onData(uint16_t rd, uint8_t *data, uint8_t length) {
         PAMSerial.println(rd, "[PAMSerialEditValue]::onData\nTrying to respond to unknown data type!");
     }
+
+    void finish() {}
 
 private:
     T *ptr;
