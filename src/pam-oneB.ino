@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 12
+#define BUILD_VERSION 15
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -53,7 +53,8 @@ GoogleMapsDeviceLocator locator;
 #define TMP36_VPDC 0.01 //10mV per degree C
 
 //google maps API key:
-#define GOOGLE_API_KEY "AIzaSyAfgY0VX3KSMkVoIVvWAr9oVlT-AoQ68e0"
+//#define GOOGLE_API_KEY "AIzaSyAfgY0VX3KSMkVoIVvWAr9oVlT-AoQ68e0"
+#define GOOGLE_API_KEY "AIzaSyAH1DrFHTXmtUEAxd8sY9fdjMmgpSzmRCk"
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
 #define ALPHA_ADC_READ_AMOUNT 10
@@ -565,7 +566,9 @@ void readStoredVars(void){
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
+    google_location_en = 0;
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
+    sensible_iot_en = 0;
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
 
     if(sensible_iot_en){
@@ -984,7 +987,7 @@ void setup()
 
     if(google_location_en){
         Serial.println("Setting up google maps geolocation.");
-        locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
+        locator.withSubscribe(locationCallback).withLocatePeriodic(60); //setup google maps geolocation
     }
 
     
