@@ -36,8 +36,8 @@
 
 GoogleMapsDeviceLocator locator;
 
-#define APP_VERSION 7
-#define BUILD_VERSION 12
+#define APP_VERSION 8
+#define BUILD_VERSION 1
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -199,10 +199,16 @@ SdFat sd;
 SdFile file;
 SdFile log_file;
 File file1;
+File missedUploads;
 String fileName;
 String logFileName;
+//String missedUploadsName;
+SdFile missedUploadsFile;
+char *missedUploadsName = "missedUploads.txt";
+
 int file_started = 0;
 int log_file_started = 0;
+int missed_uploads_file_started = 0;
 
 //wifi
 String ssid; //wifi network name
@@ -362,6 +368,14 @@ void serialResetSettings(void);
 void serialTestRemoteFunction(void);
 void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
+void writeMissedUploadsFile(String data);
+void read_missed_uploads_file(void);
+struct LinesAndPositions FindLinesAndPositions(char* filename);
+void CopyFiles(char* ToFile, char* FromFile);
+void ShowFileContents(char* filename);
+void DeleteLineFromFile(char * filename, int Line);
+//void DeleteSelectedLinesFromFile(char * filename, char * StrOfLines);
+void DeleteMultipleLinesFromFile(char * filename, int SLine, int ELine);
 
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
@@ -387,6 +401,13 @@ void sendPacket(byte *packet, byte len);
 void locationCallback(float lat, float lon, float accuracy);
 
 //void testsensible();
+
+struct LinesAndPositions
+{
+  int NumberOfLines; // number of lines in file
+  int SOL[50]; // start of line in file
+  int EOL[50]; // end of line in file
+};
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -450,6 +471,9 @@ void outputToCloud(String data, String sensible_data){
                   }
             }else{
                 status_word.status_int &= 0xFFFD;   //clear the connected bit
+                if(sensible_iot_en){
+                    writeMissedUploadsFile(sensible_data);  //
+                }
                 if(debugging_enabled){
                     Serial.println("Couldn't connect to particle.");
                     writeLogFile("Couldn't connect to particle.");
@@ -718,6 +742,65 @@ void check_wifi_file(void){
     file1.close();
 
 }
+void read_missed_uploads_file(void)
+{
+    missedUploads = sd.open(missedUploadsName, O_READ | O_WRITE | O_CREAT);
+    size_t n;      // Length of returned field with delimiter.
+    char str[250];  // Must hold longest field with delimiter and zero byte.
+    // Read the file and print fields.
+    
+    int i = 0;
+    long total_bytes_in_file = 0;
+    long last_line_start_byte = 0;
+    int last_line_byte_count = 0;
+    Serial.println("Contents of missed uploads file line by line:");
+    while(1)
+    {
+        n = readField(&missedUploads, str, sizeof(str), "\n");
+        total_bytes_in_file += (n + 1);
+        // done if Error or at EOF.
+        if (n == 0){
+            break;
+        }
+        last_line_byte_count = n;
+        Serial.print("n:");
+        Serial.print(n);
+        Serial.print(",I:");
+        Serial.print(i);
+        Serial.print(":");
+        Serial.println(str);
+        i++;
+    }
+    Serial.printf("Found %d lines in file\n\r", i);
+    //missedUploads.close();
+    //DeleteLineFromFile(missedUploadsName, i);
+    //Serial.printf("Deleted last line from file:");
+    //ShowFileContents(missedUploadsName);
+    last_line_start_byte = total_bytes_in_file - last_line_byte_count;
+    if(missedUploads.seek(last_line_start_byte))
+    {   
+        //Serial.printf("line at position:%ld is:", last_line_start_byte);
+        //n = readField(&missedUploads, str, sizeof(str), "\n");
+        //Serial.println(str);
+        Serial.println("marking file uploaded");
+        missedUploads.write("VOID");      //void out the line
+    }else
+    {
+        Serial.println("unable to set new EOF");
+    }
+    
+    
+    
+
+    missedUploads.close();
+    
+    //remove_last_line(&missedUploads, i);
+    
+
+}
+
+
+
 
 void setup()
 {
@@ -825,6 +908,8 @@ void setup()
      fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
      Serial.println("Checking for sd card");
      logFileName = "log_" + fileName;
+     //search for missedUpload.txt and if not there, create one
+
 
     if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
       /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
@@ -1885,6 +1970,23 @@ void readOzone(void){
     }
 }
 
+void writeMissedUploadsFile(String data){
+  if (sd.begin(CS)){
+      Serial.println("Writing data to missed uploads file.");
+      missedUploadsFile.open("missedUploads.txt", O_CREAT | O_APPEND | O_WRITE);
+      if(missed_uploads_file_started == 0){
+          //missedUploadsFile.println("Missed uploads file Start timestamp: ");
+          //missedUploadsFile.println(Time.timeStr());
+          missed_uploads_file_started = 1;
+      }
+      missedUploadsFile.println(data);
+
+      missedUploadsFile.close();
+  }else{
+    Serial.println("Unable to write to missed uploads file");
+  }
+}
+
 void writeLogFile(String data){
   if (sd.begin(CS)){
       Serial.println("Writing data to log file.");
@@ -1968,7 +2070,7 @@ void outputDataToESP(void){
     writer.name("CO2").value(String(CO2_float, 0));
     writer.name("CO").value(String(CO_float, 3));
     writer.name("PM1_0").value(String(PM01Value));
-    writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
+    writer.name("PM2_5").value(String(corrected_PM_25, 1)); 
     writer.name("Temp").value(String(readTemperature(), 1));
     writer.name("Press").value(String(bme.pressure / 100.0, 1));
     writer.name("Hmdty").value(String(readHumidity(), 1));
@@ -2989,6 +3091,9 @@ void serialMenu(){
             EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
         }
     
+    }else if(incomingByte == '*'){
+
+        read_missed_uploads_file();
     }else if(incomingByte == 'W'){
         if(google_location_en == 1){
             Serial.println("Disabling google location services.");
@@ -3794,6 +3899,159 @@ void outputSerialMenuOptions(void){
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
     Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
+    Serial.println("*   Print out the missed uploads data file");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
+
+
+struct LinesAndPositions FindLinesAndPositions(char* filename)
+{
+  File myFile;
+  LinesAndPositions LNP;
+
+  myFile = sd.open(filename);
+  if (myFile)
+  {
+    LNP.NumberOfLines = 0;
+    LNP.SOL[0] = 0; //the very first start-of-line index is always zero 
+    int i = 0;
+
+    while (myFile.available())
+    {
+      if (myFile.read() == '\n') // read until the newline character has been found
+      {
+        LNP.EOL[LNP.NumberOfLines] = i; // record the location of where it is in the file
+        LNP.NumberOfLines++; // update the number of lines found
+        LNP.SOL[LNP.NumberOfLines] = i + 1; // the start-of-line is always 1 character more than the end-of-line location
+      }
+      i++;
+    }
+    LNP.EOL[LNP.NumberOfLines] = i; // record the last locations
+    LNP.NumberOfLines += 1; // record the last line
+
+    myFile.close();
+  }
+
+  return LNP;
+}
+
+void CopyFiles(char* ToFile, char* FromFile)
+{
+  File myFileOrig;
+  File myFileTemp;
+Serial.println("Here11");
+  if (sd.exists(ToFile))
+    sd.remove(ToFile);
+Serial.println("Here12");
+  //Serial << "\nCopying Files. From:" << FromFile << " -> To:" << ToFile << "\n";
+
+  myFileTemp = sd.open(ToFile, FILE_WRITE);
+  myFileOrig = sd.open(FromFile);
+  Serial.println("Here13");
+  if (myFileOrig)
+  {
+      Serial.println("Here14");
+    while (myFileOrig.available())
+    {
+      myFileTemp.write( myFileOrig.read() ); // make a complete copy of the original file
+    }
+    Serial.println("Here15");
+    myFileOrig.close();
+    myFileTemp.close();
+    //Serial.println("done.");
+  }
+}
+
+void ShowFileContents(char* filename)
+{
+  Serial.println(filename);
+  File myFile = sd.open(filename);
+  if (myFile)
+  {
+    while (myFile.available()) {
+      Serial.write(myFile.read());
+    }
+    Serial.println();
+    myFile.close();
+  }
+}
+
+void DeleteLineFromFile(char * filename, int Line)
+{
+  DeleteMultipleLinesFromFile(filename, Line, Line);
+}
+
+/*void DeleteSelectedLinesFromFile(char * filename, char * StrOfLines)
+{
+  byte offset = 0;
+  Serial << "Deleting multiple lines, please wait";
+  for (unsigned short i = 0, j = strlen(StrOfLines), index = 0; i <= j; i++)
+  {
+    char C = (*StrOfLines++);
+    if (isComma(C) || (i == j))
+    {
+      DeleteLineFromFile(filename, index - offset);
+      offset++;
+      index = 0;
+    }
+    else if (isSpace(C)) continue;
+    else
+      index = (index * 10) + C - '0';
+    if((i%2) == 0)
+      Serial << ".";
+  }
+  Serial.println();
+}*/
+
+void DeleteMultipleLinesFromFile(char * filename, int SLine, int ELine)
+{
+  File myFileOrig;
+  File myFileTemp;
+    //Serial.println("Here1");
+  // If by some chance it exists, remove the temp file from the card
+  if (sd.exists("tempFile.txt"))
+    sd.remove("tempFile.txt");
+//Serial.println("Here2");
+  // Get the start and end of line positions from said file
+  LinesAndPositions FileLines = FindLinesAndPositions(filename);
+  //Serial.println("Here3");
+  if ((SLine > FileLines.NumberOfLines) || (ELine > FileLines.NumberOfLines))
+    return;
+    //Serial.printf("Sline:%d, Eline:%d\n\r", SLine, ELine);
+//Serial.println("Her4e");
+  myFileTemp = sd.open("tempFile.txt", FILE_WRITE);
+  myFileOrig = sd.open(filename);
+  double position = 0;
+//Serial.println("Here5");
+  if (myFileOrig)
+  {
+     Serial.println("Here6"); 
+    while (myFileOrig.available())
+    {
+      char C = myFileOrig.read();
+        //Serial.printf("%d\r", position);
+      // Copy the file but exclude the entered lines by user
+      if ((position < FileLines.SOL[SLine - 1]) || (position > FileLines.EOL[ELine - 1]))
+        myFileTemp.write(C);
+
+      position++;
+      if(position > 10000)
+      {
+          Serial.println("Issue with copying file");
+          break;
+      }
+    }
+    Serial.println("Here7");
+    myFileOrig.close();
+    myFileTemp.close();
+  }
+    Serial.println("Here8");
+  //copy the contents of tempFile back to the original file
+  CopyFiles(filename, "tempFile.txt");
+Serial.println("Here9");
+  // Remove the tempfile from the SD card
+  if (sd.exists("tempFile.txt"))
+    sd.remove("tempFile.txt");
+    Serial.println("Here10");
+}
