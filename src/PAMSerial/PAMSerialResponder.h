@@ -5,7 +5,7 @@
 
 #ifndef __PAMSERIALRESPONDER_H__
 #define __PAMSERIALRESPONDER_H__
-
+//gets the type of variable to read
 
 class PAMSerialResponder {
 

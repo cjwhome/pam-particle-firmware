@@ -28,8 +28,8 @@
 
 GoogleMapsDeviceLocator locator;
 
-#define APP_VERSION 7
-#define BUILD_VERSION 8
+#define APP_VERSION 8
+#define BUILD_VERSION 1
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)

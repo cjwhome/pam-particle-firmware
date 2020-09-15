@@ -65,6 +65,8 @@ bool BME680::measure()
 
     this->voc.raw_value = this->_bme680.gas_resistance;
     this->voc.adj_value = (this->voc.slope * this->voc.raw_value) * this->voc.zero;
-
+    Serial.printf("temperature slope: %1.2f, temperature zero: %1.2f\n\r", this->temperature.slope, this->temperature.zero);
+    //Serial.printf("temp:%1.1f, press:%1.1f, hum:%1.1f\n\r", this->temperature.raw_value, this->pressure.raw_value, this->humidity.raw_value);
+    //Serial.printf("tempa:%1.1f, pressa:%1.1f, huma:%1.1f\n\r", this->temperature.adj_value, this->pressure.adj_value, this->humidity.adj_value);
     return true;
 }
