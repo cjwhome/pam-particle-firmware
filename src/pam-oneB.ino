@@ -36,8 +36,8 @@
 
 GoogleMapsDeviceLocator locator;
 
-#define APP_VERSION 7
-#define BUILD_VERSION 12
+#define APP_VERSION 70
+#define BUILD_VERSION 13
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -69,8 +69,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define DEVICE_ID_MEM_ADDRESS 0
 #define CO2_ZERO_MEM_ADDRESS 4
 #define CO2_SLOPE_MEM_ADDRESS 8
-#define CO_ZERO_MEM_ADDRESS 12
-#define CO_SLOPE_MEM_ADDRESS 16
+#define CO_ZEROA_MEM_ADDRESS 12
+#define CO_SLOPEA_MEM_ADDRESS 16
 #define PM_1_ZERO_MEM_ADDRESS 20
 #define PM_1_SLOPE_MEM_ADDRESS 24
 #define PM_25_ZERO_MEM_ADDRESS 28
@@ -103,8 +103,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define GOOGLE_LOCATION_MEM_ADDRESS 136
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
-#define MAX_MEM_ADDRESS 144
-
+#define CO_ZEROB_MEM_ADDRESS 148
+#define CO_SLOPEB_MEM_ADDRESS 152
+#define MAX_MEM_ADDRESS 152
 
 //max and min values
 #define MIN_DEVICE_ID_NUMBER 1
@@ -210,8 +211,8 @@ String password; //wifi network password
 
 //global variables
 int counter = 0;
-float CO_float = 0;
-float CO_float_2 = 0;
+float CO_float_A = 0;
+float CO_float_B = 0;
 float CO2_float = 0;
 float CO2_float_previous = 0;
 int CO2_value = 0;
@@ -258,8 +259,10 @@ double sound_average;
 //calibration parameters
 float CO2_slope;
 int CO2_zero;
-float CO_slope;
-int CO_zero;
+float CO_slopeA;
+int CO_zeroA;
+float CO_slopeB;
+int CO_zeroB;
 float PM_1_slope;
 float PM_25_slope;
 float PM_10_slope;
@@ -354,9 +357,11 @@ void checkWifiFile(void);
 void serialMenu();
 void serialGetDeviceId(void);
 void serialGetCo2Zero(void);
-void serialGetCo2Zero(void);
-void serialGetCoZero(void);
-void serialGetCoZero(void);
+void serialGetCo2Slope(void);
+void serialGetCoZeroA(void);
+void serialGetCoZeroB(void);
+void serialGetCoSlopeA(void);
+void serialGetCoSlopeB(void);
 void serialGetOzoneOffset(void);
 void serialResetSettings(void);
 void serialTestRemoteFunction(void);
@@ -367,7 +372,8 @@ void outputSerialMenuOptions(void);
 void outputToCloud(void);
 void echoGps();
 void readOzone(void);
-float readCO(void);
+float readCO_A(void);
+float readCO_B(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
@@ -515,9 +521,12 @@ void readStoredVars(void){
     EEPROM.get(CO2_SLOPE_MEM_ADDRESS, tempValue);
     CO2_slope = tempValue;
     CO2_slope /= 100;
-    EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempValue);
-    CO_slope = tempValue;
-    CO_slope /= 100;
+    EEPROM.get(CO_SLOPEA_MEM_ADDRESS, tempValue);
+    CO_slopeA = tempValue;
+    CO_slopeA /= 100;
+    EEPROM.get(CO_SLOPEB_MEM_ADDRESS, tempValue);
+    CO_slopeB = tempValue;
+    CO_slopeB /= 100;
     EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, tempValue);
     PM_1_slope = tempValue;
     PM_1_slope /= 100;
@@ -538,7 +547,8 @@ void readStoredVars(void){
     rh_slope /= 100;
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
-    EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
+    EEPROM.get(CO_ZEROA_MEM_ADDRESS, CO_zeroA);
+    EEPROM.get(CO_ZEROB_MEM_ADDRESS, CO_zeroB);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
     EEPROM.get(PM_10_ZERO_MEM_ADDRESS, PM_10_zero);
@@ -581,9 +591,13 @@ void readStoredVars(void){
     {
         CO2_slope = 1;
     }
-    if(!CO_slope)
+    if(!CO_slopeA)
     {
-        CO_slope = 1;
+        CO_slopeA = 1;
+    }
+    if(!CO_slopeB)
+    {
+        CO_slopeB = 1;
     }
     if(!PM_1_slope)
     {
@@ -604,7 +618,8 @@ void writeDefaultSettings(void){
 
 
     EEPROM.put(CO2_SLOPE_MEM_ADDRESS, 100);
-    EEPROM.put(CO_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(CO_SLOPEA_MEM_ADDRESS, 100);
+    EEPROM.put(CO_SLOPEB_MEM_ADDRESS, 100);
     EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, 100);
@@ -613,7 +628,8 @@ void writeDefaultSettings(void){
     EEPROM.put(RH_SLOPE_MEM_ADDRESS, 100);
 
     EEPROM.put(CO2_ZERO_MEM_ADDRESS, 0);
-    EEPROM.put(CO_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(CO_ZEROA_MEM_ADDRESS, 0);
+    EEPROM.put(CO_ZEROB_MEM_ADDRESS, 0);
     EEPROM.put(PM_1_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_25_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_10_ZERO_MEM_ADDRESS, 0);
@@ -1018,22 +1034,19 @@ void locationCallback(float lat, float lon, float accuracy) {
 
 void loop() {
 
-    if(car_topper_power_en && powerCheck.getHasPower() == 0){
+    /*if(car_topper_power_en && powerCheck.getHasPower() == 0){
         
         goToSleepBattery();
-    }
+    }*/
     //Serial.println("locator loop");
     locator.loop();
     
 
-    if(output_only_particles == 1){
+    /*if(output_only_particles == 1){
         outputParticles();
-    }
+    }*/
     //read temp, press, humidity, and TVOCs
-    if(debugging_enabled){
-      Serial.println("Before reading bme");
-      writeLogFile("before reading bme");
-    }
+    
     if (! bme.performReading()) {
       Serial.println("Failed to read BME680");
       writeLogFile("Failed to read BME680");
@@ -1043,60 +1056,15 @@ void loop() {
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
       }
     }
-    if(hih8120_enabled){
-        readHIH8120();
-    }
+    
     readGpsStream();
 
 
     //read CO values and apply calibration factors
-    CO_float = readCO();
+    CO_float_A = readCO_A();
+    CO_float_B = readCO_B();
 
-
-
-
-    //CO_float_2 += CO_zero_2;
-    //CO_float_2 *= CO_slope_2;
-
-    CO2_float = readCO2();
-
-
-    //correct for altitude
-    float pressure_correction = bme.pressure/100;
-    if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
-        pressure_correction /= SEALEVELPRESSURE_HPA;
-        if(debugging_enabled){
-            Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
-
-        }
-        CO2_float *= pressure_correction;
-    }else{
-        Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
-        Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
-
-    }
-
-
-    if(ozone_enabled){
-        readOzone();
-    }
-
-
-    //sound_average = 0;
-    calculateAQI();
-    sound_average = readSound();
-    //read PM values and apply calibration factors
-    readPlantower();
-
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-    if(debugging_enabled){
-        Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
-    }
-    corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
-    corrected_PM_25 = corrected_PM_25 + PM_25_zero;
-    corrected_PM_25 = corrected_PM_25 * PM_25_slope;
-
-    //getEspWifiStatus();
+ 
     outputDataToESP();
 
     sample_counter = ++sample_counter;
@@ -1601,19 +1569,35 @@ double readSound(void){
     return sum;
 }
 //read Carbon monoxide alphasense sensor
-float readCO(void){
+//read Carbon monoxide alphasense sensor
+float readCO_A(void){
     float float_offset;
 
-    if(CO_socket == 0){
-        CO_float = readAlpha1();
-    }else{
-        CO_float = readAlpha2();
-    }
+    
+    CO_float = readAlpha1();
+   
 
-    float_offset = CO_zero;
+    float_offset = CO_zero_A;
     float_offset /= 1000;
 
-    CO_float *= CO_slope;
+    CO_float *= CO_slope_A;
+    CO_float += float_offset;
+
+    return CO_float;
+}
+
+//read Carbon monoxide alphasense sensor
+float readCO_B(void){
+    float float_offset;
+
+    
+    CO_float = readAlpha2();
+   
+
+    float_offset = CO_zero_B;
+    float_offset /= 1000;
+
+    CO_float *= CO_slope_B.;
     CO_float += float_offset;
 
     return CO_float;
@@ -1948,90 +1932,18 @@ void outputDataToESP(void){
     String latitude_string = "";
     String longitude_string = "";
 
-    char sensible_buf[256];
+    
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
     csv_output_string += String(DEVICE_id) + ",";
 
-
-
-
-    JSONBufferWriter writer(sensible_buf, sizeof(sensible_buf) - 1);
-    writer.beginObject();
-    String device_string = "PAM-" + String(DEVICE_id);
-    //String device_time = String(Time.format(time, "%Y/%m/%dT%H:%M:%SZ"));
-    //String co2_string = String(CO2_float, 0);
-    //String co_string = String(CO_float, 3);
-    writer.name("instrumentKey").value(device_string);
-    writer.name("datetime").value(String(Time.format(time, "%Y-%m-%dT%H:%M:%SZ")));
-    writer.name("CO2").value(String(CO2_float, 0));
-    writer.name("CO").value(String(CO_float, 3));
-    writer.name("PM1_0").value(String(PM01Value));
-    writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
-    writer.name("Temp").value(String(readTemperature(), 1));
-    writer.name("Press").value(String(bme.pressure / 100.0, 1));
-    writer.name("Hmdty").value(String(readHumidity(), 1));
-    //add gps coordinates to json:
-    if(gps.get_latitude() != 0){
-        if(gps.get_nsIndicator() == 0){
-            latitude_string += "-";
-        }
     
-        latitude_string += String(gps.get_latitude());
-    }else{
-        latitude_string = "";
-    }
-    writer.name("Lat").value(latitude_string);
-
-    if(gps.get_longitude() != 0){
-        if(gps.get_ewIndicator() == 0x01){
-            longitude_string += "-";
-            
-        }
-        longitude_string += String(gps.get_longitude());
-    }  
-      
-    writer.name("Long").value(longitude_string);
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_A, 3);
+    csv_output_string += String(CO_float_A, 3) + ",";
     
+    csv_output_string += String(CO_float_B, 3) + ",";
     
-    writer.endObject();
-    writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0;
-
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
-    csv_output_string += String(CO_float, 3) + ",";
-    #if AFE2_en
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_2, 3);
-    csv_output_string += String(CO_float_2, 3) + ",";
-    #endif
-    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
-    csv_output_string += String(CO2_float, 0) + ",";
-
-    if(voc_enabled){
-        cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
-        csv_output_string += String(air_quality_score, 1) + ",";
-    }
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
-    csv_output_string += String(PM01Value) + ",";
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
-    csv_output_string += String(corrected_PM_25, 0) + ",";
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
-    csv_output_string += String(PM10Value) + ",";
-    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
-    csv_output_string += String(readTemperature(), 1) + ",";
-    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
-    csv_output_string += String(bme.pressure / 100.0, 1) + ",";
-    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
-    csv_output_string += String(readHumidity(), 1) + ",";
-    if(ozone_enabled){
-        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
-        csv_output_string += String(O3_float, 1) + ",";
-    }
-    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
-    csv_output_string += String(fuel.getSoC(), 1) + ",";
-    cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
-
-    csv_output_string += String(sound_average, 0) + ",";
     cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
 
     if(gps.get_latitude() != 0){
