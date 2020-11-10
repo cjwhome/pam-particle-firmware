@@ -183,7 +183,8 @@ SYSTEM_THREAD(ENABLED);
 //global objects
 Adafruit_BME680 bme; // I2C
 Telaire_T6713 t6713;  //CO2 sensor
-LMP91000 lmp91000;
+LMP91000 lmp91000_1;
+LMP91000 lmp91000_2;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
 Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
@@ -239,6 +240,7 @@ int CO_socket = 0;
 int google_location_en = 0;
 int sensible_iot_en = 0;
 int car_topper_power_en = 0;
+double measurement_number = 0;
 
 
 char geolocation_latitude[12] = "111.1111111";
@@ -404,19 +406,10 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 }
 
-/*void testsensible(){
-    float lat = 39.73915360;
-    float lng = -104.98470340;
 
-    char data[256];
-    snprintf(data, sizeof(data), "{\"lat\":%f, \"lng\":%f}", lat, lng);
-
-    Particle.publish("testJson", data, PRIVATE);
-}*/
-//todo: average everything except ozone
 void outputToCloud(String data, String sensible_data){
     String webhook_data = " ";
-    CO_sum += CO_float;
+    CO_sum += CO_float_A;
     CO2_sum += CO2_float;
     O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
     measurement_count++;
@@ -439,9 +432,9 @@ void outputToCloud(String data, String sensible_data){
               writeLogFile("Published pamup data!");
             }
             if(sensible_iot_en){
-                Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
+                //Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
                 //testsensible();
-                Particle.process();
+                //Particle.process();
                 if(debugging_enabled){
                     Serial.println("Published sensible data!");
                     writeLogFile("Published sensible data!");
@@ -660,80 +653,6 @@ void writeDefaultSettings(void){
     EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, 0);
 }
 
-size_t readField(File* file, char* str, size_t size, const char* delim) {
-  char ch;
-  size_t n = 0;
-  while ((n + 1) < size && file->read(&ch, 1) == 1) {
-    // Delete CR.
-    if (ch == '\r') {
-      continue;
-    }
-    str[n++] = ch;
-    if (strchr(delim, ch)) {
-        break;
-    }
-  }
-  str[n] = '\0';
-  return n;
-}
-
-void check_wifi_file(void){
-    file1 = sd.open("wifi.txt", O_READ);
-    size_t n;      // Length of returned field with delimiter.
-    char str[50];  // Must hold longest field with delimiter and zero byte.
-    // Read the file and print fields.
-    int cred = 0;
-    int i = 0;
-    Serial.println("Contents of wifi file line by line:");
-    while(1)
-    {
-        n = readField(&file1, str, sizeof(str), ",\n");
-        // done if Error or at EOF.
-        if (n == 0){
-            break;
-        }
-        //Serial.print("I:");
-        //Serial.print(i);
-        //Serial.print(":");
-        //Serial.println(str);
-        //the first field is "SSID,PASSWORD", the second is the actual values
-        if(i>1)
-        {
-            if (str[n-1] == ','){
-              str[n-1] = 0;
-              ssid = str;
-              ssid.trim();
-              cred++;
-            }
-            else if (str[n-1] == '\n') {
-              str[n-1] = 0;
-              password = str;
-              password.trim();
-              cred++;
-            }
-            else if(file1.available() == 0) { //There's a better way to do this. Buggy, fix soon!
-              password = str;
-              cred++;
-            }
-            else {
-              // At eof, too long, or read error.  Too long is error.
-              Serial.print(file1.available() ? F("error: ") : F("eof:   "));
-            }
-            if(cred >= 2){ //at least one pair of ssid and password
-              Serial.print("Found SSID:");
-              Serial.println(ssid);
-              Serial.print("Found password:");
-              Serial.println(password);
-              break;
-            }
-            //WiFi.setCredentials(ssid, password);
-        }
-
-        i++;
-    }
-    file1.close();
-
-}
 
 void setup()
 {
@@ -870,14 +789,14 @@ void setup()
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_1_en, LOW); //enable the chip
 
-    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    if(lmp91000_1.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
-          Serial.println("Couldn't communicate with LMP91000 for CO");
+          Serial.println("Couldn't communicate with LMP91000_1 for CO");
           if(debugging_enabled){
-            writeLogFile("Couldn't communicate with LMP91000 for CO");
+            writeLogFile("Couldn't communicate with LMP91000_1 for CO");
           }
     }else{
-          Serial.println("Initialized LMP91000 for CO");
+          Serial.println("Initialized LMP91000_1 for CO");
           if(debugging_enabled){
             writeLogFile("Initialized LMP91000 for CO");
           }
@@ -908,20 +827,20 @@ void setup()
 
     //AFE 2 setup
     //#if AFE2_en
-    Serial.println("Starting LMP91000 2 initialization");
+    Serial.println("Starting LMP91000_2 initialization");
     if(debugging_enabled)
-        writeLogFile("Starting LMP91000 2 initialization");
+        writeLogFile("Starting LMP91000_2 initialization");
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_2_en, LOW); //enable the chip
 
-    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    if(lmp91000_2.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for 2");
           writeLogFile("Couldn't communicate with LMP91000 for 2");
     }else{
-          Serial.println("Initialized LMP91000 for 2");
+          Serial.println("Initialized LMP91000 for CO 2");
           if(debugging_enabled)
-            writeLogFile("Initialized LMP91000 for 2");
+            writeLogFile("Initialized LMP91000 for CO 2");
           /*Serial.print("STATUS: ");
           Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
           Serial.print("TIACN: ");
@@ -947,44 +866,7 @@ void setup()
       ads2.setGain(GAIN_TWOTHIRDS);
     }
     //#endif
-
-    if (!bme.begin()) {
-      Serial.println("Could not find a valid BME680 sensor, check wiring!");
-      if(debugging_enabled)
-          writeLogFile("Could not find a valid BME680 sensor, check wiring!");
-      //while (1);
-    }else{
-      Serial.println("Initialized BME Sensor");
-      if(debugging_enabled)
-        writeLogFile("Initialized BME Sensor");
-    }
-
-    if(!t6713.begin()){
-      Serial.println("Could not find a valid T6713 sensor, check wiring!");
-      if(debugging_enabled)
-          writeLogFile("Could not find a valid T6713");
-    }
-  //Serial.println("before bme setup");
-    // Set up oversampling and filter initialization
-    bme.setTemperatureOversampling(BME680_OS_8X);
-    bme.setHumidityOversampling(BME680_OS_2X);
-    bme.setPressureOversampling(BME680_OS_4X);
-    bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    bme.setGasHeater(320, 150); // 320*C for 150 ms
-//Serial.println("After bme setup");
-    //output current time
-
-    //Serial.printf("Time now: %u\n\r", Time.now());
-    //Serial.println(Time.timeStr());
-    /*Serial.println(String(HEADER_STRING));
-    if (sd.begin(CS)){
-        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
-        file.println("File Start timestamp: ");
-        file.println(Time.timeStr());
-        file.println(String(HEADER_STRING));
-        file.close();
-        file_started = 1;
-    }*/
+    
     resetESP();
 
     Serial.println("ESP reset!");
@@ -997,81 +879,26 @@ void setup()
 
 
     enableContinuousGPS();
-
-    if(google_location_en){
-        Serial.println("Setting up google maps geolocation.");
-        locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
-    }
-
     
     Log.info("System version: %s", (const char*)System.version());
     
 
 }
 
-void locationCallback(float lat, float lon, float accuracy) {
-  // Handle the returned location data for the device. This method is passed three arguments:
-  // - Latitude
-  // - Longitude
-  // - Accuracy of estimated location (in meters)
-  Serial.println("google geolocation:");
-  Serial.printlnf("Latitude:%f, longitude:%f, acc:%f", lat, lon, accuracy);
-  snprintf(geolocation_latitude, sizeof(geolocation_latitude), "%.6f", lat);
-  snprintf(geolocation_longitude, sizeof(geolocation_longitude), "%.6f", lon);
-  snprintf(geolocation_accuracy, sizeof(geolocation_accuracy), "%3.2f", accuracy);
-  if(gps.get_latitude() == 0){
-      status_word.status_int |= 0x0008;
-      status_word.status_int &= 0xFFF3;
-      if(accuracy < 2){
-          status_word.status_int |= 0x000C;
-      }else if(accuracy < 5){
-          status_word.status_int |= 0x0008;
-      }else if(accuracy < 20){
-          status_word.status_int |= 0x0004;
-      }
-  }
-}
 
 void loop() {
-
-    /*if(car_topper_power_en && powerCheck.getHasPower() == 0){
-        
-        goToSleepBattery();
-    }*/
-    //Serial.println("locator loop");
-    locator.loop();
-    
-
-    /*if(output_only_particles == 1){
-        outputParticles();
-    }*/
-    //read temp, press, humidity, and TVOCs
-    
-    if (! bme.performReading()) {
-      Serial.println("Failed to read BME680");
-      writeLogFile("Failed to read BME680");
-      return;
-    }else{
-      if(debugging_enabled){
-        Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
-      }
-    }
-    
-    readGpsStream();
+    Serial.println("Top of loop");
+    measurement_number++;
 
 
     //read CO values and apply calibration factors
     CO_float_A = readCO_A();
     CO_float_B = readCO_B();
 
- 
-    outputDataToESP();
+    outputCOtoPI();
+    //outputDataToESP();
 
-    sample_counter = ++sample_counter;
-    if(sample_counter == 99)    {
-          sample_counter = 0;
-    }
-
+    
     if (Serial.available() > 0) {
         // read the incoming byte:
         incomingByte = Serial.read();
@@ -1131,52 +958,11 @@ void loop() {
         goToSleepBattery();
     }
 
-    if(co2_calibration_timer){
-        co2_calibration_timer--;
-        if(debugging_enabled){
-            t6713.readStatus(1);
-        }
-    }
+    
 
 }
 
-void calculateAQI(void){
-    //Calculate humidity contribution to IAQ index
-        gas_reference = bme.gas_resistance/100;
-      float current_humidity = readHumidity();
-      if(debugging_enabled){
-          Serial.printf("gas resistance: %1.0f, humidity: %1.2f\n\r", gas_reference, current_humidity);
 
-      }
-      if (current_humidity >= 38 && current_humidity <= 42)
-        hum_score = 0.25*100; // Humidity +/-5% around optimum
-      else
-      { //sub-optimal
-        if (current_humidity < 38)
-          hum_score = 0.25/hum_reference*current_humidity*100;
-        else
-        {
-          hum_score = ((-0.25/(100-hum_reference)*current_humidity)+0.416666)*100;
-        }
-      }
-
-      //Calculate gas contribution to IAQ index
-
-      if (gas_reference > gas_upper_limit) gas_reference = gas_upper_limit;
-      if (gas_reference < gas_lower_limit) gas_reference = gas_lower_limit;
-      gas_score = (0.75/(gas_upper_limit-gas_lower_limit)*gas_reference -(gas_lower_limit*(0.75/(gas_upper_limit-gas_lower_limit))))*100;
-      if(debugging_enabled){
-        Serial.print("Gas score: ");
-        Serial.println(gas_score);
-        Serial.print("Humidity score: ");
-        Serial.println(hum_score);
-    }
-
-      //Combine results for the final IAQ index value (0-100% where 100% is good quality air)
-      air_quality_score = hum_score + gas_score;
-
-
-}
 
 void echoGps(){
     char gps_byte = 0;
@@ -1552,35 +1338,20 @@ float readHumidity(void){
     return humidity;
     //temperature = temperature +
 }
-//read sound from
-double readSound(void){
-    int val;
-    double sum = 0;
-    float average = 0;
-    for(int i=0; i< 10;i++){
-        val = analogRead(sound_input);
-        sum += val;
-        //Serial.print("Sound level: ");
-        //Serial.println(val);
-    }
-    sum = sum/10;
-    sum /= 4095;
-    sum *= 100;
-    return sum;
-}
-//read Carbon monoxide alphasense sensor
+
+
 //read Carbon monoxide alphasense sensor
 float readCO_A(void){
     float float_offset;
-
+    float CO_float;
     
     CO_float = readAlpha1();
    
 
-    float_offset = CO_zero_A;
+    float_offset = CO_zeroA;
     float_offset /= 1000;
 
-    CO_float *= CO_slope_A;
+    CO_float *= CO_slopeA;
     CO_float += float_offset;
 
     return CO_float;
@@ -1589,38 +1360,22 @@ float readCO_A(void){
 //read Carbon monoxide alphasense sensor
 float readCO_B(void){
     float float_offset;
+    float CO_float;
 
     
     CO_float = readAlpha2();
    
 
-    float_offset = CO_zero_B;
+    float_offset = CO_zeroB;
     float_offset /= 1000;
 
-    CO_float *= CO_slope_B.;
-    CO_float += float_offset;
+    //CO_float *= CO_slopeB;
+    //CO_float += float_offset;
 
     return CO_float;
 }
 
-float readCO2(void){
-    //read CO2 values and apply calibration factors
-    if(debugging_enabled){
-        t6713.readStatus(1);
-    }
-    CO2_float = t6713.readPPM();
 
-    if(CO2_float == 0){
-        CO2_float = CO2_float_previous;
-    }else{
-        CO2_float_previous = CO2_float;
-    }
-
-    CO2_float *= CO2_slope;
-    CO2_float += CO2_zero;
-    
-    return CO2_float;
-}
 float readAlpha1(void){
     //read from CO sensor
     int32_t A0_gas; //gas
@@ -1643,8 +1398,8 @@ float readAlpha1(void){
 
     if(Wire.requestFrom(0x49,1) == 0){
       if(debugging_enabled){
-        Serial.println("Couldn't communicate with LMP91000");
-        writeLogFile("Couldn't communicate with LMP91000");
+        Serial.println("Couldn't communicate with LMP91000_1");
+        writeLogFile("Couldn't communicate with LMP91000_1");
       }
         //operation_log += "AD1,";
         //digitalWrite(red_status_led, HIGH);
@@ -1662,7 +1417,7 @@ float readAlpha1(void){
         }
     }
 
-    if(lmp91000.read(LMP91000_STATUS_REG) == 0){
+    if(lmp91000_1.read(LMP91000_STATUS_REG) == 0){
         if(debugging_enabled){
             Serial.println("Status = 0 from LMP91000 status reg");
             writeLogFile("LMP1000 status = 0");
@@ -1675,7 +1430,7 @@ float readAlpha1(void){
     }
 
     //if(Wire.requestFrom(0x49,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0 || (abs((volt_half_Vref)/1000 - 1.25) > 0.5)){
-    if(Wire.requestFrom(0x49,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0){
+    if(Wire.requestFrom(0x49,1) == 0 || lmp91000_1.read(LMP91000_STATUS_REG) == 0){
         alpha1_ppmRounded = "-99";
         volt0_gas = -99;
         volt1_aux = -99;
@@ -1775,7 +1530,7 @@ float readAlpha2(void){
         }
     }
 
-    if(lmp91000.read(LMP91000_STATUS_REG) == 0){
+    if(lmp91000_2.read(LMP91000_STATUS_REG) == 0){
         if(debugging_enabled)
             Serial.println("Status == 0 from LMP91000 2 status reg");
         //operation_log += "AFE1,";
@@ -1785,7 +1540,7 @@ float readAlpha2(void){
         //delay(200);
     }
 
-    if(Wire.requestFrom(0x4A,1) == 0 || lmp91000.read(LMP91000_STATUS_REG) == 0 || (abs((volt_half_Vref)/1000 - 1.25) > 0.5)){
+    if(Wire.requestFrom(0x4A,1) == 0 || lmp91000_2.read(LMP91000_STATUS_REG) == 0 || (abs((volt_half_Vref)/1000 - 1.25) > 0.5)){
         alpha2_ppmRounded = "-99";
         volt0_gas = -99;
         volt1_aux = -99;
@@ -1851,23 +1606,7 @@ float readAlpha2(void){
       return alpha2_ppmraw;
 }
 
-void readOzone(void){
-    int tempValue = 0;
-    if(ozone_analog_enabled){
-        tempValue = analogRead(A0);  // read the analogPin for ozone voltage
-        if(debugging_enabled){
-            Serial.print("Ozone Raw analog in:");
-            Serial.println(tempValue);
 
-        }
-        O3_float = tempValue;
-        O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-        O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
-        O3_float += ozone_offset;
-    }else{
-        O3_float = getEspOzoneData();
-    }
-}
 
 void writeLogFile(String data){
   if (sd.begin(CS)){
@@ -1990,7 +1729,7 @@ void outputDataToESP(void){
         Serial.println(cloud_output_string);
     }
     
-    outputToCloud(cloud_output_string, sensible_buf);
+    outputToCloud(cloud_output_string, "blahfornow");
     
     if(esp_wifi_connection_status){
         if(debugging_enabled){
@@ -2066,7 +1805,7 @@ void outputDataToESP(void){
         */
         if(i == 0){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = CO_float;
+            floatBytes.myFloat = CO_float_A;
         }else if(i == 1){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
             floatBytes.myFloat = CO2_float;
@@ -2295,145 +2034,6 @@ float getEspOzoneData(void){
 
 
 
-/***start of all plantower functions***/
-
-void outputParticles(){
-    union{
-	       double myDouble;
-	       unsigned char bytes[sizeof(double)];
-    } doubleBytes;
-    //doubleBytes.myDouble = double;
-    //
-
-    //used for converting float to bytes for measurement value
-    union {
-        float myFloat;
-        unsigned char bytes[4];
-    } floatBytes;
-
-    //used for converting word to bytes for lat and longitude
-    union {
-        int16_t myWord;
-        unsigned char bytes[2];
-    }wordBytes;
-
-    while(!Serial.available()){
-        if (! bme.performReading()) {
-          Serial.println("Failed to read BME680");
-
-        }
-        readPlantower();
-        readGpsStream();
-        CO2_float = t6713.readPPM();
-
-        CO2_float += CO2_zero;
-        CO2_float *= CO2_slope;
-        //correct for altitude
-        float pressure_correction = bme.pressure/100;
-        if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
-            pressure_correction /= SEALEVELPRESSURE_HPA;
-            CO2_float *= pressure_correction;
-        }
-        pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-        corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
-
-        byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
-
-
-        for(int i=0; i<5; i++){
-
-            //************Fill the ble output array**********************//
-            //Serial.printf("making array[%d]\n", i);
-            //byte 0 - version
-            ble_output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
-
-            //bytes 1,2 - Device ID
-            //DEVICE_id = 555;
-            wordBytes.myWord = DEVICE_id;
-            ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            //byte 3 - Measurement number
-            ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
-
-            //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
-            //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
-            //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
-            /*
-            0-battery
-            1-PM01Value
-            2-PM2_5Value
-            3-PM10Value
-
-
-            */
-
-            if(i == 0){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
-                floatBytes.myFloat = fuel.getSoC();
-            }else if(i == 1){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-                floatBytes.myFloat = PM01Value;
-            }else if(i == 2){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-                floatBytes.myFloat = corrected_PM_25;
-            }else if(i == 3){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-                floatBytes.myFloat = PM10Value;
-            }else if(i == 4){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
-                floatBytes.myFloat = CO2_float;
-            }
-
-            //bytes 5,6,7,8 - Measurement Value
-            ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
-            ble_output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
-            ble_output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
-            ble_output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
-
-
-            //bytes 9-12 - latitude
-            wordBytes.myWord = gps.get_latitudeWhole();
-            ble_output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            wordBytes.myWord = gps.get_latitudeFrac();
-            ble_output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            //bytes 14-17 - longitude
-            wordBytes.myWord = gps.get_longitudeWhole();
-            ble_output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            wordBytes.myWord = gps.get_longitudeFrac();
-            ble_output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-
-            //byte 18 - east west and north south indicator
-            //  LSB 0 = East, LSB 1 = West
-            //  MSB 0 = South, MSB 1 = North
-            int northSouth = gps.get_nsIndicator();
-            int eastWest = gps.get_ewIndicator();
-
-            ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
-            ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
-
-            ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
-
-        }
-
-        //send start delimeter to ESP
-        Serial1.print("$");
-        //send the packaged data with # delimeters in between packets
-        Serial1.write(ble_output_array, 5*BLE_PAYLOAD_SIZE);
-
-        //send ending delimeter
-        Serial1.print("&");
-        sample_counter += 1;
-    }
-}
 
 void readHIH8120(void){
     hih.start();
@@ -2452,61 +2052,6 @@ void readHIH8120(void){
     Serial.println(" C (");
     Serial.print(hih.temperature_Raw());
     Serial.println(")");*/
-}
-//read from plantower pms 5500
-void readPlantower(void){
-    if(Serial4.find("B")){    //start to read when detect 0x42
-        //if(debugging_enabled)
-          //Serial.println("Found a B when reading plantower");
-          Serial4.readBytes(buf,LENG);
-          if(buf[0] == 0x4d){
-              if(checkValue(buf,LENG)){ //All units are ug/m^3
-                  //Serial.println("Value is good from pm buff");
-                  PM01Value=transmitPM01(buf); //count PM1.0 value of the air detector module
-                  PM2_5Value=transmitPM2_5(buf);//count PM2.5 value of the air detector module
-                  PM10Value=transmitPM10(buf); //count PM10 value of the air detector module
-              }
-          }
-      }
-      else{
-        //Serial.println("Clearing serial buffer from PM measurement");
-        while(Serial4.available()){
-            char clearBuffer = Serial4.read();
-            //Serial.print(clearBuffer);
-        }
-      }
-}
-char checkValue(char *thebuf, char leng)  {
-    char receiveflag=0;
-    int receiveSum=0;
-
-    for(int i=0; i<(leng-2); i++) {
-      receiveSum=receiveSum+thebuf[i];
-    }
-    receiveSum=receiveSum + 0x42;
-
-    if(receiveSum == ((thebuf[leng-2]<<8)+thebuf[leng-1])) { //check the serial data
-      receiveSum = 0;
-      receiveflag = 1;
-    }
-    return receiveflag;
-}
-int transmitPM01(char *thebuf)  {
-    int PM01Val;
-    PM01Val=((thebuf[3]<<8) + thebuf[4]); //count PM1.0 value of the air detector module
-    return PM01Val;
-}
-//transmit PM Value to PC
-float transmitPM2_5(char *thebuf) {
-    float PM2_5Val;
-    PM2_5Val=((thebuf[5]<<8) + thebuf[6]);//count PM2.5 value of the air detector module
-    return PM2_5Val;
-}
-//transmit PM Value to PC
-int transmitPM10(char *thebuf)  {
-    int PM10Val;
-    PM10Val=((thebuf[7]<<8) + thebuf[8]); //count PM10 value of the air detector module
-    return PM10Val;
 }
 
 void goToSleep(void){
@@ -2587,6 +2132,7 @@ void resetESP(void){
 /************************Serial menu stuff******************/
 
 void serialMenu(){
+  
   incomingByte = '0';
   while(incomingByte!= 'x')
   {
@@ -2936,12 +2482,27 @@ void serialMenu(){
         //}else{
         //    Serial.println("Cellular not enabled.  Please enable cellular first!");
         //}
+    }else if(incomingByte == '*'){
+        outputCOtoPI();
+
     }else if(incomingByte == '?'){
         outputSerialMenuOptions();
     }
   }
   Serial.println("Exiting serial menu...");
 
+}
+
+void outputCOtoPI(void)
+{
+    String CO_string = "*";
+    Serial.println("Outputting CO to PI.");
+    CO_string += String(measurement_number, 0) + ",";
+    CO_string += String(CO_float_A, 3) + ",";
+    CO_string += String(CO_float_B, 3) + "\n\r";
+    Serial1.print(CO_string);
+    //send ending delimeter
+    Serial1.print("&");
 }
 
 void serialTestRemoteFunction(void){
@@ -3255,7 +2816,7 @@ void serialGetCoSlope(void){
 
     Serial.println();
     Serial.print("Current CO slope:");
-    Serial.print(String(CO_slope, 2));
+    Serial.print(String(CO_slopeA, 2));
     Serial.println(" ppm");
     Serial.print("Enter new CO slope\n\r");
     Serial.setTimeout(50000);
@@ -3264,13 +2825,13 @@ void serialGetCoSlope(void){
     int tempValue;
 
     if(tempfloat >= 0.1 && tempfloat < 2.0){
-        CO_slope = tempfloat;
+        CO_slopeA = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
-        Serial.print("\n\rNew CO slope: ");
-        Serial.println(String(CO_slope,2));
+        Serial.print("\n\rNew COA slope: ");
+        Serial.println(String(CO_slopeA,2));
 
-        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(CO_SLOPEA_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3278,8 +2839,8 @@ void serialGetCoSlope(void){
 
 void serialGetCoZero(void){
     Serial.println();
-    Serial.print("Current CO zero:");
-    Serial.print(CO_zero);
+    Serial.print("Current CO_A zero:");
+    Serial.print(CO_zeroA);
     Serial.println(" ppb");
     Serial.print("Enter new CO Zero\n\r");
     Serial.setTimeout(50000);
@@ -3289,8 +2850,8 @@ void serialGetCoZero(void){
     if(tempValue >= -5000 && tempValue < 5000){
         Serial.print("\n\rNew CO zero: ");
         Serial.println(tempValue);
-        CO_zero = tempValue;
-        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+        CO_zeroA = tempValue;
+        EEPROM.put(CO_ZEROA_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3637,8 +3198,8 @@ void serialGetUpperLimit(void){
 
 void readAlpha1Constantly(void){
     while(!Serial.available()){
-        CO_float = readCO();
-        Serial.printf("CO: %1.3f ppm\n\r", CO_float);
+        CO_float_A = readCO_A();
+        Serial.printf("CO: %1.3f ppm\n\r", CO_float_A);
     }
 }
 void outputSerialMenuOptions(void){
