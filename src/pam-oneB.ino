@@ -191,6 +191,7 @@ FuelGauge fuel;
 GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
+time_t systemTime;
 //SerialLogHandler logHandler;
 HIH61XX hih(0x27);
 unsigned long lastCheck = 0;
@@ -894,6 +895,11 @@ void loop() {
     //read CO values and apply calibration factors
     CO_float_A = readCO_A();
     CO_float_B = readCO_B();
+    readGpsStream();
+    readGpsStreamDate();        //get the gps date and time along with the cellular time and determine which one to output
+                                //if no gps connection, use the cellular time.
+    systemTime = Time.now();
+    Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
     outputCOtoPI();
     //outputDataToESP();
@@ -1351,8 +1357,8 @@ float readCO_A(void){
     float_offset = CO_zeroA;
     float_offset /= 1000;
 
-    CO_float *= CO_slopeA;
-    CO_float += float_offset;
+    //CO_float *= CO_slopeA;
+    //CO_float += float_offset;
 
     return CO_float;
 }
@@ -2497,12 +2503,43 @@ void outputCOtoPI(void)
 {
     String CO_string = "*";
     Serial.println("Outputting CO to PI.");
+    
+
     CO_string += String(measurement_number, 0) + ",";
     CO_string += String(CO_float_A, 3) + ",";
-    CO_string += String(CO_float_B, 3) + "\n\r";
+    CO_string += String(CO_float_B, 3) + ",";
+    if(gps.get_latitude() != 0){
+        if(gps.get_nsIndicator() == 0){
+            CO_string += "-";
+        }
+        CO_string += String(gps.get_latitude()) + ",";
+        
+    }else{
+        CO_string += String(geolocation_latitude)+ ",";
+    }
+
+    if(gps.get_longitude() != 0){
+        if(gps.get_ewIndicator() == 0x01){
+            CO_string += "-";
+        }
+        CO_string += String(gps.get_longitude()) + ",";
+    }else{
+        CO_string += String(geolocation_longitude) + ",";
+    }
+
+    if (gps.get_longitude() != 0) {
+        CO_string += String(gps.get_horizontalDillution() / 10.0) + ",";
+    } else {
+        CO_string += String(geolocation_accuracy) + ",";
+    }
+
+    CO_string += String(Time.format(systemTime, "%d/%m/%y,%H:%M:%S"));
+    //get a current time string
+    
+    CO_string += "\n\r&";
     Serial1.print(CO_string);
     //send ending delimeter
-    Serial1.print("&");
+    //Serial1.print("&");
 }
 
 void serialTestRemoteFunction(void){
