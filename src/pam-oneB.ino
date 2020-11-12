@@ -410,20 +410,8 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 void outputToCloud(String data, String sensible_data){
     String webhook_data = " ";
-    CO_sum += CO_float_A;
-    CO2_sum += CO2_float;
-    O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
-    measurement_count++;
-
-    if(measurement_count == measurements_to_average){
-        CO_sum /= measurements_to_average;
-        CO2_sum /= measurements_to_average;
-        //O3_sum /= measurements_to_average;
-
-        measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
-
+    
+        
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
             Particle.publish("pamup", data, PRIVATE);
@@ -432,15 +420,7 @@ void outputToCloud(String data, String sensible_data){
               Serial.println("Published pamup data!");
               writeLogFile("Published pamup data!");
             }
-            if(sensible_iot_en){
-                //Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
-                //testsensible();
-                //Particle.process();
-                if(debugging_enabled){
-                    Serial.println("Published sensible data!");
-                    writeLogFile("Published sensible data!");
-                }
-            }
+            
         }else{
             if(serial_cellular_enabled == 0){
                 if(debugging_enabled){
@@ -456,10 +436,6 @@ void outputToCloud(String data, String sensible_data){
                   }
             }
         }
-        CO_sum = 0;
-        CO2_sum = 0;
-        O3_sum = 0;
-    }
 }
 
 
@@ -717,6 +693,7 @@ void setup()
 
     // register the cloud function
     Particle.function("geteepromdata", remoteReadStoredVars);
+    Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
