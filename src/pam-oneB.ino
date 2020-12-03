@@ -879,7 +879,7 @@ void loop() {
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
     outputCOtoPI();
-    //outputDataToESP();
+    outputDataToESP();
 
     
     if (Serial.available() > 0) {
@@ -1635,15 +1635,7 @@ void outputDataToESP(void){
     time_t time = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
-    /*Sensible Iot data format:
-    {
-    "instrumentkey": "3504deb9-5f1f-45fc-9eea-c407e5090e7f",
-    "datetime": "2020-05-07T20:43:13.921Z",
-    "PM2_5": 1.17,
-    "PM1_0": 2.15,
-    "Temp": 87.1,
-    "Hmdty": 65.4
-    }*/
+    
 
     //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/
     //This is different than the ble packet in that we are putting all of the data that we have in one packet
