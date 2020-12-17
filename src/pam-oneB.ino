@@ -378,6 +378,7 @@ void readOzone(void);
 float readCO_A(void);
 float readCO_B(void);
 float getEspOzoneData(void);
+void getEspAQSyncData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
 int remoteWriteStoredVars(String addressAndValue);
@@ -650,7 +651,7 @@ void setup()
     pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
     pinMode(blower_en, OUTPUT);
-    pinMode(D4, INPUT);
+    //pinMode(D4, INPUT);
     pinMode(co2_en, OUTPUT);
 
     //read all stored variables (calibration parameters)
@@ -668,17 +669,17 @@ void setup()
     powerCheck.loop();
 
     
-    if(car_topper_power_en && powerCheck.getHasPower() == 0){
+    if(powerCheck.getHasPower() == 0){
         goToSleepBattery();
     }else if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
             //Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
     //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D4, System.reset, RISING);
-    if(digitalRead(D4)){
-      goToSleep();
-    }
+    //attachInterrupt(D4, System.reset, RISING);
+    //if(digitalRead(D4)){
+    //  goToSleep();
+    //}
 
     digitalWrite(lmp91000_1_en, HIGH);
     digitalWrite(lmp91000_2_en, HIGH);
@@ -877,7 +878,7 @@ void loop() {
                                 //if no gps connection, use the cellular time.
     systemTime = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
-
+    getEspAQSyncData();
     outputCOtoPI();
     outputDataToESP();
 
@@ -2007,6 +2008,108 @@ float getEspOzoneData(void){
     //parseOzoneString(recievedData);
 }
 
+void getEspAQSyncData(void){
+    
+    String getAQSyncData = "Y&";
+    String recievedData = " ";
+    bool timeOut = false;
+    double counterIndex = 0;
+    //if esp doesn't answer, keep going
+    Serial1.setTimeout(3000);
+    if(debugging_enabled){
+        Serial.println("Getting aqsync data from esp");
+        writeLogFile("Getting aqsync data from esp");
+      }
+    Serial1.print(getAQSyncData);
+    while(!Serial1.available() && timeOut == false){
+      //delay(1);
+      counterIndex++;
+      if(counterIndex > MAX_COUNTER_INDEX){
+        if(debugging_enabled){
+          Serial.printf("Unable to get AQSync data from ESP, counter index: %1.1f\n\r", counterIndex);
+        }
+        timeOut = true;
+      }
+    }
+
+
+    delay(10);
+
+    recievedData = Serial1.readString();
+    //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
+    if(debugging_enabled)
+    {
+        Serial.print("RECIEVED DATA FROM ESP: ");
+        Serial.println(recievedData);
+        writeLogFile("Recieved data from ESP");
+    }
+
+    if(Particle.connected() && serial_cellular_enabled){
+            
+            Particle.publish("AQSync", recievedData, PRIVATE);
+            Particle.process(); //attempt at ensuring the publish is complete before sleeping
+            if(debugging_enabled){
+              Serial.println("Published AQSync data!");
+              writeLogFile("Published AQSync data!");
+            }
+    }
+    //parse data if not null
+    /*int comma_count = 0;
+    int from_index = 0;
+    int index_of_comma = 0;
+    bool still_searching_for_commas = true;
+    String stringArray[NUMBER_OF_FEILDS];
+
+    while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
+        //Serial.printf("From index: %d\n\r", from_index);
+
+        index_of_comma = recievedData.indexOf(',', from_index);
+        if(debugging_enabled){
+          Serial.print("comma index: ");
+          Serial.println(index_of_comma);
+          //writeLogFile("got a comma");
+
+        }
+
+        //if the index of the comma is not zero, then there is data.
+        if(index_of_comma > 0){
+            stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
+            if(debugging_enabled){
+                Serial.printf("String[%d]:", comma_count);
+                Serial.println(stringArray[comma_count]);
+                //writeLogFile(stringArray[comma_count]);
+            }
+            comma_count++;
+            from_index = index_of_comma;
+            from_index += 1;
+        }else{
+            int index_of_cr = recievedData.indexOf('\r', from_index);
+            if(index_of_cr > 0){
+                stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
+                if(debugging_enabled){
+                    Serial.printf("String[%d]:", comma_count);
+                    Serial.println(stringArray[comma_count]);
+                }
+            }
+            still_searching_for_commas = false;
+        }
+    }
+    if(comma_count == NUMBER_OF_FIELDS_LOGGING){
+        ozone_value = stringArray[1].toFloat();
+        if(debugging_enabled){
+            Serial.println("using string array index 1 due to logging");
+            //writeLogFile("using string array index 1 due to logging");
+          }
+    }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
+        ozone_value = stringArray[0].toFloat();
+        if(debugging_enabled){
+            Serial.println("using string array index 0, not logging");
+            //writeLogFile("using string array index 0, not logging");
+          }
+    }
+    return ozone_value;
+    //parseOzoneString(recievedData);*/
+}
 
 
 
@@ -2038,7 +2141,7 @@ void goToSleep(void){
     digitalWrite(co2_en, LOW);
     digitalWrite(fiveVolt_en, LOW);
     enableLowPowerGPS();
-    System.sleep(D4, FALLING, sleepInterval * 2);     //every 2 minutes wake up and check if battery voltage is too low
+    //System.sleep(D4, FALLING, sleepInterval * 2);     //every 2 minutes wake up and check if battery voltage is too low
     System.reset();
 }
 
