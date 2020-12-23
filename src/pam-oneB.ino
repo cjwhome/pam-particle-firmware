@@ -880,9 +880,12 @@ void loop() {
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
     getEspAQSyncData();
     outputCOtoPI();
-    outputDataToESP();
+    //outputDataToESP();
 
-    
+    if (powerCheck.getHasPower() == 0){
+        goToSleepBattery();
+    }
+
     if (Serial.available() > 0) {
         // read the incoming byte:
         incomingByte = Serial.read();
@@ -2003,6 +2006,12 @@ float getEspOzoneData(void){
             Serial.println("using string array index 0, not logging");
             //writeLogFile("using string array index 0, not logging");
           }
+    }else if(comma_count == NUMBER_OF_FIELDS_108){
+        ozone_value = stringArray[0].toFloat();
+        if(debugging_enabled){
+            Serial.println("Read ozone from 108!);
+            //writeLogFile("using string array index 0, not logging");
+          }
     }
     return ozone_value;
     //parseOzoneString(recievedData);
@@ -2010,16 +2019,16 @@ float getEspOzoneData(void){
 
 void getEspAQSyncData(void){
     
-    String getAQSyncData = "Y&";
+    String getAQSyncData = "Z&";
     String recievedData = " ";
     bool timeOut = false;
     double counterIndex = 0;
     //if esp doesn't answer, keep going
     Serial1.setTimeout(3000);
-    if(debugging_enabled){
+    //if(debugging_enabled){
         Serial.println("Getting aqsync data from esp");
-        writeLogFile("Getting aqsync data from esp");
-      }
+    //    writeLogFile("Getting aqsync data from esp");
+     // }
     Serial1.print(getAQSyncData);
     while(!Serial1.available() && timeOut == false){
       //delay(1);
@@ -2037,12 +2046,12 @@ void getEspAQSyncData(void){
 
     recievedData = Serial1.readString();
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
-    if(debugging_enabled)
-    {
+    //if(debugging_enabled)
+    //{
         Serial.print("RECIEVED DATA FROM ESP: ");
         Serial.println(recievedData);
-        writeLogFile("Recieved data from ESP");
-    }
+        //writeLogFile("Recieved data from ESP");
+    //}
 
     if(Particle.connected() && serial_cellular_enabled){
             
