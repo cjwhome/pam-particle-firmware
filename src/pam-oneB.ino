@@ -56,7 +56,7 @@ GoogleMapsDeviceLocator locator;
 #define GOOGLE_API_KEY "AIzaSyAfgY0VX3KSMkVoIVvWAr9oVlT-AoQ68e0"
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
-#define ALPHA_ADC_READ_AMOUNT 10
+#define ALPHA_ADC_READ_AMOUNT 20
 //float ads_bitmv = 0.1920;
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
@@ -866,20 +866,20 @@ void setup()
 
 
 void loop() {
-    Serial.println("Top of loop");
+    //Serial.println("Top of loop");
     measurement_number++;
 
 
     //read CO values and apply calibration factors
     CO_float_A = readCO_A();
     CO_float_B = readCO_B();
-    readGpsStream();
-    readGpsStreamDate();        //get the gps date and time along with the cellular time and determine which one to output
+    //readGpsStream();
+    //readGpsStreamDate();        //get the gps date and time along with the cellular time and determine which one to output
                                 //if no gps connection, use the cellular time.
     systemTime = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
-    getEspAQSyncData();
-    outputCOtoPI();
+    //getEspAQSyncData();
+    //outputCOtoPI();
     outputDataToESP();
 
     
@@ -1330,6 +1330,8 @@ float readCO_A(void){
     float CO_float;
     
     CO_float = readAlpha1();
+    CO_float *= 10000;  //current is in nA
+    
    
 
     float_offset = CO_zeroA;
@@ -1348,7 +1350,7 @@ float readCO_B(void){
 
     
     CO_float = readAlpha2();
-   
+    CO_float *= 10000;  //current is in nA
 
     float_offset = CO_zeroB;
     float_offset /= 1000;
@@ -1455,7 +1457,7 @@ float readAlpha1(void){
         else{
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
-        alpha1_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        //alpha1_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha1_ppmRounded = String(alpha1_ppmraw, 2);
       }
 
@@ -1469,7 +1471,7 @@ float readAlpha1(void){
           Serial.printf("half_vref: %d\n\r", half_Vref);
 
       }
-      return alpha1_ppmraw;
+      return correctedCurrent;
 }
 
 float readAlpha2(void){
@@ -1587,7 +1589,7 @@ float readAlpha2(void){
       Serial.print("Volt1 Aux:");
       Serial.print(volt1_aux);
       Serial.println("Volts");*/
-      return alpha2_ppmraw;
+      return correctedCurrent;
 }
 
 
@@ -1654,10 +1656,10 @@ void outputDataToESP(void){
     csv_output_string += String(DEVICE_id) + ",";
 
     
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_A, 3);
-    csv_output_string += String(CO_float_A, 3) + ",";
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_A, 4);
+    csv_output_string += String(CO_float_A, 1) + ",";
     
-    csv_output_string += String(CO_float_B, 3) + ",";
+    csv_output_string += String(CO_float_B, 1) + ",";
     
     cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
 
