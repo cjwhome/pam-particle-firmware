@@ -2010,7 +2010,7 @@ float getEspOzoneData(void){
 
 void getEspAQSyncData(void){
     
-    String getAQSyncData = "Y&";
+    String getAQSyncData = "Z&";
     String recievedData = " ";
     bool timeOut = false;
     double counterIndex = 0;
