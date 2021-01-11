@@ -1160,7 +1160,7 @@ void readGpsStream(void)
                     break;
 
                 default:
-                    printf("BAD index in readGpsStream\n");
+                    Serial.printf("BAD index in readGpsStream\n");
                     break;
                 }
                 comma_counter++;
