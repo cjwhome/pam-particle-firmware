@@ -2071,7 +2071,8 @@ void outputDataToESP(void){
 
     csv_output_string += String(status_word.status_int) + ",";
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
-    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
+    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT);
+    cloud_output_string += (const char *)Time.now();
     cloud_output_string += '&';
     if(debugging_enabled){
         Serial.println("Line to write to cloud:");
