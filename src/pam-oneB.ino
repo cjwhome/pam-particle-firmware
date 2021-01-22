@@ -880,7 +880,7 @@ void loop() {
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
     getEspAQSyncData();
     outputCOtoPI();
-    outputDataToESP();
+    //outputDataToESP();
 
     
     if (Serial.available() > 0) {

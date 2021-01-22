@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "d:/_Work/AQSync/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/particleProjects/pam-one-testing/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -83,7 +83,7 @@ void serialGetHumidityZero(void);
 void serialGetLowerLimit(void);
 void serialGetUpperLimit(void);
 void readAlpha1Constantly(void);
-#line 37 "d:/_Work/AQSync/pam-particle-firmware/src/pam-oneB.ino"
+#line 37 "c:/particleProjects/pam-one-testing/src/pam-oneB.ino"
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 70
@@ -930,7 +930,7 @@ void loop() {
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
     getEspAQSyncData();
     outputCOtoPI();
-    outputDataToESP();
+    //outputDataToESP();
 
     
     if (Serial.available() > 0) {
