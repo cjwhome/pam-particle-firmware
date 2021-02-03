@@ -866,7 +866,7 @@ void setup()
 
 
 void loop() {
-    Serial.println("Top of loop");
+    //Serial.println("Top of loop");
     measurement_number++;
 
 
@@ -878,9 +878,9 @@ void loop() {
                                 //if no gps connection, use the cellular time.
     systemTime = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
-    getEspAQSyncData();
-    outputCOtoPI();
-    //outputDataToESP();
+    //getEspAQSyncData();
+    //outputCOtoPI();
+    outputDataToESP();
 
     
     if (Serial.available() > 0) {
