@@ -242,6 +242,7 @@ int google_location_en = 0;
 int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 double measurement_number = 0;
+bool get_diagnostic_data_flag = false;
 
 
 char geolocation_latitude[12] = "111.1111111";
@@ -379,6 +380,7 @@ float readCO_A(void);
 float readCO_B(void);
 float getEspOzoneData(void);
 void getEspAQSyncData(void);
+int getEspAQSyncDiagnostics(String command);     //cloud function
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
 int remoteWriteStoredVars(String addressAndValue);
@@ -858,6 +860,7 @@ void setup()
 
 
     enableContinuousGPS();
+    Particle.function("AQSyncDiag", getEspAQSyncDiagnostics);
     
     Log.info("System version: %s", (const char*)System.version());
     
@@ -2111,6 +2114,56 @@ void getEspAQSyncData(void){
     //parseOzoneString(recievedData);*/
 }
 
+int getEspAQSyncDiagnostics(String command){
+    
+    String getAQSyncDiag = "D&";
+    String recievedData = " ";
+    bool timeOut = false;
+    double counterIndex = 0;
+    //if esp doesn't answer, keep going
+    Serial1.setTimeout(3000);
+    if(debugging_enabled){
+        Serial.println("Getting aqsync diagnostics from esp");
+        writeLogFile("Getting aqsync diagnostics from esp");
+      }
+    Serial1.print(getAQSyncDiag);
+    while(!Serial1.available() && timeOut == false){
+      //delay(1);
+      counterIndex++;
+      if(counterIndex > MAX_COUNTER_INDEX){
+        if(debugging_enabled){
+          Serial.printf("Unable to get AQSync diag from ESP, counter index: %1.1f\n\r", counterIndex);
+        }
+        timeOut = true;
+      }
+    }
+
+
+    delay(10);
+
+    recievedData = Serial1.readString();
+    //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
+    if(debugging_enabled)
+    {
+        Serial.print("RECIEVED diagnostics DATA FROM ESP: ");
+        Serial.println(recievedData);
+        writeLogFile("Recieved diagnostics data from ESP");
+    }
+
+    if(Particle.connected() && serial_cellular_enabled){
+            
+            Particle.publish("UploadAQSyncDiagnostic", recievedData, PRIVATE);
+            Particle.process(); //attempt at ensuring the publish is complete before sleeping
+            if(debugging_enabled){
+              Serial.println("Published AQSync diagnostics!");
+              writeLogFile("Published AQSync diagnostics!");
+            }
+        return 1;
+    }else{
+        return -1;
+    }
+    
+}
 
 
 void readHIH8120(void){
@@ -2304,15 +2357,6 @@ void serialMenu(){
         }
 
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-    }else if(incomingByte == 'D'){
-        if(new_temperature_sensor_enabled == 1){
-            new_temperature_sensor_enabled = 0;
-            Serial.println("Disabling new temperature sensor");
-        }else{
-
-            Serial.println("Temperature sensor already disabled");
-        }
-        EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
 
     }else if(incomingByte == 'E'){
         if(new_temperature_sensor_enabled == 1){
