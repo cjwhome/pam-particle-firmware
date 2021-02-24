@@ -8,7 +8,7 @@
 #define EAST_WEST_FIELD_INDEX 4
 #define GPS_QUALITY_FIELD_INDEX 5
 #define NUMBER_OF_SATELLITES_INDEX 6
-#define HORZONTAL_DILLUTION_INDEX 7
+#define HORIZONTAL_DILUTION_INDEX 7
 #define ALTITUDE_FIELD_INDEX 8
 #define DATE_FIELD_INDEX 6
 
@@ -25,7 +25,7 @@ class GPS {
     int8_t ew_indicator;              //'E' = east, 'W' = west
     int quality_indicator;          //0-2
     int satellites_used;            //0-24
-    float horizontal_dillution;     //00.0-99.9
+    float horizontal_dilution;     //00.0-99.9
 
 public:
     //(d)dd + (mm.mmmm/60) (* -1 for W and S)
@@ -34,9 +34,9 @@ public:
     double get_latitude(void);
     double get_longitude(void);
     void set_satellites(String satString);
-    void set_horizontalDillution(String hdString);
+    void set_horizontalDilution(String hdString);
     int get_satellites(void);
-    int get_horizontalDillution(void);
+    int get_horizontalDilution(void);
     int16_t get_latitudeWhole(void);
     int16_t get_latitudeFrac(void);
     int16_t get_longitudeWhole(void);
