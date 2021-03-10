@@ -692,6 +692,7 @@ void setup()
 
     // register the cloud function
     Particle.function("geteepromdata", remoteReadStoredVars);
+    Particle.function("AQSyncDiag", getEspAQSyncDiagnostics);
     Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
