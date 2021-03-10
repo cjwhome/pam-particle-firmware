@@ -57,6 +57,7 @@ float readAlpha2(void);
 void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
+int getEspAQSyncDiagnostics(String command);
 void goToSleep(void);
 void goToSleepBattery(void);
 void resetESP(void);
@@ -743,6 +744,7 @@ void setup()
 
     // register the cloud function
     Particle.function("geteepromdata", remoteReadStoredVars);
+    Particle.function("AQSyncDiag", getEspAQSyncDiagnostics);
     Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -2270,27 +2272,29 @@ void getEspAQSyncData(void)
 
     for (int i = 1; i < strlen(buffer); i++) {
         if (buffer[i] == '@' && deviceSection != "" && deviceSection != "@") {
-            Serial.println("Would have published this here: ");
-            Serial.println(deviceSection);
-            //Particle.publish("AQSync", receivedData, PRIVATE);
-            //Particle.process(); //attempt at ensuring the publish is complete before sleeping
-            deviceSection = "";
+            if (Particle.connected() && serial_cellular_enabled) {
+                Serial.println("This is what I am publishing: ");
+                Serial.println(deviceSection);
+                Particle.publish("AQSync", deviceSection, PRIVATE);
+                Particle.process(); //attempt at ensuring the publish is complete before sleeping
+                deviceSection = "";
+            }
         }
         else {
             deviceSection += buffer[i];
         }
     }
 
-    if (Particle.connected() && serial_cellular_enabled)
-    {
-        Particle.publish("AQSync", receivedData, PRIVATE);
-        Particle.process(); //attempt at ensuring the publish is complete before sleeping
-        if (debugging_enabled)
-        {
-            Serial.println("Published AQSync data!");
-            writeLogFile("Published AQSync data!");
-        }
-    }
+    // if (Particle.connected() && serial_cellular_enabled)
+    // {
+    //     Particle.publish("AQSync", receivedData, PRIVATE);
+    //     Particle.process(); //attempt at ensuring the publish is complete before sleeping
+    //     if (debugging_enabled)
+    //     {
+    //         Serial.println("Published AQSync data!");
+    //         writeLogFile("Published AQSync data!");
+    //     }
+    // }
     //parse data if not null
     /*int comma_count = 0;
     int from_index = 0;
@@ -2347,6 +2351,81 @@ void getEspAQSyncData(void)
     }
     return ozone_value;
     //parseOzoneString(receivedData);*/
+}
+
+int getEspAQSyncDiagnostics(String command){
+    
+    String getAQSyncDiag = "D&";
+    String receivedData = " ";
+    bool timeOut = false;
+    double counterIndex = 0;
+    //if esp doesn't answer, keep going
+    Serial1.setTimeout(3000);
+    if(debugging_enabled){
+        Serial.println("Getting aqsync diagnostics from esp");
+        writeLogFile("Getting aqsync diagnostics from esp");
+      }
+    Serial1.print(getAQSyncDiag);
+    while(!Serial1.available() && timeOut == false){
+      //delay(1);
+      counterIndex++;
+      if(counterIndex > MAX_COUNTER_INDEX){
+        if(debugging_enabled){
+          Serial.printf("Unable to get AQSync diag from ESP, counter index: %1.1f\n\r", counterIndex);
+        }
+        timeOut = true;
+      }
+    }
+
+
+    delay(10);
+
+    receivedData = Serial1.readString();
+    char buffer[receivedData.length()];
+    receivedData.toCharArray(buffer, receivedData.length());
+    String deviceSection;
+    Serial.println("This is char version of recieved String: ");
+    Serial.println(buffer);
+
+    for (int i = 1; i < strlen(buffer); i++) {
+        if (buffer[i] == '@' && deviceSection != "" && deviceSection != "@") {
+            if (Particle.connected() && serial_cellular_enabled) {
+                Serial.println("This is what I am publishing: ");
+                Serial.println(deviceSection);
+                Particle.publish("UploadAQSyncDiagnostic", deviceSection, PRIVATE);
+                Particle.process(); //attempt at ensuring the publish is complete before sleeping
+                deviceSection = "";
+                return 1;
+            }
+        }
+        else {
+            deviceSection += buffer[i];
+        }
+    }
+    return -1;
+
+
+
+    // if(debugging_enabled)
+    // {
+    //     Serial.print("RECIEVED diagnostics DATA FROM ESP: ");
+    //     Serial.println(recievedData);
+    //     writeLogFile("Recieved diagnostics data from ESP");
+    // }
+
+    // if(Particle.connected() && serial_cellular_enabled){
+            
+    //         Particle.publish("UploadAQSyncDiagnostic", recievedData, PRIVATE);
+    //         Particle.process(); //attempt at ensuring the publish is complete before sleeping
+    //         if(debugging_enabled){
+    //           Serial.println("Published AQSync diagnostics!");
+    //           writeLogFile("Published AQSync diagnostics!");
+    //         }
+    //     return 1;
+    // }else{
+    //     return -1;
+    // }
+    
 }
 
 void readHIH8120(void)
