@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/particleProjects/pam-one-testing/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -19,7 +19,7 @@
   Written by Limor Fried & Kevin Townsend for Adafruit Industries.
   BSD license, all text above must be included in any redistribution
  ***************************************************************************/
-
+#include <string>
 //#include <Wire.h>
 //#include <SPI.h>
 #include <Adafruit_Sensor.h>
@@ -84,7 +84,7 @@ void serialGetHumidityZero(void);
 void serialGetLowerLimit(void);
 void serialGetUpperLimit(void);
 void readAlpha1Constantly(void);
-#line 37 "c:/particleProjects/pam-one-testing/src/pam-oneB.ino"
+#line 37 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 #define SERIAL_PASSWORD "bould"
 
 GoogleMapsDeviceLocator locator;
@@ -935,7 +935,7 @@ void loop()
                                 //if no gps connection, use the cellular time.
     systemTime = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
-    //getEspAQSyncData();
+    getEspAQSyncData();
     //outputCOtoPI();
     outputDataToESP();
 
@@ -2259,13 +2259,26 @@ void getEspAQSyncData(void)
 
     delay(10);
 
+
+    // String placeHolder;
     receivedData = Serial1.readString();
-    //receivedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
-    if (debugging_enabled)
-    {
-        Serial.print("RECEIVED DATA FROM ESP: ");
-        Serial.println(receivedData);
-        writeLogFile("Received data from ESP");
+    char buffer[receivedData.length()];
+    receivedData.toCharArray(buffer, receivedData.length());
+    String deviceSection;
+    Serial.println("This is char version of recieved String: ");
+    Serial.println(buffer);
+
+    for (int i = 1; i < strlen(buffer); i++) {
+        if (buffer[i] == '@' && deviceSection != "" && deviceSection != "@") {
+            Serial.println("Would have published this here: ");
+            Serial.println(deviceSection);
+            //Particle.publish("AQSync", receivedData, PRIVATE);
+            //Particle.process(); //attempt at ensuring the publish is complete before sleeping
+            deviceSection = "";
+        }
+        else {
+            deviceSection += buffer[i];
+        }
     }
 
     if (Particle.connected() && serial_cellular_enabled)
