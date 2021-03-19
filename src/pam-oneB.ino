@@ -30,14 +30,14 @@
 #include "PowerCheck.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
-#include "HIH61XX.h"
+#include "HIH61xx.h"
 #include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 13
+#define BUILD_VERSION 14
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -190,7 +190,8 @@ GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
 //SerialLogHandler logHandler;
-HIH61XX hih(0x27);
+//HIH61xx hih(0x27);
+HIH61xx<TwoWire> hih(Wire);
 unsigned long lastCheck = 0;
 char lastStatus[256];
 
@@ -305,6 +306,13 @@ float hum_score, gas_score;
 float gas_reference = 250000;
 float hum_reference = 40;
 
+//debugging 
+bool bme_pass = false;
+bool t6713_pass = false;
+bool hih61_pass = false;
+bool lmp9100_1_pass = false;
+bool lmp9100_2_pass = false;
+bool plantower_pass = false;
 
 union{
     uint16_t status_int;
@@ -387,6 +395,19 @@ void sendPacket(byte *packet, byte len);
 void locationCallback(float lat, float lon, float accuracy);
 
 //void testsensible();
+AsyncDelay samplingInterval;
+
+
+void powerUpErrorHandler(HIH61xx<TwoWire>& hih)
+{
+  Serial.println("Error powering up HIH61xx device");
+}
+
+
+void readErrorHandler(HIH61xx<TwoWire>& hih)
+{
+  Serial.println("Error reading from HIH61xx device");
+}
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -547,6 +568,9 @@ void readStoredVars(void){
     EEPROM.get(RH_ZERO_MEM_ADDRESS, rh_zero);
 
     EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+    if(serial_cellular_enabled){
+        Cellular.on();
+    }
     EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
     EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     EEPROM.get(VOC_EN_MEM_ADDRESS, voc_enabled);
@@ -576,6 +600,7 @@ void readStoredVars(void){
     if(measurements_to_average < 1 || measurements_to_average > 5000)
         measurements_to_average = 1;
 
+    //measurements_to_average = 2;    //testing!!!
     //check all values to make sure are within limits
     if(!CO2_slope)
     {
@@ -784,6 +809,7 @@ void setup()
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
+    Serial1.flush();
     //init serial4 to communicate with Plantower PMS5003
     Serial4.begin(9600);
     Serial5.begin(9600);        //gps is connected to this serial port
@@ -857,10 +883,12 @@ void setup()
     if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for CO");
+          lmp9100_1_pass = false;
           if(debugging_enabled){
             writeLogFile("Couldn't communicate with LMP91000 for CO");
           }
     }else{
+          lmp9100_1_pass = true;
           Serial.println("Initialized LMP91000 for CO");
           if(debugging_enabled){
             writeLogFile("Initialized LMP91000 for CO");
@@ -900,9 +928,11 @@ void setup()
 
     if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
+            lmp9100_2_pass = false;
           Serial.println("Couldn't communicate with LMP91000 for 2");
           writeLogFile("Couldn't communicate with LMP91000 for 2");
     }else{
+        lmp9100_2_pass = true;
           Serial.println("Initialized LMP91000 for 2");
           if(debugging_enabled)
             writeLogFile("Initialized LMP91000 for 2");
@@ -931,44 +961,50 @@ void setup()
       ads2.setGain(GAIN_TWOTHIRDS);
     }
     //#endif
-
+    Serial.println("Starting BME init");
     if (!bme.begin()) {
+        bme_pass = false;
       Serial.println("Could not find a valid BME680 sensor, check wiring!");
       if(debugging_enabled)
           writeLogFile("Could not find a valid BME680 sensor, check wiring!");
       //while (1);
     }else{
+        bme_pass = true;
       Serial.println("Initialized BME Sensor");
       if(debugging_enabled)
         writeLogFile("Initialized BME Sensor");
     }
-
+    Serial.println("Starting T6713 CO2 sensor init");
     if(!t6713.begin()){
+        t6713_pass = false;
       Serial.println("Could not find a valid T6713 sensor, check wiring!");
       if(debugging_enabled)
           writeLogFile("Could not find a valid T6713");
+    }else{
+        t6713_pass = true;
     }
   //Serial.println("before bme setup");
     // Set up oversampling and filter initialization
-    bme.setTemperatureOversampling(BME680_OS_8X);
-    bme.setHumidityOversampling(BME680_OS_2X);
-    bme.setPressureOversampling(BME680_OS_4X);
-    bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    bme.setGasHeater(320, 150); // 320*C for 150 ms
-//Serial.println("After bme setup");
-    //output current time
+    if(bme_pass){
+        bme.setTemperatureOversampling(BME680_OS_8X);
+        bme.setHumidityOversampling(BME680_OS_2X);
+        bme.setPressureOversampling(BME680_OS_4X);
+        bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
+        bme.setGasHeater(320, 150); // 320*C for 150 ms
+    }
 
-    //Serial.printf("Time now: %u\n\r", Time.now());
-    //Serial.println(Time.timeStr());
-    /*Serial.println(String(HEADER_STRING));
-    if (sd.begin(CS)){
-        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
-        file.println("File Start timestamp: ");
-        file.println(Time.timeStr());
-        file.println(String(HEADER_STRING));
-        file.close();
-        file_started = 1;
-    }*/
+    Serial.println("Initializing the HIH sensor");
+    //initialize the HIH RH sensor
+    Wire.begin();
+
+    // Set the handlers *before* calling initialise() in case something goes wrong
+    hih.setPowerUpErrorHandler(powerUpErrorHandler);
+    hih.setReadErrorHandler(readErrorHandler);
+    hih.initialise();
+    samplingInterval.start(3000, AsyncDelay::MILLIS);
+
+    Serial.println("HIH sensor initialized");
+
     resetESP();
 
     Serial.println("ESP reset!");
@@ -1034,18 +1070,20 @@ void loop() {
       Serial.println("Before reading bme");
       writeLogFile("before reading bme");
     }
-    if (! bme.performReading()) {
-      Serial.println("Failed to read BME680");
-      writeLogFile("Failed to read BME680");
-      return;
-    }else{
-      if(debugging_enabled){
-        Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
-      }
-    }
-    if(hih8120_enabled){
+    //if(bme_pass){
+        if (! bme.performReading()) {
+            Serial.println("Failed to read BME680");
+            writeLogFile("Failed to read BME680");
+            return;
+        }else{
+            if(debugging_enabled){
+                Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
+            }
+        }
+    //}
+    //if(hih8120_enabled){
         readHIH8120();
-    }
+    //}
     readGpsStream();
 
 
@@ -1084,17 +1122,21 @@ void loop() {
 
     //sound_average = 0;
     calculateAQI();
-    sound_average = readSound();
+    //sound_average = readSound();
     //read PM values and apply calibration factors
-    readPlantower();
+    //if(plantower_pass){
+        readPlantower();
 
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-    if(debugging_enabled){
-        Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
-    }
-    corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
-    corrected_PM_25 = corrected_PM_25 + PM_25_zero;
-    corrected_PM_25 = corrected_PM_25 * PM_25_slope;
+        pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+        if(debugging_enabled){
+            Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
+        }
+        corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
+        corrected_PM_25 = corrected_PM_25 + PM_25_zero;
+        corrected_PM_25 = corrected_PM_25 * PM_25_slope;
+   // }else{
+        corrected_PM_25 = -9999;
+   // }
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -1529,8 +1571,10 @@ void printPacket(byte *packet, byte len)
 
 float readTemperature(void){
     float temperature = 0;
+    uint16_t int_temperature = 0;
     if(hih8120_enabled){
-        temperature = hih.temperature();
+        int_temperature = hih.getAmbientTemp();
+        temperature = int_temperature;
         if(debugging_enabled){
             Serial.println("Temperature reading from HIH8120");
         }
@@ -1563,9 +1607,10 @@ float readTemperature(void){
 
 float readHumidity(void){
     float humidity;
+    uint16_t int_humidity;
     if(hih8120_enabled){
-        humidity = hih.humidity();
-        humidity *= 100;
+        int_humidity = hih.getRelHumidity();//hih.humidity();
+        humidity = int_humidity;
         if(debugging_enabled){
             Serial.println("Humidity reading from HIH8120");
         }
@@ -1605,37 +1650,55 @@ float readCO(void){
     float float_offset;
 
     if(CO_socket == 0){
-        CO_float = readAlpha1();
+        //if(lmp9100_1_pass){
+            CO_float = readAlpha1();
+            float_offset = CO_zero;
+            float_offset /= 1000;
+
+            CO_float *= CO_slope;
+            CO_float += float_offset;
+        //}else{
+        //    CO_float = -99.99;
+        //}
     }else{
-        CO_float = readAlpha2();
+        //if(lmp9100_2_pass){
+            CO_float = readAlpha2();
+            float_offset = CO_zero;
+            float_offset /= 1000;
+
+            CO_float *= CO_slope;
+            CO_float += float_offset;
+        //}else{
+       //     CO_float = -99.99;
+       // }
     }
 
-    float_offset = CO_zero;
-    float_offset /= 1000;
-
-    CO_float *= CO_slope;
-    CO_float += float_offset;
+    
 
     return CO_float;
 }
 
 float readCO2(void){
     //read CO2 values and apply calibration factors
-    if(debugging_enabled){
-        t6713.readStatus(1);
-    }
-    CO2_float = t6713.readPPM();
+    if(t6713_pass){
+        if(debugging_enabled){
+            t6713.readStatus(1);
+        }
+        CO2_float = t6713.readPPM();
 
-    if(CO2_float == 0){
-        CO2_float = CO2_float_previous;
+        if(CO2_float == 0){
+            CO2_float = CO2_float_previous;
+        }else{
+            CO2_float_previous = CO2_float;
+        }
+
+        CO2_float *= CO2_slope;
+        CO2_float += CO2_zero;
+        
+        return CO2_float;
     }else{
-        CO2_float_previous = CO2_float;
+        return -99.99;
     }
-
-    CO2_float *= CO2_slope;
-    CO2_float += CO2_zero;
-    
-    return CO2_float;
 }
 float readAlpha1(void){
     //read from CO sensor
@@ -2085,6 +2148,7 @@ void outputDataToESP(void){
             Serial.println("Sending data to esp to upload via wifi...");
             writeLogFile("Sending data to esp to upload via wifi");
           }
+        
         Serial1.println(cloud_output_string);
     }
     Serial.println(csv_output_string);
@@ -2524,10 +2588,10 @@ void outputParticles(){
 }
 
 void readHIH8120(void){
-    hih.start();
+    //hih.start();
 
     //  request an update of the humidity and temperature
-    hih.update();
+    //hih.update();
 
     /*Serial.print("Humidity: ");
     Serial.print(hih.humidity(), 5);
@@ -2540,6 +2604,7 @@ void readHIH8120(void){
     Serial.println(" C (");
     Serial.print(hih.temperature_Raw());
     Serial.println(")");*/
+    hih.read();
 }
 //read from plantower pms 5500
 void readPlantower(void){
@@ -2557,7 +2622,7 @@ void readPlantower(void){
           }
       }
       else{
-        //Serial.println("Clearing serial buffer from PM measurement");
+        Serial.println("Error when reading Plantower, clearing serial buffer from PM measurement");
         while(Serial4.available()){
             char clearBuffer = Serial4.read();
             //Serial.print(clearBuffer);
@@ -2739,6 +2804,7 @@ void serialMenu(){
             Serial.println("Cellular already enabled.");
         }
         serial_cellular_enabled = 1;
+        Cellular.on();
         EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
     }else if(incomingByte == 'z'){
         if(serial_cellular_enabled == 1){
