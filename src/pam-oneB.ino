@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 13
+#define BUILD_VERSION 91
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -547,6 +547,11 @@ void readStoredVars(void){
     EEPROM.get(RH_ZERO_MEM_ADDRESS, rh_zero);
 
     EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+    serial_cellular_enabled = 1;        //this is for testing!
+    if(serial_cellular_enabled){
+         Cellular.on();
+    }
+
     EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
     EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     EEPROM.get(VOC_EN_MEM_ADDRESS, voc_enabled);
@@ -563,6 +568,7 @@ void readStoredVars(void){
     EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
+    hih8120_enabled = 0;
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
