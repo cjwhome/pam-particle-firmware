@@ -30,7 +30,8 @@
 #include "PowerCheck.h"
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
-#include "HIH61XX.h"
+//#include "HIH61XX.h"
+#include "HIH8000_I2C.h"
 #include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 
@@ -190,7 +191,14 @@ GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
 //SerialLogHandler logHandler;
-HIH61XX hih(0x27);
+//HIH61XX hih(0x27);
+
+//HIH81000 RH sensor
+HIH8000_I2C hih(0x27);
+bool getReading = false;
+bool trigSuccess = false;
+byte I2CStatus = 0;
+char serialReadBuffer[2];
 unsigned long lastCheck = 0;
 char lastStatus[256];
 
@@ -993,6 +1001,11 @@ void setup()
         locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
     }
 
+    if(hih8120_enabled){
+        Serial.println("Enabling HIH8120");
+        trigSuccess = trigMeas();
+        Serial.println("HIH8120 Enabled");
+    }
     
     Log.info("System version: %s", (const char*)System.version());
     
@@ -2530,22 +2543,16 @@ void outputParticles(){
 }
 
 void readHIH8120(void){
-    hih.start();
-
-    //  request an update of the humidity and temperature
-    hih.update();
-
-    /*Serial.print("Humidity: ");
-    Serial.print(hih.humidity(), 5);
-    Serial.print(" RH (");
-    Serial.print(hih.humidity_Raw());
-    Serial.println(")");
-
-    Serial.print("Temperature: ");
-    Serial.print(hih.temperature(), 5);
-    Serial.println(" C (");
-    Serial.print(hih.temperature_Raw());
-    Serial.println(")");*/
+    if (getReading)
+    {
+        if (trigSuccess) {
+            fetchMeas();
+        }
+        
+        trigSuccess = trigMeas();
+        
+        delay(500);
+    }
 }
 //read from plantower pms 5500
 void readPlantower(void){
@@ -3803,3 +3810,87 @@ void outputSerialMenuOptions(void){
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
+
+
+//HIH81000 helper functions
+bool trigMeas() {
+  I2CStatus = hih.triggerMeasurement();
+  
+  switch (I2CStatus)
+  {
+    case HIH8000_I2C_comStatus_OK:
+      return true;
+      break;
+      
+    case HIH8000_I2C_comStatus_LONGDATA:
+       Serial.println("Data too long to fit in I2C transmit buffer");
+      break;
+
+    case HIH8000_I2C_comStatus_NACKADD:
+      Serial.println("Cannot find a sensor with the given address");
+      break;
+      
+    case HIH8000_I2C_comStatus_NACKDATA:
+      Serial.println("Sensor stopped data transmission");
+      break;
+      break;
+
+    case HIH8000_I2C_comStatus_ADDRESS:
+      Serial.println("Address of sensor has not been set in the HIH8000_I2C class");
+      break;
+
+    case HIH8000_I2C_comStatus_OTHER:
+    default:
+      Serial.println("Something went wrong...");
+      break;
+  }
+
+  return false;
+}
+
+void fetchMeas() {
+  I2CStatus = hih.fetchMeasurement();
+
+  if (I2CStatus == HIH8000_I2C_comStatus_OK) {
+    switch (hih.getStatus())
+    {
+      case 0:
+        Serial.println("Relative humidity: " + String(hih.getHumidity(), 2) + "%");
+        Serial.println("Temperature: " + String(hih.getTemperature(), 2) + " C");
+        break;
+
+      case 1:
+        Serial.println("***NOTE: Stale data***");
+        Serial.println("Relative humidity: " + String(hih.getHumidity(), 2) + "%");
+        Serial.println("Temperature: " + String(hih.getTemperature(), 2) + " C");
+        break;
+        
+      case 2:
+        Serial.println("Sensor in command mode");
+        break;
+
+      case 3:
+        Serial.println("Sensor in diagnostic mode");
+        break;
+
+      default:
+        Serial.println("Sensor returned an invalid status");
+        break;
+    }
+  } else {
+    switch (I2CStatus)
+    {
+      case HIH8000_I2C_comStatus_BYTECOUNT:
+        Serial.println("Received different amount of bytes than requested");
+        break;
+
+      case HIH8000_I2C_comStatus_ADDRESS:
+        Serial.println("Address of sensor has not been set in the HIH8000_I2C class");
+        break;
+        
+      default:
+        Serial.println("Something went wrong...");
+        break;
+    }
+  }
+}
