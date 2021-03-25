@@ -953,6 +953,8 @@ void setup()
       Serial.println("Could not find a valid T6713 sensor, check wiring!");
       if(debugging_enabled)
           writeLogFile("Could not find a valid T6713");
+    }else{
+        Serial.println("Initilized T6713")
     }
   //Serial.println("before bme setup");
     // Set up oversampling and filter initialization
