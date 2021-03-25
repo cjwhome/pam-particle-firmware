@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 91
+#define BUILD_VERSION 93
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -568,10 +568,11 @@ void readStoredVars(void){
     EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
-    hih8120_enabled = 0;
+    //hih8120_enabled = 0;
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
+    sensible_iot_en = 1;
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
 
     if(sensible_iot_en){
@@ -949,13 +950,13 @@ void setup()
         writeLogFile("Initialized BME Sensor");
     }
 
-    if(!t6713.begin()){
+    /*if(!t6713.begin()){
       Serial.println("Could not find a valid T6713 sensor, check wiring!");
       if(debugging_enabled)
           writeLogFile("Could not find a valid T6713");
     }else{
         Serial.println("Initilized T6713")
-    }
+    }*/
   //Serial.println("before bme setup");
     // Set up oversampling and filter initialization
     bme.setTemperatureOversampling(BME680_OS_8X);
