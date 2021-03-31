@@ -2272,13 +2272,13 @@ void getEspAQSyncData(void)
 
     for (int i = 1; i < strlen(buffer); i++) {
         if (buffer[i] == '@' && deviceSection != "" && deviceSection != "@") {
-            if (Particle.connected() && serial_cellular_enabled) {
+            //if (Particle.connected() && serial_cellular_enabled) {
                 Serial.println("This is what I am publishing: ");
                 Serial.println(deviceSection);
-                Particle.publish("AQSync", deviceSection, PRIVATE);
-                Particle.process(); //attempt at ensuring the publish is complete before sleeping
+                //Particle.publish("AQSync", deviceSection, PRIVATE);
+                //Particle.process(); //attempt at ensuring the publish is complete before sleeping
                 deviceSection = "";
-            }
+            //}
         }
         else {
             deviceSection += buffer[i];
