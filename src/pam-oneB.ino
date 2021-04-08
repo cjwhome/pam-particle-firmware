@@ -34,6 +34,9 @@
 #include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 
+// THIS IS SO WE GET A LARGER SERIAL BUFFER
+#include "SerialBufferRK.h"
+
 #define SERIAL_PASSWORD "bould"
 
 GoogleMapsDeviceLocator locator;
@@ -164,13 +167,15 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 int lmp91000_1_en = B0;         //enable line for the lmp91000 AFE chip for measuring CO
 int lmp91000_2_en = B2;
 int fiveVolt_en = D5;
-int plantower_en = B4;
+int serial4Enabler = B4;
 int power_led_en = D6;
 int kill_power = WKP;
 int esp_wroom_en = D7;
 int blower_en = D2;
 int sound_input = B5;       //ozone monitor's voltage output is connected to this input
 int co2_en = C5;            //enables the CO2 sensor power
+
+SerialBuffer<4096> serBuf(Serial4); // This is how we setup getting a bigger buffer for Serial4
 
 //manually control connection to cellular network
 SYSTEM_MODE(MANUAL);
@@ -441,8 +446,8 @@ int remoteWriteStoredVars(String addressAndValue)
     String addressString = addressAndValue.substring(0, index_of_comma);
     String valueString = addressAndValue.substring(index_of_comma + 1);
 
-    Serial.printf("address substring: %s\n\r", addressString);
-    Serial.printf("Value substring: %s\n\r", valueString);
+    // Serial.printf("address substring: %s\n\r", addressString);
+    // Serial.printf("Value substring: %s\n\r", valueString);
 
     int numerical_mem_address = addressString.toInt();
     int numerical_value = valueString.toInt();
@@ -632,6 +637,7 @@ void writeDefaultSettings(void)
 
 void setup()
 {
+
     status_word.status_int = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
     status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
@@ -645,7 +651,7 @@ void setup()
     pinMode(lmp91000_1_en, OUTPUT);
     pinMode(lmp91000_2_en, OUTPUT);
     pinMode(fiveVolt_en, OUTPUT);
-    pinMode(plantower_en, OUTPUT);
+    pinMode(serial4Enabler, OUTPUT);
     pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
     pinMode(blower_en, OUTPUT);
@@ -684,7 +690,7 @@ void setup()
     digitalWrite(lmp91000_1_en, HIGH);
     digitalWrite(lmp91000_2_en, HIGH);
     digitalWrite(power_led_en, HIGH);
-    digitalWrite(plantower_en, HIGH);
+    digitalWrite(serial4Enabler, HIGH);
     digitalWrite(esp_wroom_en, HIGH);
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
@@ -692,7 +698,6 @@ void setup()
 
     // register the cloud function
     Particle.function("geteepromdata", remoteReadStoredVars);
-    Particle.function("AQSyncDiag", getEspAQSyncDiagnostics);
     Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -700,31 +705,9 @@ void setup()
     //init serial4 to communicate with Plantower PMS5003
     Serial4.begin(9600);
     Serial5.begin(9600);        //gps is connected to this serial port
-    //set the Timeout to 1500ms, longer than the data transmission periodic time of the sensor
-    Serial4.setTimeout(5000);
 
-    // Setup the PMIC manually (resets the BQ24195 charge controller)
-    // REG00 Input Source Control Register  (disabled)
-    /*writeRegister(0, 0b00110000);  //0x30
-
-    // REG01 Power-On Configuration Register (charge battery, 3.5 V)
-    writeRegister(1, 0b00011011);   //0x1B
-
-    // REG02 Charge Current Control Register (1024 + 512 mA)
-    writeRegister(2, 0b01100000);   //0x60
-
-    // REG03 Pre-Charge/Termination Current Control Register (128mA pre charge, 128mA termination current)
-    writeRegister(3, 0b00010001);   //0x11
-
-    // REG04 Charge Voltage Control Register Format
-    writeRegister(4, 0b10110010);   //0xB2
-
-    // REG05 Charge Termination/Timer Control Register
-    writeRegister(5, 0b10011010);   //0x9A
-    // REG06 Thermal Regulation Control Register
-    writeRegister(6, 0b00000011);   //0x03
-    // REG07 Misc Operation Control Register Format
-    writeRegister(7, 0b01001011);   //0x4B*/
+    // this sets up serial1 buffer size to be larger for receiveing pi data
+    serBuf.setup();
 
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
@@ -885,9 +868,13 @@ void loop()
                                 //if no gps connection, use the cellular time.
     systemTime = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
-    getEspAQSyncData();
+
+    // this will block the for loop until it is done. this will be waiting until pi sends what it is waiting for.
+    if (serBuf.available() > 0)
+    {
+        getEspAQSyncData();
+    }
     //outputCOtoPI();
-    outputDataToESP();
 
     if (Serial.available() > 0) 
     {
@@ -1566,10 +1553,10 @@ float readAlpha1(void)
     if (debugging_enabled)
     {
         Serial.print("CO measurements:  \n\r");
-        Serial.printf("A0_gas: %d\n\r", A0_gas);
-        Serial.printf("A1_aux: %d\n\r", A1_aux);
-        Serial.printf("A2_temp: %d\n\r", A2_temperature);
-        Serial.printf("half_vref: %d\n\r", half_Vref);
+        // Serial.printf("A0_gas: %d\n\r", A0_gas);
+        // Serial.printf("A1_aux: %d\n\r", A1_aux);
+        // Serial.printf("A2_temp: %d\n\r", A2_temperature);
+        // Serial.printf("half_vref: %d\n\r", half_Vref);
     }
     return alpha1_ppmraw;
 }
@@ -2068,312 +2055,40 @@ void sendWifiInfo(void)
     Serial.println("Success!");
 }
 
-float getEspOzoneData(void)
-{
-    float ozone_value = 0.0;
-    String getOzoneData = "Z&";
-    String receivedData = " ";
-    bool timeOut = false;
-    double counterIndex = 0;
-
-    //if esp doesn't answer, keep going
-    Serial1.setTimeout(3000);
-    if (debugging_enabled)
-    {
-        Serial.println("Getting ozone data from esp");
-        writeLogFile("Getting ozone data from esp");
-    }
-    Serial1.print(getOzoneData);
-    while (!Serial1.available() && !timeOut)
-    {
-        //delay(1);
-        counterIndex++;
-        if (counterIndex > MAX_COUNTER_INDEX)
-        {
-            if (debugging_enabled)
-            {
-                Serial.printf("Unable to get ozone data from ESP, counter index: %1.1f\n\r", counterIndex);
-            }
-            timeOut = true;
-        }
-    }
-    delay(10);
-
-    receivedData = Serial1.readString();
-    //receivedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
-    if (debugging_enabled)
-    {
-        Serial.print("RECEIVED DATA FROM ESP: ");
-        Serial.println(receivedData);
-        writeLogFile("Received data from ESP");
-    }
-    //parse data if not null
-    int comma_count = 0;
-    int from_index = 0;
-    int index_of_comma = 0;
-    bool still_searching_for_commas = true;
-    String stringArray[NUMBER_OF_FIELDS];
-    int index_of_cr;
-    while (still_searching_for_commas && comma_count < NUMBER_OF_FIELDS)
-    {
-        //Serial.printf("From index: %d\n\r", from_index);
-
-        index_of_comma = receivedData.indexOf(',', from_index);
-        if (debugging_enabled)
-        {
-            Serial.print("comma index: ");
-            Serial.println(index_of_comma);
-            //writeLogFile("got a comma");
-        }
-
-        //if the index of the comma is not zero, then there is data.
-        if (index_of_comma > 0)
-        {
-            stringArray[comma_count] = receivedData.substring(from_index, index_of_comma);
-            if (debugging_enabled)
-            {
-                Serial.printf("String[%d]:", comma_count);
-                Serial.println(stringArray[comma_count]);
-                //writeLogFile(stringArray[comma_count]);
-            }
-            comma_count++;
-            from_index = index_of_comma;
-            from_index += 1;
-        }
-        else
-        {
-            index_of_cr = receivedData.indexOf('\r', from_index);
-            if (index_of_cr > 0)
-            {
-                stringArray[comma_count] = receivedData.substring(from_index, index_of_cr);
-                if (debugging_enabled)
-                {
-                    Serial.printf("String[%d]:", comma_count);
-                    Serial.println(stringArray[comma_count]);
-                }
-            }
-            still_searching_for_commas = false;
-        }
-    }
-
-    if (comma_count == NUMBER_OF_FIELDS_LOGGING)
-    {
-        ozone_value = stringArray[1].toFloat();
-        if (debugging_enabled)
-        {
-            Serial.println("using string array index 1 due to logging");
-            //writeLogFile("using string array index 1 due to logging");
-        }
-    }
-    else if (comma_count == (NUMBER_OF_FIELDS_LOGGING - 1))
-    {
-        ozone_value = stringArray[0].toFloat();
-        if (debugging_enabled)
-        {
-            Serial.println("using string array index 0, not logging");
-            //writeLogFile("using string array index 0, not logging");
-        }
-    }
-    return ozone_value;
-    //parseOzoneString(receivedData);
-}
 
 void getEspAQSyncData(void)
 {
     String getAQSyncData = "Z&";
-    String receivedData = " ";
-    bool timeOut = false;
-    double counterIndex = 0;
+    String receivedData = "";
 
-    //If esp doesn't answer, keep going
-    Serial1.setTimeout(3000);
-    if (debugging_enabled)
-    {
-        Serial.println("Getting AQ Sync data from esp");
-        writeLogFile("Getting AQ Sync data from esp");
-    }
-    Serial1.print(getAQSyncData);
-    while (!Serial1.available() && !timeOut)
-    {
-        //delay(1);
-        counterIndex++;
-        if (counterIndex > MAX_COUNTER_INDEX)
-        {
-            if (debugging_enabled)
-            {
-                Serial.printf("Unable to get AQSync data from ESP, counter index: %1.1f\n\r", counterIndex);
-            }
-            timeOut = true;
-        }
-    }
-
-    delay(10);
-
-
-    // String placeHolder;
-    receivedData = Serial1.readString();
-    char buffer[receivedData.length()];
-    receivedData.toCharArray(buffer, receivedData.length());
-    String deviceSection;
-    Serial.println("This is char version of recieved String: ");
-    Serial.println(buffer);
-
-    for (int i = 1; i < strlen(buffer); i++) {
-        if (buffer[i] == '@' && deviceSection != "" && deviceSection != "@") {
-            //if (Particle.connected() && serial_cellular_enabled) {
-                Serial.println("This is what I am publishing: ");
-                Serial.println(deviceSection);
-                //Particle.publish("AQSync", deviceSection, PRIVATE);
-                //Particle.process(); //attempt at ensuring the publish is complete before sleeping
-                deviceSection = "";
-            //}
-        }
-        else {
-            deviceSection += buffer[i];
-        }
-    }
-
-    // if (Particle.connected() && serial_cellular_enabled)
-    // {
-    //     Particle.publish("AQSync", receivedData, PRIVATE);
-    //     Particle.process(); //attempt at ensuring the publish is complete before sleeping
-    //     if (debugging_enabled)
-    //     {
-    //         Serial.println("Published AQSync data!");
-    //         writeLogFile("Published AQSync data!");
-    //     }
-    // }
-    //parse data if not null
-    /*int comma_count = 0;
-    int from_index = 0;
-    int index_of_comma = 0;
-    bool still_searching_for_commas = true;
-    String stringArray[NUMBER_OF_FIELDS];
-
-    while(still_searching_for_commas && comma_count < NUMBER_OF_FIELDS){
-        //Serial.printf("From index: %d\n\r", from_index);
-
-        index_of_comma = receivedData.indexOf(',', from_index);
-        if(debugging_enabled){
-          Serial.print("comma index: ");
-          Serial.println(index_of_comma);
-          //writeLogFile("got a comma");
-
-        }
-
-        //if the index of the comma is not zero, then there is data.
-        if(index_of_comma > 0){
-            stringArray[comma_count] = receivedData.substring(from_index, index_of_comma);
-            if(debugging_enabled){
-                Serial.printf("String[%d]:", comma_count);
-                Serial.println(stringArray[comma_count]);
-                //writeLogFile(stringArray[comma_count]);
-            }
-            comma_count++;
-            from_index = index_of_comma;
-            from_index += 1;
-        }else{
-            int index_of_cr = receivedData.indexOf('\r', from_index);
-            if(index_of_cr > 0){
-                stringArray[comma_count] = receivedData.substring(from_index, index_of_cr);
-                if(debugging_enabled){
-                    Serial.printf("String[%d]:", comma_count);
-                    Serial.println(stringArray[comma_count]);
-                }
-            }
-            still_searching_for_commas = false;
-        }
-    }
-    if(comma_count == NUMBER_OF_FIELDS_LOGGING){
-        ozone_value = stringArray[1].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 1 due to logging");
-            //writeLogFile("using string array index 1 due to logging");
-          }
-    }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
-        ozone_value = stringArray[0].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 0, not logging");
-            //writeLogFile("using string array index 0, not logging");
-          }
-    }
-    return ozone_value;
-    //parseOzoneString(receivedData);*/
-}
-
-int getEspAQSyncDiagnostics(String command){
+    receivedData = serBuf.readString();
     
-    String getAQSyncDiag = "D&";
-    String receivedData = " ";
-    bool timeOut = false;
-    double counterIndex = 0;
-    //if esp doesn't answer, keep going
-    Serial1.setTimeout(3000);
-    if(debugging_enabled){
-        Serial.println("Getting aqsync diagnostics from esp");
-        writeLogFile("Getting aqsync diagnostics from esp");
-      }
-    Serial1.print(getAQSyncDiag);
-    while(!Serial1.available() && timeOut == false){
-      //delay(1);
-      counterIndex++;
-      if(counterIndex > MAX_COUNTER_INDEX){
-        if(debugging_enabled){
-          Serial.printf("Unable to get AQSync diag from ESP, counter index: %1.1f\n\r", counterIndex);
-        }
-        timeOut = true;
-      }
-    }
-
-
-    delay(10);
-
-    receivedData = Serial1.readString();
+    //receivedData = Serial4.readStringUntil('$');
+    //receivedData = Serial4.readString();
     char buffer[receivedData.length()];
     receivedData.toCharArray(buffer, receivedData.length());
-    String deviceSection;
-    Serial.println("This is char version of recieved String: ");
-    Serial.println(buffer);
+    
+    char typeOfInput = buffer[0];
+    receivedData = receivedData.remove(0, 1);
+    receivedData.replace("\\", "");
 
-    for (int i = 1; i < strlen(buffer); i++) {
-        if (buffer[i] == '@' && deviceSection != "" && deviceSection != "@") {
-            if (Particle.connected() && serial_cellular_enabled) {
+    Serial.println("string from rbpi: ");
+    Serial.println(receivedData);
+
+    if (typeOfInput == 'Y')
+    {
                 Serial.println("This is what I am publishing: ");
-                Serial.println(deviceSection);
-                Particle.publish("UploadAQSyncDiagnostic", deviceSection, PRIVATE);
+                Serial.println(receivedData);
+                Particle.publish("AQSync", receivedData, PRIVATE);
                 Particle.process(); //attempt at ensuring the publish is complete before sleeping
-                deviceSection = "";
-                return 1;
-            }
-        }
-        else {
-            deviceSection += buffer[i];
-        }
     }
-    return -1;
-
-
-
-    // if(debugging_enabled)
-    // {
-    //     Serial.print("RECIEVED diagnostics DATA FROM ESP: ");
-    //     Serial.println(recievedData);
-    //     writeLogFile("Recieved diagnostics data from ESP");
-    // }
-
-    // if(Particle.connected() && serial_cellular_enabled){
-            
-    //         Particle.publish("UploadAQSyncDiagnostic", recievedData, PRIVATE);
-    //         Particle.process(); //attempt at ensuring the publish is complete before sleeping
-    //         if(debugging_enabled){
-    //           Serial.println("Published AQSync diagnostics!");
-    //           writeLogFile("Published AQSync diagnostics!");
-    //         }
-    //     return 1;
-    // }else{
-    //     return -1;
-    // }
-    
+    if (typeOfInput == 'Q')
+    {
+        Serial.println("This is what I am publishing to diagnostics: ");
+        Serial.println(receivedData);
+        Particle.publish("UploadAQSyncDiagnostic", receivedData, PRIVATE);
+        Particle.process(); //attempt at ensuring the publish is complete before sleeping
+    }
 }
 
 void readHIH8120(void)
@@ -2400,7 +2115,7 @@ void goToSleep(void)
 {
     //Serial.println("Going to sleep:)");
     digitalWrite(power_led_en, LOW);
-    digitalWrite(plantower_en, LOW);
+    //digitalWrite(serial4Enabler, LOW);
     digitalWrite(esp_wroom_en, LOW);
     digitalWrite(blower_en, LOW);
     digitalWrite(co2_en, LOW);
@@ -2462,12 +2177,12 @@ void goToSleepBattery(void)
 void resetESP(void)
 {
     digitalWrite(esp_wroom_en, LOW);
-    digitalWrite(plantower_en, LOW);
+    //digitalWrite(serial4Enabler, LOW);
     digitalWrite(blower_en, LOW);
     digitalWrite(co2_en, LOW);
     delay(1000);
     digitalWrite(esp_wroom_en, HIGH);
-    digitalWrite(plantower_en, HIGH);
+    //digitalWrite(serial4Enabler, HIGH);
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
     delay(1000);
@@ -2503,30 +2218,6 @@ void serialMenu()
 
         case 'd':
             serialGetCoZero();
-            break;
-
-        case 'e':
-            serialGetPm1Slope();
-            break;
-
-        case 'f':
-            serialGetPm1Zero();
-            break;
-
-        case 'g':
-            serialGetPm25Slope();
-            break;
-
-        case 'h':
-            serialGetPm25Zero();
-            break;
-
-        case 'i':
-            serialGetPm10Slope();
-            break;
-
-        case 'j':
-            serialGetPm10Zero();
             break;
 
         case 'k':
@@ -2610,10 +2301,6 @@ void serialMenu()
             }
             serial_cellular_enabled = 0;
             EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
-            break;
-
-        case 'A':
-            readAlpha1Constantly();
             break;
 
         case 'B':
@@ -2869,14 +2556,6 @@ void serialMenu()
             Log.info("ICCID=%s", CellularHelper.getICCID().c_str());
             break;
 
-        case '1':
-            serialGetLowerLimit();
-            break;
-
-        case '2':
-            serialGetUpperLimit();
-            break;
-
         case '3':
             Serial.print("APP Version: ");
             Serial.println(APP_VERSION);
@@ -3014,7 +2693,7 @@ void serialMenu()
 
 void outputCOtoPI(void)
 {
-    String CO_string = "*";
+    String CO_string = "";
     Serial.println("Outputting CO to PI.");
 
     CO_string += String(measurement_number, 0) + ",";
@@ -3496,161 +3175,11 @@ void serialGetCoZero(void)
     }
 }
 
-void serialGetPm1Slope(void)
-{
-    Serial.println();
-    Serial.print("Current PM1 slope:");
-    Serial.print(String(PM_1_slope, 2));
-    Serial.println(" ");
-    Serial.print("Enter new PM1 slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
 
-    if (tempfloat >= 0.5 && tempfloat < 1.5)
-    {
-        PM_1_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew PM1 slope: ");
-        Serial.println(String(PM_1_slope, 2));
 
-        EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
 
-void serialGetPm1Zero(void)
-{
-    Serial.println();
-    Serial.print("Current PM1 zero:");
-    Serial.print(PM_1_zero);
-    Serial.println(" ug/m3");
-    Serial.print("Enter new PM1 Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
 
-    if (tempValue >= -1000 && tempValue < 1000)
-    {
-        Serial.print("\n\rNew PM1 zero: ");
-        Serial.println(tempValue);
-        PM_1_zero = tempValue;
-        EEPROM.put(PM_1_ZERO_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
 
-void serialGetPm25Slope(void)
-{
-    Serial.println();
-    Serial.print("Current PM2.5 slope:");
-    Serial.print(String(PM_25_slope, 2));
-    Serial.println(" ");
-    Serial.print("Enter new PM2.5 slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if (tempfloat >= 0.5 && tempfloat < 1.5)
-    {
-        PM_25_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew PM2.5 slope: ");
-        Serial.println(String(PM_25_slope, 2));
-
-        EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm25Zero(void)
-{
-    Serial.println();
-    Serial.print("Current PM2.5 zero:");
-    Serial.print(PM_25_zero);
-    Serial.println(" ug/m3");
-    Serial.print("Enter new PM2.5 Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if (tempValue >= -1000 && tempValue < 1000)
-    {
-        Serial.print("\n\rNew PM2.5 zero: ");
-        Serial.println(tempValue);
-        PM_25_zero = tempValue;
-        EEPROM.put(PM_25_ZERO_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm10Slope(void)
-{
-    Serial.println();
-    Serial.print("Current PM10 slope:");
-    Serial.print(String(PM_10_slope, 2));
-    Serial.println(" ");
-    Serial.print("Enter new PM10 slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if (tempfloat >= 0.5 && tempfloat < 1.5)
-    {
-        PM_10_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew PM10 slope: ");
-        Serial.println(String(PM_10_slope, 2));
-
-        EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm10Zero(void)
-{
-    Serial.println();
-    Serial.print("Current PM10 zero:");
-    Serial.print(PM_10_zero);
-    Serial.println(" um/m3");
-    Serial.print("Enter new PM10 Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if (tempValue >= -1000 && tempValue < 1000)
-    {
-        Serial.print("\n\rNew PM10 zero: ");
-        Serial.println(tempValue);
-        PM_10_zero = tempValue;
-        EEPROM.put(PM_10_ZERO_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
 
 void serialGetTemperatureSlope(void) 
 {
@@ -3808,105 +3337,8 @@ void serialGetHumidityZero(void)
     }
 }
 
-void serialGetOzoneOffset(void)
-{
-    Serial.println();
-    Serial.print("Current O3 analog offset:");
-    Serial.print(ozone_offset);
-    Serial.println(" ppb");
-    Serial.print("Enter new ozone offset\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
 
-    if (tempValue >= -50 && tempValue < 50)
-    {
-        Serial.print("\n\rNew ozone offset: ");
-        Serial.println(tempValue);
-        ozone_offset = tempValue;
-        EEPROM.put(OZONE_OFFSET_MEM_ADDRESS, ozone_offset);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
 
-void serialGetLowerLimit(void)
-{
-    Serial.println();
-    Serial.print("Current lower limit:");
-    Serial.println(gas_lower_limit);
-    Serial.println("Please enter password in order to change the lower limit");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-
-    if (tempString == "bould")
-    {
-        Serial.println("Password correct!");
-        Serial.println("Enter new lower limit:\n\r");
-        String tempString = Serial.readStringUntil('\r');
-        int tempValue = tempString.toInt();
-        Serial.println("");
-        if (tempValue > 0 && tempValue < 20000)
-        {
-            Serial.print("\n\rNew lower limit:");
-            Serial.println(tempValue);
-            gas_lower_limit = tempValue;
-            EEPROM.put(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
-        }
-        else
-        {
-            Serial.println("\n\rInvalid value!");
-        }
-    }
-    else {
-        Serial.println("\n\rIncorrect password!");
-    }
-}
-
-void serialGetUpperLimit(void)
-{
-    Serial.println();
-    Serial.print("Current upper limit:");
-    Serial.println(gas_upper_limit);
-    Serial.println("Please enter password in order to change the upper limit");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-
-    if (tempString == "bould")
-    {
-        Serial.println("Password correct!");
-        Serial.println("Enter new upper limit:\n\r");
-        String tempString = Serial.readStringUntil('\r');
-        int tempValue = tempString.toInt();
-        Serial.println("");
-        if (tempValue > 0 && tempValue < 50000)
-        {
-            Serial.print("\n\rNew upper limit:");
-            Serial.println(tempValue);
-            gas_upper_limit = tempValue;
-            EEPROM.put(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
-        }
-        else
-        {
-            Serial.println("\n\rInvalid value!");
-        }
-    }
-    else
-    {
-        Serial.println("\n\rIncorrect password!");
-    }
-}
-
-void readAlpha1Constantly(void)
-{
-    while (!Serial.available())
-    {
-        CO_float_A = readCO_A();
-        Serial.printf("CO: %1.3f ppm\n\r", CO_float_A);
-    }
-}
 
 void outputSerialMenuOptions(void)
 {
