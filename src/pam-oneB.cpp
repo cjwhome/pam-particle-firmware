@@ -60,6 +60,7 @@ float readAlpha2(void);
 void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
+int rebootAQSync(String nothing);
 void goToSleep(void);
 void goToSleepBattery(void);
 void resetESP(void);
@@ -216,6 +217,8 @@ int esp_wroom_en = D7;
 int blower_en = D2;
 int sound_input = B5;       //ozone monitor's voltage output is connected to this input
 int co2_en = C5;            //enables the CO2 sensor power
+
+String diagnostics = "not initialized";
 
 SerialBuffer<4096> serBuf(Serial4); // This is how we setup getting a bigger buffer for Serial4
 
@@ -740,6 +743,8 @@ void setup()
 
     // register the cloud function
     Particle.function("geteepromdata", remoteReadStoredVars);
+    Particle.function("rebootaqsync", rebootAQSync);
+    Particle.variable("diagnostics", diagnostics);
     Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -916,7 +921,7 @@ void loop()
     {
         getEspAQSyncData();
     }
-    //outputCOtoPI();
+    outputCOtoPI();
 
     if (Serial.available() > 0) 
     {
@@ -2126,11 +2131,22 @@ void getEspAQSyncData(void)
     }
     if (typeOfInput == 'Q')
     {
-        Serial.println("This is what I am publishing to diagnostics: ");
+        Serial.println("We are updating the diagnostic variable here");
         Serial.println(receivedData);
-        Particle.publish("UploadAQSyncDiagnostic", receivedData, PRIVATE);
-        Particle.process(); //attempt at ensuring the publish is complete before sleeping
+        diagnostics = receivedData;
+
+        // Serial.println("This is what I am publishing to diagnostics: ");
+        // Serial.println(receivedData);
+        // Particle.publish("UploadAQSyncDiagnostic", receivedData, PRIVATE);
+        // Particle.process(); //attempt at ensuring the publish is complete before sleeping
     }
+}
+
+int rebootAQSync(String nothing)
+{
+    serBuf.write('R');
+    return 1;
+
 }
 
 void readHIH8120(void)
