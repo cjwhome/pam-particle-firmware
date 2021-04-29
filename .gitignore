@@ -4,6 +4,7 @@
 *.o
 *.d
 *.cpp
+*.der
 
 /target
 /vcpkg

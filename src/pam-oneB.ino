@@ -448,9 +448,6 @@ int remoteWriteStoredVars(String addressAndValue)
     String addressString = addressAndValue.substring(0, index_of_comma);
     String valueString = addressAndValue.substring(index_of_comma + 1);
 
-    // Serial.printf("address substring: %s\n\r", addressString);
-    // Serial.printf("Value substring: %s\n\r", valueString);
-
     int numerical_mem_address = addressString.toInt();
     int numerical_value = valueString.toInt();
 
@@ -953,7 +950,7 @@ void loop()
 void echoGps() 
 {
     char gps_byte = 0;
-    while (!Serial.available()) 
+    while (!serBuf.available()) 
     {
         if (Serial5.available() > 0) 
         {
@@ -2250,7 +2247,6 @@ void resetESP(void)
 
 void serialMenu()
 {
-    Serial.println("I am openinng up the serial menu, One sec");
     byte fault;
     byte systemStatus;
     incomingByte = '0';
@@ -2258,8 +2254,8 @@ void serialMenu()
     {
         Serial.print("Menu>");
         Serial.flush();
-        while (!Serial.available());
-        incomingByte = Serial.read();
+        while (!serBuf.available());
+        incomingByte = serBuf.read();
 
         switch (incomingByte)
         {
@@ -3138,7 +3134,7 @@ void serialGetCo2Slope(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO2 slope\n\r");
     Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
+    String tempString = serBuf.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
     int tempValue;
 
@@ -3166,7 +3162,7 @@ void serialGetCo2Zero(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO2 Zero\n\r");
     Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
+    String tempString = serBuf.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
     if (tempValue >= -1000 && tempValue < 1000)
@@ -3190,7 +3186,7 @@ void serialGetCoSlope(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO slope\n\r");
     Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
+    String tempString = serBuf.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
     int tempValue;
 
@@ -3218,7 +3214,7 @@ void serialGetCoZero(void)
     Serial.println(" ppb");
     Serial.print("Enter new CO Zero\n\r");
     Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
+    String tempString = serBuf.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
     if (tempValue >= -5000 && tempValue < 5000)
@@ -3236,169 +3232,6 @@ void serialGetCoZero(void)
 
 
 
-
-
-
-
-void serialGetTemperatureSlope(void) 
-{
-    Serial.println();
-    Serial.print("Current Temperature slope:");
-    Serial.print(String(temp_slope, 2));
-    Serial.println(" Degrees C");
-    Serial.print("Enter new Temperature slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if (tempfloat >= 0.5 && tempfloat < 1.5)
-    {
-        temp_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew Temperature slope: ");
-        Serial.println(String(temp_slope, 2));
-
-        EEPROM.put(TEMP_SLOPE_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetTemperatureZero(void)
-{
-    Serial.println();
-    Serial.print("Current Temperature zero:");
-    Serial.print(temp_zero);
-    Serial.println(" Degrees C");
-    Serial.print("Enter new Temperature Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if (tempValue >= -30 && tempValue < 30)
-    {
-        Serial.print("\n\rNew Temperature zero: ");
-        Serial.println(tempValue);
-        temp_zero = tempValue;
-        EEPROM.put(TEMP_ZERO_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPressureSlope(void)
-{
-    Serial.println();
-    Serial.print("Current Pressure slope:");
-    Serial.print(String(pressure_slope, 2));
-    Serial.println(" torr");
-    Serial.print("Enter new Pressure slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if (tempfloat >= 0.5 && tempfloat < 1.5)
-    {
-        pressure_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew Pressure slope: ");
-        Serial.println(String(pressure_slope, 2));
-
-        EEPROM.put(PRESSURE_SLOPE_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPressureZero(void)
-{
-    Serial.println();
-    Serial.print("Current Pressure zero:");
-    Serial.print(pressure_zero);
-    Serial.println(" ppm");
-    Serial.print("Enter new Pressure Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if (tempValue >= -1000 && tempValue < 1000)
-    {
-        Serial.print("\n\rNew Pressure zero: ");
-        Serial.println(tempValue);
-        pressure_zero = tempValue;
-        EEPROM.put(PRESSURE_ZERO_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetHumiditySlope(void)
-{
-    Serial.println();
-    Serial.print("Current RH slope:");
-    Serial.print(String(rh_slope, 2));
-    Serial.println(" %");
-    Serial.print("Enter new RH slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if (tempfloat >= 0.5 && tempfloat < 10)
-    {
-        rh_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew RH slope: ");
-        Serial.println(String(rh_slope, 2));
-
-        EEPROM.put(RH_SLOPE_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetHumidityZero(void)
-{
-    Serial.println();
-    Serial.print("Current RH zero:");
-    Serial.print(rh_zero);
-    Serial.println(" %");
-    Serial.print("Enter new RH Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if (tempValue >= -50 && tempValue < 50)
-    {
-        Serial.print("\n\rNew RH zero: ");
-        Serial.println(tempValue);
-        rh_zero = tempValue;
-        EEPROM.put(RH_ZERO_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-
-
-
 void outputSerialMenuOptions(void)
 {
     Serial.println("Command:  Description");
@@ -3406,18 +3239,6 @@ void outputSerialMenuOptions(void)
     Serial.println("b:  Adjust CO2 zero");
     Serial.println("c:  Adjust CO slope");
     Serial.println("d:  Adjust CO zero");
-    Serial.println("e:  Adjust PM1 slope");
-    Serial.println("f:  Adjust PM1 zero");
-    Serial.println("g:  Adjust PM2.5 slope");
-    Serial.println("h:  Adjust PM2.5 zero");
-    Serial.println("i:  Adjust PM10 slope");
-    Serial.println("j:  Adjust PM10 zero");
-    Serial.println("k:  Adjust Temperature slope");
-    Serial.println("l:  Adjust Temperature zero");
-    Serial.println("m:  Adjust Pressure slope");
-    Serial.println("n:  Adjust Pressure zero");
-    Serial.println("o:  Adjust Humidity slope");
-    Serial.println("p:  Adjust Humidity zero");
     Serial.println("q:  Enable serial debugging");
     Serial.println("r:  Disable serial debugging");
     Serial.println("s:  Output header string");
