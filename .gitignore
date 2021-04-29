@@ -5,6 +5,6 @@
 *.d
 *.cpp
 
-./target
-./vcpkg
+.target/
+.vcpkg/
 
