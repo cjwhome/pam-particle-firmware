@@ -175,7 +175,7 @@ int blower_en = D2;
 int sound_input = B5;       //ozone monitor's voltage output is connected to this input
 int co2_en = C5;            //enables the CO2 sensor power
 
-String diagnostics = "not initialized";
+String diagnostics = "";
 
 SerialBuffer<4096> serBuf(Serial4); // This is how we setup getting a bigger buffer for Serial4
 
@@ -701,7 +701,7 @@ void setup()
     // register the cloud function
     Particle.function("geteepromdata", remoteReadStoredVars);
     Particle.function("rebootaqsync", rebootAQSync);
-    Particle.variable("diagnostics", diagnostics);
+    Particle.function("diagnostics", sendDiagnostics);
     Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -873,29 +873,22 @@ void loop()
     systemTime = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
-    // this will block the for loop until it is done. this will be waiting until pi sends what it is waiting for.
     if (serBuf.available() > 0)
     {
-        getEspAQSyncData();
-    }
-    outputCOtoPI();
-
-    if (Serial.available() > 0) 
-    {
-        // read the incoming byte:
-        incomingByte = Serial.read();
-        if (debugging_enabled) 
-        {
-            Serial.print("Incoming byte:");
-            Serial.println(incomingByte);
-
-        }
+        incomingByte = serBuf.read();
+        Serial.println("We have recieved something from the touch screen!!! This is the incomingByte: ");
         Serial.println(incomingByte);
-        if (incomingByte == 'm') 
+        if (incomingByte == 'm')
         {
             serialMenu();
         }
+        else 
+        {
+            getEspAQSyncData(incomingByte);
+        }
+
     }
+    outputCOtoPI();
 
     if (serial_cellular_enabled) 
     {
@@ -1101,7 +1094,7 @@ void readGpsStream(void)
                     break;
 
                 default:
-                    Serial.printf("BAD index in readGpsStream\n");
+                    //Serial.printf("BAD index in readGpsStream\n");
                     break;
                 }
                 comma_counter++;
@@ -1237,7 +1230,7 @@ void readGpsStreamDate(void)
                     break;
 
                 default:
-                    Serial.println("Received bad index in readGpsStreamDate");
+                    //Serial.println("Received bad index in readGpsStreamDate");
                     break;
                 }
                 comma_counter++;
@@ -1753,6 +1746,8 @@ void outputDataToESP(void)
     String latitude_string = "";
     String longitude_string = "";
 
+    cloud_output_string += '&';
+
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
@@ -1814,7 +1809,6 @@ void outputDataToESP(void)
     csv_output_string += String(status_word.status_int) + ",";
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
-    cloud_output_string += '&';
     if (debugging_enabled)
     {
         Serial.println("Line to write to cloud:");
@@ -2060,7 +2054,7 @@ void sendWifiInfo(void)
 }
 
 
-void getEspAQSyncData(void)
+void getEspAQSyncData(char incomingByte)
 {
     String getAQSyncData = "Z&";
     String receivedData = "";
@@ -2072,30 +2066,51 @@ void getEspAQSyncData(void)
     char buffer[receivedData.length()];
     receivedData.toCharArray(buffer, receivedData.length());
     
-    char typeOfInput = buffer[0];
-    receivedData = receivedData.remove(0, 1);
-    receivedData.replace("\\", "");
-
     Serial.println("string from rbpi: ");
     Serial.println(receivedData);
+    receivedData.replace("\\", "");
 
-    if (typeOfInput == 'Y')
+
+    if (incomingByte == 'Y')
     {
-                Serial.println("This is what I am publishing: ");
-                Serial.println(receivedData);
                 Particle.publish("AQSync", receivedData, PRIVATE);
                 Particle.process(); //attempt at ensuring the publish is complete before sleeping
     }
-    if (typeOfInput == 'Q')
+    if (incomingByte == 'Q')
     {
-        Serial.println("We are updating the diagnostic variable here");
+        int s = receivedData.indexOf(':');
+        String deviceName = receivedData.substring(0, s);
+        int deviceIndex = diagnostics.indexOf(deviceName);
+        Serial.println("This is the deviceDiagnostics being put into diagnostics: ");
         Serial.println(receivedData);
-        diagnostics = receivedData;
+        Serial.println("This is the device name extracted from receivedData: ");
+        Serial.println(deviceName);
+        if (deviceIndex > 0)
+        {
+            String justDevice = diagnostics.substring(deviceIndex-2, diagnostics.length());
+            justDevice.substring(0, justDevice.indexOf("}}")+1);
+            Serial.println("this is the string I am replacing: ");
+            Serial.println(justDevice);
+            diagnostics.replace(justDevice, receivedData);
+        }
+        else 
+        {
+            if (diagnostics == "")
+            {
+                Serial.println("First diagnostic data");
+                Serial.println(receivedData);
+                diagnostics.concat(receivedData);
+            }
+            else 
+            {
+                Serial.println("New device for diagnostic data");
+                Serial.println(receivedData);
+                diagnostics.concat(',');
+                diagnostics.concat(receivedData);
+            }
 
-        // Serial.println("This is what I am publishing to diagnostics: ");
-        // Serial.println(receivedData);
-        // Particle.publish("UploadAQSyncDiagnostic", receivedData, PRIVATE);
-        // Particle.process(); //attempt at ensuring the publish is complete before sleeping
+        }
+        //diagnostics = receivedData;
     }
 }
 
@@ -2104,6 +2119,34 @@ int rebootAQSync(String nothing)
     serBuf.write('R');
     return 1;
 
+}
+
+int sendDiagnostics(String nothing)
+{
+    Serial.println("This is the diagnostic data: ");
+    Serial.println(diagnostics);
+    int deviceSeperator = diagnostics.indexOf("}}");
+    Serial.println(deviceSeperator);
+    Serial.println("This should be the diagnostic data for first device: ");
+    Serial.println(diagnostics.substring(0, deviceSeperator+1));
+    Serial.println("this should be the rest of the devices data: ");
+    Serial.println(diagnostics.substring(deviceSeperator+2, diagnostics.length()));
+    return 1;
+    // String tempDiagnostics = diagnostics;
+    // bool done = false;
+    // while(tempDiagnostics.length() > 1)
+    // {
+    //     int deviceSeperator = tempDiagnostics.indexOf("}}"+1);
+    //     String deviceDiagnostics = tempDiagnostics.substring(0, deviceSeperator);
+    //     Serial.println("Sending this to the servers: ");
+    //     Serial.println(deviceDiagnostics);
+    //     Particle.publish("UploadAQSyncDiagnostic", deviceDiagnostics, PRIVATE);
+    //     Particle.process(); //attempt at ensuring the publish is complete before sleeping
+    //     tempDiagnostics = tempDiagnostics.substring(deviceSeperator+1, tempDiagnostics.length());
+    //     Serial.println("this is what is left of diagnostics: ");
+    //     Serial.println(tempDiagnostics);
+    // }
+    // return 1;
 }
 
 void readHIH8120(void)
@@ -2207,6 +2250,7 @@ void resetESP(void)
 
 void serialMenu()
 {
+    Serial.println("I am openinng up the serial menu, One sec");
     byte fault;
     byte systemStatus;
     incomingByte = '0';
@@ -2753,7 +2797,7 @@ void outputCOtoPI(void)
     //get a current time string
 
     CO_string += "\n\r&";
-    Serial1.print(CO_string);
+    serBuf.print(CO_string);
     //send ending delimeter
     //Serial1.print("&");
 }

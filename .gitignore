@@ -4,3 +4,7 @@
 *.o
 *.d
 *.cpp
+
+target
+vcpkg
+
