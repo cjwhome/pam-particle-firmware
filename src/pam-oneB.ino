@@ -163,6 +163,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define NUMBER_OF_FIELDS 7
 #define NUMBER_OF_FIELDS_LOGGING 7
 
+#define SERIAL_MENU_TIMEOUT 500000 //In system ticks
+
 
 int lmp91000_1_en = B0;         //enable line for the lmp91000 AFE chip for measuring CO
 int lmp91000_2_en = B2;
@@ -2053,7 +2055,6 @@ void sendWifiInfo(void)
 
 void getEspAQSyncData(char incomingByte)
 {
-    String getAQSyncData = "Z&";
     String receivedData = "";
 
     receivedData = serBuf.readString();
@@ -2075,38 +2076,42 @@ void getEspAQSyncData(char incomingByte)
     }
     if (incomingByte == 'Q')
     {
+        Serial.println("This is the diagnostics before new string: ");
+        Serial.println(diagnostics);
         int s = receivedData.indexOf(':');
         String deviceName = receivedData.substring(0, s);
         int deviceIndex = diagnostics.indexOf(deviceName);
-        Serial.println("This is the deviceDiagnostics being put into diagnostics: ");
-        Serial.println(receivedData);
-        Serial.println("This is the device name extracted from receivedData: ");
-        Serial.println(deviceName);
+        // Serial.println("This is the deviceDiagnostics being put into diagnostics: ");
+        // Serial.println(receivedData);
+        // Serial.println("This is the device name extracted from receivedData: ");
+        // Serial.println(deviceName);
         if (deviceIndex > 0)
         {
             String justDevice = diagnostics.substring(deviceIndex-2, diagnostics.length());
-            justDevice.substring(0, justDevice.indexOf("}}")+1);
-            Serial.println("this is the string I am replacing: ");
-            Serial.println(justDevice);
+            justDevice = justDevice.substring(0, justDevice.indexOf("}}")+1);
+            // Serial.println("this is the string I am replacing: ");
+            // Serial.println(justDevice);
             diagnostics.replace(justDevice, receivedData);
         }
         else 
         {
             if (diagnostics == "")
             {
-                Serial.println("First diagnostic data");
-                Serial.println(receivedData);
+                // Serial.println("First diagnostic data");
+                // Serial.println(receivedData);
                 diagnostics.concat(receivedData);
             }
             else 
             {
-                Serial.println("New device for diagnostic data");
-                Serial.println(receivedData);
+                // Serial.println("New device for diagnostic data");
+                // Serial.println(receivedData);
                 diagnostics.concat(',');
                 diagnostics.concat(receivedData);
             }
 
         }
+        Serial.println("This is the diagnostics after new string: ");
+        Serial.println(diagnostics);
         //diagnostics = receivedData;
     }
 }
@@ -2259,6 +2264,12 @@ void serialMenu()
 
         switch (incomingByte)
         {
+        case 'Q':
+        case 'Y':
+            getEspAQSyncData(incomingByte);
+            break;
+
+
         case 'a':
             serialGetCo2Slope();
             break;
@@ -2273,30 +2284,6 @@ void serialMenu()
 
         case 'd':
             serialGetCoZero();
-            break;
-
-        case 'k':
-            serialGetTemperatureSlope();
-            break;
-
-        case 'l':
-            serialGetTemperatureZero();
-            break;
-
-        case 'm':
-            serialGetPressureSlope();
-            break;
-
-        case 'n':
-            serialGetPressureZero();
-            break;
-
-        case 'o':
-            serialGetHumiditySlope();
-            break;
-
-        case 'p':
-            serialGetHumidityZero();
             break;
 
         case 'q':
@@ -2513,10 +2500,10 @@ void serialMenu()
             break;
 
             //allow batfet to turn on
-        case 'Q':
+        /*case 'Q':
             Serial.println("Allowing batfet to turn on");
             writeRegister(7, 0b01001011);
-            break;
+            break;*/
 
         case 'R':
             if (abc_logic_enabled)
@@ -2801,7 +2788,7 @@ void outputCOtoPI(void)
 void serialTestRemoteFunction(void)
 {
     Serial.println("Enter string (address,value)");
-    Serial.setTimeout(50000);
+    Serial.setTimeout(SERIAL_MENU_TIMEOUT);
     String tempString = Serial.readStringUntil('\r');
     int response = remoteWriteStoredVars(tempString);
     if (response)
@@ -2948,13 +2935,13 @@ void serialGetWifiCredentials(void)
     Serial.print("Current stored password: ");
     Serial.println(password);
     Serial.println("Please enter password in order to make changes.\n\r");
-    Serial.setTimeout(50000);
+    Serial.setTimeout(SERIAL_MENU_TIMEOUT);
     String tempString = Serial.readStringUntil('\r');
     if (tempString.equals("bould"))
     {
         Serial.println("Password correct!");
         Serial.println("Enter new ssid:");
-        Serial.setTimeout(50000);
+        Serial.setTimeout(SERIAL_MENU_TIMEOUT);
         String tempSsid = Serial.readStringUntil('\r');
         Serial.print("Your new ssid will be: ");
         Serial.println(tempSsid);
@@ -2991,7 +2978,7 @@ void serialGetWifiCredentials(void)
 void serialSetSensibleIotEnable(void)
 {
     Serial.println("Please enter password in order to enable data push to Sensible Iot");
-    Serial.setTimeout(50000);
+    Serial.setTimeout(SERIAL_MENU_TIMEOUT);
     String tempString = Serial.readStringUntil('\r');
     if (tempString == "imsensible")
     {
@@ -3012,7 +2999,7 @@ void serialGetDeviceId(void)
     Serial.print("Current Device ID:");
     Serial.println(DEVICE_id);
     Serial.println("Please enter password in order to change the ID");
-    Serial.setTimeout(50000);
+    Serial.setTimeout(SERIAL_MENU_TIMEOUT);
     String tempString = Serial.readStringUntil('\r');
 
     if (tempString == SERIAL_PASSWORD)
@@ -3044,7 +3031,7 @@ void serialResetSettings(void)
 {
     Serial.println();
     Serial.println("Please enter password in order to apply default settings");
-    Serial.setTimeout(50000);
+    Serial.setTimeout(SERIAL_MENU_TIMEOUT);
     String tempString = Serial.readStringUntil('\r');
 
     if (tempString == "bould")
@@ -3061,7 +3048,7 @@ void serialResetSettings(void)
 void serialGetTimeDate(void)
 {
     Serial.println("Enter new Device time and date (10 digit epoch timestamp):");
-    Serial.setTimeout(50000);
+    Serial.setTimeout(SERIAL_MENU_TIMEOUT);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
     Serial.println("");
@@ -3082,7 +3069,7 @@ void serialGetTimeDate(void)
 void serialGetZone(void)
 {
     Serial.println("Enter new Device time zone (-12.0 to 14.0)");
-    Serial.setTimeout(50000);
+    Serial.setTimeout(SERIAL_MENU_TIMEOUT);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
     Serial.println("");
@@ -3108,7 +3095,7 @@ void serialGetAverageTime(void)
     Serial.print(measurements_to_average);
     Serial.println("(~2 second) measurements");
     Serial.print("Enter new amount\n\r");
-    Serial.setTimeout(50000);
+    Serial.setTimeout(SERIAL_MENU_TIMEOUT);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
@@ -3133,10 +3120,20 @@ void serialGetCo2Slope(void)
     Serial.print(String(CO2_slope, 2));
     Serial.println(" ppm");
     Serial.print("Enter new CO2 slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = serBuf.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
+
+    String inputString;
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (serBuf.available())
+        {
+            incomingByte = serBuf.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    float tempfloat = inputString.toFloat();
 
     if (tempfloat >= 0.5 && tempfloat < 10.0)
     {
@@ -3161,9 +3158,20 @@ void serialGetCo2Zero(void)
     Serial.print(CO2_zero);
     Serial.println(" ppm");
     Serial.print("Enter new CO2 Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = serBuf.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+
+    String inputString;
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (serBuf.available())
+        {
+            incomingByte = serBuf.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    int tempValue = inputString.toInt();
 
     if (tempValue >= -1000 && tempValue < 1000)
     {
@@ -3185,12 +3193,24 @@ void serialGetCoSlope(void)
     Serial.print(String(CO_slopeA, 2));
     Serial.println(" ppm");
     Serial.print("Enter new CO slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = serBuf.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
 
-    if (tempfloat >= 0.1 && tempfloat < 2.0)
+    String inputString;
+    incomingByte = 0;
+
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (serBuf.available())
+        {
+            incomingByte = serBuf.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    float tempfloat = inputString.toFloat();
+
+    if (tempfloat >= 0.1 && tempfloat < 5.0)
     {
         CO_slopeA = tempfloat;
         tempfloat *= 100;
@@ -3213,9 +3233,20 @@ void serialGetCoZero(void)
     Serial.print(CO_zeroA);
     Serial.println(" ppb");
     Serial.print("Enter new CO Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = serBuf.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+
+    String inputString;
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (serBuf.available())
+        {
+            incomingByte = serBuf.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    int tempValue = inputString.toInt();
 
     if (tempValue >= -5000 && tempValue < 5000)
     {
