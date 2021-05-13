@@ -1404,8 +1404,8 @@ float readCO_A(void)
     float_offset = CO_zeroA;
     float_offset /= 1000;
 
-    //CO_float *= CO_slopeA;
-    //CO_float += float_offset;
+    CO_float *= CO_slopeA;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -1421,8 +1421,8 @@ float readCO_B(void)
     float_offset = CO_zeroB;
     float_offset /= 1000;
 
-    //CO_float *= CO_slopeB;
-    //CO_float += float_offset;
+    CO_float *= CO_slopeB;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -2076,43 +2076,45 @@ void getEspAQSyncData(char incomingByte)
     }
     if (incomingByte == 'Q')
     {
-        Serial.println("This is the diagnostics before new string: ");
-        Serial.println(diagnostics);
-        int s = receivedData.indexOf(':');
-        String deviceName = receivedData.substring(0, s);
-        int deviceIndex = diagnostics.indexOf(deviceName);
-        // Serial.println("This is the deviceDiagnostics being put into diagnostics: ");
-        // Serial.println(receivedData);
-        // Serial.println("This is the device name extracted from receivedData: ");
-        // Serial.println(deviceName);
-        if (deviceIndex > 0)
-        {
-            String justDevice = diagnostics.substring(deviceIndex-2, diagnostics.length());
-            justDevice = justDevice.substring(0, justDevice.indexOf("}}")+1);
-            // Serial.println("this is the string I am replacing: ");
-            // Serial.println(justDevice);
-            diagnostics.replace(justDevice, receivedData);
-        }
-        else 
-        {
-            if (diagnostics == "")
-            {
-                // Serial.println("First diagnostic data");
-                // Serial.println(receivedData);
-                diagnostics.concat(receivedData);
-            }
-            else 
-            {
-                // Serial.println("New device for diagnostic data");
-                // Serial.println(receivedData);
-                diagnostics.concat(',');
-                diagnostics.concat(receivedData);
-            }
+        Serial.println("This is the q data: ");
+        Serial.println(receivedData);
+        // Serial.println("This is the diagnostics before new string: ");
+        // Serial.println(diagnostics);
+        // int s = receivedData.indexOf(':');
+        // String deviceName = receivedData.substring(0, s);
+        // int deviceIndex = diagnostics.indexOf(deviceName);
+        // // Serial.println("This is the deviceDiagnostics being put into diagnostics: ");
+        // // Serial.println(receivedData);
+        // // Serial.println("This is the device name extracted from receivedData: ");
+        // // Serial.println(deviceName);
+        // if (deviceIndex > 0)
+        // {
+        //     String justDevice = diagnostics.substring(deviceIndex-2, diagnostics.length());
+        //     justDevice = justDevice.substring(0, justDevice.indexOf("}}")+1);
+        //     // Serial.println("this is the string I am replacing: ");
+        //     // Serial.println(justDevice);
+        //     diagnostics.replace(justDevice, receivedData);
+        // }
+        // else 
+        // {
+        //     if (diagnostics == "")
+        //     {
+        //         // Serial.println("First diagnostic data");
+        //         // Serial.println(receivedData);
+        //         diagnostics.concat(receivedData);
+        //     }
+        //     else 
+        //     {
+        //         // Serial.println("New device for diagnostic data");
+        //         // Serial.println(receivedData);
+        //         diagnostics.concat(',');
+        //         diagnostics.concat(receivedData);
+        //     }
 
-        }
-        Serial.println("This is the diagnostics after new string: ");
-        Serial.println(diagnostics);
-        //diagnostics = receivedData;
+        // }
+        // Serial.println("This is the diagnostics after new string: ");
+        // Serial.println(diagnostics);
+        // //diagnostics = receivedData;
     }
 }
 
@@ -2264,26 +2266,20 @@ void serialMenu()
 
         switch (incomingByte)
         {
-        case 'Q':
-        case 'Y':
-            getEspAQSyncData(incomingByte);
-            break;
-
-
         case 'a':
-            serialGetCo2Slope();
+            serialGetCoSlopeA();
             break;
 
         case 'b':
-            serialGetCo2Zero();
+            serialGetCoZeroA();
             break;
 
         case 'c':
-            serialGetCoSlope();
+            serialGetCoSlopeB();
             break;
 
         case 'd':
-            serialGetCoZero();
+            serialGetCoZeroB();
             break;
 
         case 'q':
@@ -3186,7 +3182,7 @@ void serialGetCo2Zero(void)
     }
 }
 
-void serialGetCoSlope(void)
+void serialGetCoSlopeA(void)
 {
     Serial.println();
     Serial.print("Current CO slope:");
@@ -3226,7 +3222,7 @@ void serialGetCoSlope(void)
     }
 }
 
-void serialGetCoZero(void)
+void serialGetCoZeroA(void)
 {
     Serial.println();
     Serial.print("Current CO_A zero:");
@@ -3261,15 +3257,90 @@ void serialGetCoZero(void)
     }
 }
 
+void serialGetCoSlopeB(void)
+{
+    Serial.println();
+    Serial.print("Current CO slope:");
+    Serial.print(String(CO_slopeB, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new CO slope\n\r");
+
+    String inputString;
+    incomingByte = 0;
+
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (serBuf.available())
+        {
+            incomingByte = serBuf.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    float tempfloat = inputString.toFloat();
+
+    if (tempfloat >= 0.1 && tempfloat < 5.0)
+    {
+        CO_slopeB = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("\n\rNew COB slope: ");
+        Serial.println(String(CO_slopeB, 2));
+
+        EEPROM.put(CO_SLOPE_A_MEM_ADDRESS, tempValue);
+    }
+    else
+    {
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
+void serialGetCoZeroB(void)
+{
+    Serial.println();
+    Serial.print("Current CO_B zero:");
+    Serial.print(CO_zeroB);
+    Serial.println(" ppb");
+    Serial.print("Enter new CO Zero\n\r");
+
+    String inputString;
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (serBuf.available())
+        {
+            incomingByte = serBuf.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    int tempValue = inputString.toInt();
+
+    if (tempValue >= -5000 && tempValue < 5000)
+    {
+        Serial.print("\n\rNew COB zero: ");
+        Serial.println(tempValue);
+        CO_zeroB = tempValue;
+        EEPROM.put(CO_ZERO_A_MEM_ADDRESS, tempValue);
+    }
+    else
+    {
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
 
 
 void outputSerialMenuOptions(void)
 {
     Serial.println("Command:  Description");
-    Serial.println("a:  Adjust CO2 slope");
-    Serial.println("b:  Adjust CO2 zero");
-    Serial.println("c:  Adjust CO slope");
-    Serial.println("d:  Adjust CO zero");
+    Serial.println("a:  Adjust COA slope");
+    Serial.println("b:  Adjust COA zero");
+    Serial.println("c:  Adjust COB slope");
+    Serial.println("d:  Adjust COB zero");
     Serial.println("q:  Enable serial debugging");
     Serial.println("r:  Disable serial debugging");
     Serial.println("s:  Output header string");
