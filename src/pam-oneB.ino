@@ -37,9 +37,9 @@
 // THIS IS SO WE GET A LARGER SERIAL BUFFER
 #include "SerialBufferRK.h"
 //#include "ArduinoJson.hpp"
-#include <ArduinoJson.h>
+//#include <ArduinoJson.h>
 
-DynamicJsonDocument diagnosticDataJson(1024);
+//DynamicJsonDocument diagnosticDataJson(1024);
 
 String diagnosticData = "";
 
