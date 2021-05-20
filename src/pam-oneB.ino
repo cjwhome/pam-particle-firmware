@@ -36,6 +36,12 @@
 
 // THIS IS SO WE GET A LARGER SERIAL BUFFER
 #include "SerialBufferRK.h"
+//#include "ArduinoJson.hpp"
+#include <ArduinoJson.h>
+
+DynamicJsonDocument diagnosticDataJson(1024);
+
+String diagnosticData = "";
 
 #define SERIAL_PASSWORD "bould"
 
@@ -1401,11 +1407,12 @@ float readCO_A(void)
 
     CO_float = readAlpha1();
 
-    float_offset = CO_zeroA;
-    float_offset /= 1000;
+    // float_offset = CO_zeroA;
+    // float_offset /= 1000;
 
     CO_float *= CO_slopeA;
-    CO_float += float_offset;
+    CO_float += CO_zeroA;
+    // CO_float += float_offset;
 
     return CO_float;
 }
@@ -1418,11 +1425,12 @@ float readCO_B(void)
 
     CO_float = readAlpha2();
 
-    float_offset = CO_zeroB;
-    float_offset /= 1000;
+    // float_offset = CO_zeroB;
+    // float_offset /= 1000;
 
     CO_float *= CO_slopeB;
-    CO_float += float_offset;
+    CO_float += CO_zeroB;
+    // CO_float += float_offset;
 
     return CO_float;
 }
@@ -2064,8 +2072,8 @@ void getEspAQSyncData(char incomingByte)
     char buffer[receivedData.length()];
     receivedData.toCharArray(buffer, receivedData.length());
     
-    Serial.println("string from rbpi: ");
-    Serial.println(receivedData);
+    // Serial.println("string from rbpi: ");
+    // Serial.println(receivedData);
     receivedData.replace("\\", "");
 
 
@@ -2076,45 +2084,71 @@ void getEspAQSyncData(char incomingByte)
     }
     if (incomingByte == 'Q')
     {
-        Serial.println("This is the q data: ");
-        Serial.println(receivedData);
-        // Serial.println("This is the diagnostics before new string: ");
-        // Serial.println(diagnostics);
-        // int s = receivedData.indexOf(':');
-        // String deviceName = receivedData.substring(0, s);
-        // int deviceIndex = diagnostics.indexOf(deviceName);
-        // // Serial.println("This is the deviceDiagnostics being put into diagnostics: ");
-        // // Serial.println(receivedData);
-        // // Serial.println("This is the device name extracted from receivedData: ");
-        // // Serial.println(deviceName);
-        // if (deviceIndex > 0)
-        // {
-        //     String justDevice = diagnostics.substring(deviceIndex-2, diagnostics.length());
-        //     justDevice = justDevice.substring(0, justDevice.indexOf("}}")+1);
-        //     // Serial.println("this is the string I am replacing: ");
-        //     // Serial.println(justDevice);
-        //     diagnostics.replace(justDevice, receivedData);
-        // }
-        // else 
-        // {
-        //     if (diagnostics == "")
-        //     {
-        //         // Serial.println("First diagnostic data");
-        //         // Serial.println(receivedData);
-        //         diagnostics.concat(receivedData);
-        //     }
-        //     else 
-        //     {
-        //         // Serial.println("New device for diagnostic data");
-        //         // Serial.println(receivedData);
-        //         diagnostics.concat(',');
-        //         diagnostics.concat(receivedData);
-        //     }
 
-        // }
-        // Serial.println("This is the diagnostics after new string: ");
-        // Serial.println(diagnostics);
-        // //diagnostics = receivedData;
+
+        int s = receivedData.indexOf(':');
+        String deviceName = receivedData.substring(2, s-1);
+
+        // diagnosticDataJson[deviceName.c_str()] = receivedData.c_str();
+
+        // serializeJson(diagnosticDataJson, Serial);
+
+
+
+        int checkDevice = diagnosticData.indexOf(deviceName);
+        if (receivedData[receivedData.length()-1] == '\r')
+        {
+            receivedData = receivedData.substring(0, receivedData.length()-2);
+        }
+        if (checkDevice > 0)
+        {
+            // Serial.println("\n\n\n\n\nStarting replace data");
+
+            // Serial.print("Replacing ");
+            // Serial.print(deviceName);
+            // Serial.print(" old data\n");
+
+
+            
+            String deviceForward = diagnosticData.substring(checkDevice-2, diagnosticData.length());
+
+            // Serial.print("Current data: \n");
+            // Serial.println(diagnosticData);
+            // Serial.print("Starting at ");
+            // Serial.print(checkDevice-2);
+            // Serial.print(", ending at ");
+            // Serial.println(deviceForward.indexOf('&'));
+
+            String oldData = diagnosticData.substring(checkDevice-2, deviceForward.indexOf('&'));
+
+            // Serial.print("Captured data: ");
+            // Serial.println(oldData);
+
+            // Serial.print("Replacing with: ");
+            // Serial.println(receivedData);
+
+            diagnosticData.replace(oldData, receivedData);
+
+            // Serial.print("Final product: ");
+            // Serial.println(diagnosticData);
+        }
+        else if (diagnosticData == "")
+        {
+            // Serial.println("Adding the first device. This is diagnostic Data: ");
+            diagnosticData.concat(receivedData);
+            diagnosticData.concat('&');
+            // Serial.println("This is the new diagnostic data: ");
+            // Serial.println(diagnosticData);
+        }
+        else 
+        {
+            // Serial.println("Adding a new device. Old diagnosticData: ");
+            // Serial.println(diagnosticData);
+            diagnosticData.concat(receivedData);
+            diagnosticData.concat('&');
+            // Serial.println("New diagnosticData: ");
+            // Serial.println(diagnosticData);
+        }
     }
 }
 
@@ -2127,30 +2161,21 @@ int rebootAQSync(String nothing)
 
 int sendDiagnostics(String nothing)
 {
-    Serial.println("This is the diagnostic data: ");
-    Serial.println(diagnostics);
-    int deviceSeperator = diagnostics.indexOf("}}");
-    Serial.println(deviceSeperator);
-    Serial.println("This should be the diagnostic data for first device: ");
-    Serial.println(diagnostics.substring(0, deviceSeperator+1));
-    Serial.println("this should be the rest of the devices data: ");
-    Serial.println(diagnostics.substring(deviceSeperator+2, diagnostics.length()));
+    bool Done = false;
+
+    while (Done == false)
+    {
+        String sendUpData = diagnosticData.substring(0, diagnosticData.indexOf('&')-1);
+        Particle.publish("UploadAQSyncDiagnostic", sendUpData, PRIVATE);
+        Particle.process(); //attempt at ensuring the publish is complete before sleeping
+        diagnosticData = diagnosticData.substring(diagnosticData.indexOf('&')+1, diagnosticData.length());
+        if (diagnosticData.length() <= 2)
+        {
+            Done = true;
+        }
+    }
+    serBuf.flush();
     return 1;
-    // String tempDiagnostics = diagnostics;
-    // bool done = false;
-    // while(tempDiagnostics.length() > 1)
-    // {
-    //     int deviceSeperator = tempDiagnostics.indexOf("}}"+1);
-    //     String deviceDiagnostics = tempDiagnostics.substring(0, deviceSeperator);
-    //     Serial.println("Sending this to the servers: ");
-    //     Serial.println(deviceDiagnostics);
-    //     Particle.publish("UploadAQSyncDiagnostic", deviceDiagnostics, PRIVATE);
-    //     Particle.process(); //attempt at ensuring the publish is complete before sleeping
-    //     tempDiagnostics = tempDiagnostics.substring(deviceSeperator+1, tempDiagnostics.length());
-    //     Serial.println("this is what is left of diagnostics: ");
-    //     Serial.println(tempDiagnostics);
-    // }
-    // return 1;
 }
 
 void readHIH8120(void)
