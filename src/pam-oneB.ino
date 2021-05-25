@@ -28,7 +28,6 @@
 #include "inttypes.h"
 #include "Particle.h"
 #include "PowerCheck.h"
-//#include "Serial1/Serial1.h"
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "google-maps-device-locator.h"
@@ -36,11 +35,8 @@
 
 // THIS IS SO WE GET A LARGER SERIAL BUFFER
 #include "SerialBufferRK.h"
-//#include "ArduinoJson.hpp"
-//#include <ArduinoJson.h>
 
-//DynamicJsonDocument diagnosticDataJson(1024);
-
+bool haveOfflineData = false;
 String diagnosticData = "";
 
 #define SERIAL_PASSWORD "bould"
@@ -214,6 +210,14 @@ SdFile file;
 SdFile log_file;
 File file1;
 String fileName;
+
+// These go together so I can keep track of how many lines i've put into the sd card. This is so I can push to particle data that
+//the PAM recieved when it didn't have cell service.
+String dataFileName;
+long numberOfLines = 0;
+
+
+// String diagnosticFileName;
 String logFileName;
 int file_started = 0;
 int log_file_started = 0;
@@ -725,26 +729,16 @@ void setup()
 
 #if sd_en
     fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+    dataFileName = String(DEVICE_id) + "_AQSyncData_" + String(Time.year())+ '_' + String(Time.month()) + '_' + String(Time.day());
+    //diagnosticFileName = String(DEVICE_id) + "_AQSyncDiagnostic_" + String(Time.year()) + String(Time.month()) + String(Time.day());
     Serial.println("Checking for sd card");
-    logFileName = "log_" + fileName;
 
     //if uSD is functioning and MCP error has not been logged yet.
     if (sd.begin(CS)) 
     {
-        /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
-        file.remove();
-        file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
-        init_log += "MCP,";
-        file.print(init_log);
-        file.close();
-
-        //look for a wifi file
-        check_wifi_file();
-        //look for a calibration file
-        check_cal_file();*/
-
         Serial.print("Created new file to log to uSD card: ");
-        Serial.println(fileName);
+        Serial.println(dataFileName);
+        //Serial.println(diagnosticFileName);
     }
     //uSD is not functioning
     else 
@@ -881,7 +875,7 @@ void loop()
     if (serBuf.available() > 0)
     {
         incomingByte = serBuf.read();
-        Serial.println("We have recieved something from the touch screen!!! This is the incomingByte: ");
+        Serial.println("We have recieved something from the touch screen. This is the incomingByte: ");
         Serial.println(incomingByte);
         if (incomingByte == 'm')
         {
@@ -1839,7 +1833,9 @@ void outputDataToESP(void)
     if (sd.begin(CS))
     {
         if (debugging_enabled)
+        {
             Serial.println("Writing row to file.");
+        }
         file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
         if (file_started == 0)
         {
@@ -2067,87 +2063,60 @@ void getEspAQSyncData(char incomingByte)
 
     receivedData = serBuf.readString();
     
-    //receivedData = Serial4.readStringUntil('$');
-    //receivedData = Serial4.readString();
     char buffer[receivedData.length()];
     receivedData.toCharArray(buffer, receivedData.length());
     
-    // Serial.println("string from rbpi: ");
-    // Serial.println(receivedData);
     receivedData.replace("\\", "");
 
+    //This removes the newline characted at the end of the string so it is properly formatted.
+    if (receivedData[receivedData.length()-1] == '\r')
+    {
+        receivedData = receivedData.substring(0, receivedData.length()-2);
+    }
 
     if (incomingByte == 'Y')
     {
-                Particle.publish("AQSync", receivedData, PRIVATE);
-                Particle.process(); //attempt at ensuring the publish is complete before sleeping
-    }
-    if (incomingByte == 'Q')
-    {
-
-
-        int s = receivedData.indexOf(':');
-        String deviceName = receivedData.substring(2, s-1);
-
-        // diagnosticDataJson[deviceName.c_str()] = receivedData.c_str();
-
-        // serializeJson(diagnosticDataJson, Serial);
-
-
-
-        int checkDevice = diagnosticData.indexOf(deviceName);
-        if (receivedData[receivedData.length()-1] == '\r')
+        sendToDataFile(receivedData);
+        if(Particle.connected())
         {
-            receivedData = receivedData.substring(0, receivedData.length()-2);
-        }
-        if (checkDevice > 0)
-        {
-            // Serial.println("\n\n\n\n\nStarting replace data");
-
-            // Serial.print("Replacing ");
-            // Serial.print(deviceName);
-            // Serial.print(" old data\n");
-
-
-            
-            String deviceForward = diagnosticData.substring(checkDevice-2, diagnosticData.length());
-
-            // Serial.print("Current data: \n");
-            // Serial.println(diagnosticData);
-            // Serial.print("Starting at ");
-            // Serial.print(checkDevice-2);
-            // Serial.print(", ending at ");
-            // Serial.println(deviceForward.indexOf('&'));
-
-            String oldData = diagnosticData.substring(checkDevice-2, deviceForward.indexOf('&'));
-
-            // Serial.print("Captured data: ");
-            // Serial.println(oldData);
-
-            // Serial.print("Replacing with: ");
-            // Serial.println(receivedData);
-
-            diagnosticData.replace(oldData, receivedData);
-
-            // Serial.print("Final product: ");
-            // Serial.println(diagnosticData);
-        }
-        else if (diagnosticData == "")
-        {
-            // Serial.println("Adding the first device. This is diagnostic Data: ");
-            diagnosticData.concat(receivedData);
-            diagnosticData.concat('&');
-            // Serial.println("This is the new diagnostic data: ");
-            // Serial.println(diagnosticData);
+            Particle.publish("AQSync", receivedData, PRIVATE);
+            Particle.process(); //attempt at ensuring the publish is complete before sleeping
+            if (haveOfflineData) 
+            {
+                uploadOfflineData();
+                haveOfflineData = false;
+            }
         }
         else 
         {
-            // Serial.println("Adding a new device. Old diagnosticData: ");
-            // Serial.println(diagnosticData);
+            sendToUploadLater(receivedData);
+            haveOfflineData = true;
+        }
+        
+    }
+    if (incomingByte == 'Q')
+    {
+        int s = receivedData.indexOf(':');
+        String deviceName = receivedData.substring(2, s-1);
+
+        int checkDevice = diagnosticData.indexOf(deviceName);
+
+        if (checkDevice > 0)
+        {
+            String deviceForward = diagnosticData.substring(checkDevice-2, diagnosticData.length());
+            String oldData = diagnosticData.substring(checkDevice-2, deviceForward.indexOf('&'));
+            diagnosticData.replace(oldData, receivedData);
+        }
+        else if (diagnosticData == "")
+        {
+
             diagnosticData.concat(receivedData);
             diagnosticData.concat('&');
-            // Serial.println("New diagnosticData: ");
-            // Serial.println(diagnosticData);
+        }
+        else 
+        {
+            diagnosticData.concat(receivedData);
+            diagnosticData.concat('&');
         }
     }
 }
@@ -2156,7 +2125,6 @@ int rebootAQSync(String nothing)
 {
     serBuf.write('R');
     return 1;
-
 }
 
 int sendDiagnostics(String nothing)
@@ -2174,6 +2142,8 @@ int sendDiagnostics(String nothing)
             Done = true;
         }
     }
+    // This is in case the AQSync sent data while it was uploading the diagnostic data.
+    // Any data lost here is negligable because we are pushing so quickly. When we start going the speed we want, this will almost never happen.
     serBuf.flush();
     return 1;
 }
@@ -2181,21 +2151,8 @@ int sendDiagnostics(String nothing)
 void readHIH8120(void)
 {
     hih.start();
-
     //  request an update of the humidity and temperature
     hih.update();
-
-    /*Serial.print("Humidity: ");
-    Serial.print(hih.humidity(), 5);
-    Serial.print(" RH (");
-    Serial.print(hih.humidity_Raw());
-    Serial.println(")");
-
-    Serial.print("Temperature: ");
-    Serial.print(hih.temperature(), 5);
-    Serial.println(" C (");
-    Serial.print(hih.temperature_Raw());
-    Serial.println(")");*/
 }
 
 void goToSleep(void)
@@ -2353,17 +2310,7 @@ void serialMenu()
             break;
 
         case 'z':
-            if (serial_cellular_enabled == 1)
-            {
-                Serial.println("Disabling Cellular");
-                Cellular.off();
-            }
-            else
-            {
-                Serial.println("Cellular already disabled.");
-            }
-            serial_cellular_enabled = 0;
-            EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+            printToSerial();
             break;
 
         case 'B':
@@ -3021,14 +2968,13 @@ void serialGetDeviceId(void)
     Serial.println(DEVICE_id);
     Serial.println("Please enter password in order to change the ID");
     Serial.setTimeout(SERIAL_MENU_TIMEOUT);
-    String tempString = Serial.readStringUntil('\r');
+    String tempString = readSerBufUntilDone();
 
     if (tempString == SERIAL_PASSWORD)
     {
         Serial.println("Password correct!");
         Serial.println("Enter new Device ID:");
-        String tempString = Serial.readStringUntil('\r');
-        int tempValue = tempString.toInt();
+        int tempValue = readSerBufUntilDone().toInt();
         Serial.println("");
         if (tempValue > MIN_DEVICE_ID_NUMBER && tempValue < MAX_DEVICE_ID_NUMBER)
         {
@@ -3053,7 +2999,7 @@ void serialResetSettings(void)
     Serial.println();
     Serial.println("Please enter password in order to apply default settings");
     Serial.setTimeout(SERIAL_MENU_TIMEOUT);
-    String tempString = Serial.readStringUntil('\r');
+    String tempString = readSerBufUntilDone();
 
     if (tempString == "bould")
     {
@@ -3070,9 +3016,9 @@ void serialGetTimeDate(void)
 {
     Serial.println("Enter new Device time and date (10 digit epoch timestamp):");
     Serial.setTimeout(SERIAL_MENU_TIMEOUT);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-    Serial.println("");
+
+    String inputString = readSerBufUntilDone();
+    int tempValue = inputString.toInt();
 
     //min is the year 2000, max is the year 2100
     if (tempValue > 966012661 && tempValue < 4121686261)
@@ -3091,8 +3037,22 @@ void serialGetZone(void)
 {
     Serial.println("Enter new Device time zone (-12.0 to 14.0)");
     Serial.setTimeout(SERIAL_MENU_TIMEOUT);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+
+    String inputString;
+    incomingByte = 0;
+
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (serBuf.available())
+        {
+            incomingByte = serBuf.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    int tempValue = inputString.toInt();
     Serial.println("");
 
     //min is the year 2000, max is the year 2100
@@ -3117,8 +3077,9 @@ void serialGetAverageTime(void)
     Serial.println("(~2 second) measurements");
     Serial.print("Enter new amount\n\r");
     Serial.setTimeout(SERIAL_MENU_TIMEOUT);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+
+    String inputString = readSerBufUntilDone();
+    int tempValue = inputString.toInt();
 
     if (tempValue >= 1 && tempValue < 10000)
     {
@@ -3215,21 +3176,7 @@ void serialGetCoSlopeA(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO slope\n\r");
 
-    String inputString;
-    incomingByte = 0;
-
-    while(incomingByte != '\r' && incomingByte != '\n')
-    {
-        if (serBuf.available())
-        {
-            incomingByte = serBuf.read();
-            if (incomingByte != '\r' && incomingByte != '\n')
-            {
-                inputString += (char)incomingByte;
-            }
-        }
-    }
-    float tempfloat = inputString.toFloat();
+    float tempfloat = readSerBufUntilDone().toFloat();
 
     if (tempfloat >= 0.1 && tempfloat < 5.0)
     {
@@ -3255,19 +3202,7 @@ void serialGetCoZeroA(void)
     Serial.println(" ppb");
     Serial.print("Enter new CO Zero\n\r");
 
-    String inputString;
-    while(incomingByte != '\r' && incomingByte != '\n')
-    {
-        if (serBuf.available())
-        {
-            incomingByte = serBuf.read();
-            if (incomingByte != '\r' && incomingByte != '\n')
-            {
-                inputString += (char)incomingByte;
-            }
-        }
-    }
-    int tempValue = inputString.toInt();
+    int tempValue = readSerBufUntilDone().toInt();
 
     if (tempValue >= -5000 && tempValue < 5000)
     {
@@ -3290,21 +3225,7 @@ void serialGetCoSlopeB(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO slope\n\r");
 
-    String inputString;
-    incomingByte = 0;
-
-    while(incomingByte != '\r' && incomingByte != '\n')
-    {
-        if (serBuf.available())
-        {
-            incomingByte = serBuf.read();
-            if (incomingByte != '\r' && incomingByte != '\n')
-            {
-                inputString += (char)incomingByte;
-            }
-        }
-    }
-    float tempfloat = inputString.toFloat();
+    float tempfloat = readSerBufUntilDone().toFloat();
 
     if (tempfloat >= 0.1 && tempfloat < 5.0)
     {
@@ -3330,19 +3251,7 @@ void serialGetCoZeroB(void)
     Serial.println(" ppb");
     Serial.print("Enter new CO Zero\n\r");
 
-    String inputString;
-    while(incomingByte != '\r' && incomingByte != '\n')
-    {
-        if (serBuf.available())
-        {
-            incomingByte = serBuf.read();
-            if (incomingByte != '\r' && incomingByte != '\n')
-            {
-                inputString += (char)incomingByte;
-            }
-        }
-    }
-    int tempValue = inputString.toInt();
+    int tempValue = readSerBufUntilDone().toInt();
 
     if (tempValue >= -5000 && tempValue < 5000)
     {
@@ -3357,6 +3266,101 @@ void serialGetCoZeroB(void)
     }
 }
 
+String readSerBufUntilDone()
+{
+    String inputString;
+    incomingByte = 0;
+
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (serBuf.available())
+        {
+            incomingByte = serBuf.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    return inputString;
+}
+
+void sendToDataFile(String receivedData)
+{
+    Serial.println("Writing the data line to the SD Card: ");
+    file.open(String(DEVICE_id) + "_AQSyncData_" + String(Time.year())+ '_' + String(Time.month()) + '_' + String(Time.day()), O_CREAT | O_APPEND | O_WRITE);
+    file.println(receivedData);
+    file.close();
+}
+
+void sendToUploadLater(String receivedData)
+{
+    Serial.println("Writing the data line to the upload for later file: ");
+    file.open("OfflineFile", O_CREAT | O_APPEND | O_WRITE);
+    file.println(receivedData);
+    file.close();
+}
+
+void uploadOfflineData()
+{
+    char line[1000];
+    int n;
+    Serial.println("Sending the offline data up");
+    file.open("OfflineFile", O_READ);
+
+    while ((n = file.fgets(line, sizeof(line))) > 0) 
+    {
+        Particle.publish("AQSync", line, PRIVATE);
+        Particle.process(); //attempt at ensuring the publish is complete before sleeping
+        delay(400);
+    }
+    file.remove();
+    file.close();
+}
+
+void printToSerial()
+{
+    int i = 0;
+    char * listOfFiles = reinterpret_cast<char*>(malloc(sizeof(char) * 100 /* Fname size */ * 100 /* Num entries */));
+    //Make sure the array is clear
+    memset(listOfFiles, 0, sizeof(char) * 10000);
+
+    Serial.println();
+    Serial.println("Give the number of the file you want: ");
+    Serial.println();
+    file1.open("/");
+    while (file.openNext(&file1, O_RDONLY)) {
+        bool isSuccess = file.getName( listOfFiles + (i * 100), 86);
+
+        Serial.print(i);
+        Serial.print(": ");
+        Serial.println(listOfFiles + (i * 100));
+         i++;
+        file.close();
+    }
+    if (file1.getError()) {
+        Serial.println("openNext failed");
+        file.close();
+    } else {
+        Serial.println("End of List.");
+        file.close();
+    }
+    int fileLocation = readSerBufUntilDone().toInt();
+
+    int numbers = 100*fileLocation;
+
+    file.open(listOfFiles+numbers, O_READ);
+
+    char line[1000];
+    int n;
+    while ((n = file.fgets(line, sizeof(line))) > 0) 
+    {
+        Serial.println(line);
+    }
+    file1.close();
+
+    free(listOfFiles);
+}
 
 
 void outputSerialMenuOptions(void)
@@ -3374,7 +3378,7 @@ void outputSerialMenuOptions(void)
     Serial.println("v:  Adjust the Device ID");
     Serial.println("w:  Get wifi credentials");
     Serial.println("y:  Enable cellular");
-    Serial.println("z:  Disable cellular");
+    Serial.println("z:  List files to choose what to print in serial");
     Serial.println("1:  Adjust gas lower limit");
     Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");

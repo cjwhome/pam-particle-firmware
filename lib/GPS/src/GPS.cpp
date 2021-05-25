@@ -57,11 +57,11 @@ void GPS::set_satellites(String satString){
     satellites_used = satString.toInt();
 }
 
-void GPS::set_horizontalDillution(String hdString){
+void GPS::set_horizontalDilution(String hdString){
     float temp_float = hdString.toFloat();
     temp_float *= 10;
 
-    horizontal_dillution = temp_float;
+    horizontal_dilution = temp_float;
 }
 
 double GPS::get_latitude(void){
@@ -76,8 +76,9 @@ int GPS::get_satellites(void){
     return satellites_used;
 }
 
-int GPS::get_horizontalDillution(void){
-    return horizontal_dillution;
+int GPS::get_horizontalDilution(void)
+{
+    return horizontal_dilution;
 }
 
 int16_t GPS::get_latitudeWhole(void){
