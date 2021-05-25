@@ -2297,20 +2297,11 @@ void serialMenu()
             break;
 
         case 'y':
-            if (serial_cellular_enabled == 0)
-            {
-                Serial.println("Enabling Cellular.");
-            }
-            else
-            {
-                Serial.println("Cellular already enabled.");
-            }
-            serial_cellular_enabled = 1;
-            EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+            deleteFiles();
             break;
 
         case 'z':
-            printToSerial();
+            printFileToSerial();
             break;
 
         case 'B':
@@ -3304,16 +3295,51 @@ void uploadOfflineData()
     file.close();
 }
 
-void printToSerial()
+void printFileToSerial()
+{
+    Serial.println();
+    Serial.println("Give the number of the file you want: ");
+    Serial.println();
+
+    String fileName = showAndChooseFiles();
+    Serial.println(fileName);
+
+    file.open(fileName, O_READ);
+
+    char line[1000];
+    int n;
+    while ((n = file.fgets(line, sizeof(line))) > 0) 
+    {
+        Serial.println(line);
+    }
+    file1.close();
+}
+
+void deleteFiles()
+{
+    Serial.println();
+    Serial.println("Give the number of the file you want to delete: ");
+    Serial.println();
+
+    String fileName = showAndChooseFiles();
+    Serial.println(fileName);
+
+    file.open(String(fileName), O_READ);
+
+    file.remove();
+    file.close();
+    Serial.print(String(fileName));
+    Serial.println(" has been deleted");
+}
+
+String showAndChooseFiles()
 {
     int i = 0;
     char * listOfFiles = reinterpret_cast<char*>(malloc(sizeof(char) * 100 /* Fname size */ * 100 /* Num entries */));
     //Make sure the array is clear
     memset(listOfFiles, 0, sizeof(char) * 10000);
 
-    Serial.println();
-    Serial.println("Give the number of the file you want: ");
-    Serial.println();
+
     file1.open("/");
     while (file.openNext(&file1, O_RDONLY)) {
         bool isSuccess = file.getName( listOfFiles + (i * 100), 86);
@@ -3332,20 +3358,10 @@ void printToSerial()
         file.close();
     }
     int fileLocation = readSerBufUntilDone().toInt();
-
     int numbers = 100*fileLocation;
-
-    file.open(listOfFiles+numbers, O_READ);
-
-    char line[1000];
-    int n;
-    while ((n = file.fgets(line, sizeof(line))) > 0) 
-    {
-        Serial.println(line);
-    }
-    file1.close();
-
+    String fileName = String(listOfFiles+numbers);
     free(listOfFiles);
+    return String(fileName);
 }
 
 
