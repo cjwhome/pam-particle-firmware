@@ -240,7 +240,7 @@ float tempfloat = 0;
 int tempValue;
 float air_quality_score = 0;
 int esp_wifi_connection_status = 0;
-int serial_cellular_enabled = 0;
+int serial_cellular_enabled = 1;
 int debugging_enabled = 0;
 int ozone_enabled = 0;
 int voc_enabled = 0;
@@ -2277,7 +2277,7 @@ void serialMenu()
             break;
 
         case 's':
-            Serial.println(String(HEADER_STRING));
+            Serial.println(Time.timeStr());
             break;
 
         case 't':
@@ -3037,22 +3037,8 @@ void serialGetZone(void)
 {
     Serial.println("Enter new Device time zone (-12.0 to 14.0)");
     Serial.setTimeout(SERIAL_MENU_TIMEOUT);
+    int tempValue = readSerBufUntilDone().toInt();
 
-    String inputString;
-    incomingByte = 0;
-
-    while(incomingByte != '\r' && incomingByte != '\n')
-    {
-        if (serBuf.available())
-        {
-            incomingByte = serBuf.read();
-            if (incomingByte != '\r' && incomingByte != '\n')
-            {
-                inputString += (char)incomingByte;
-            }
-        }
-    }
-    int tempValue = inputString.toInt();
     Serial.println("");
 
     //min is the year 2000, max is the year 2100

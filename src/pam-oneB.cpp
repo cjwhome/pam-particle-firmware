@@ -2319,7 +2319,7 @@ void serialMenu()
             break;
 
         case 's':
-            Serial.println(String(HEADER_STRING));
+            Serial.println(Time.timeStr());
             break;
 
         case 't':
@@ -3079,22 +3079,8 @@ void serialGetZone(void)
 {
     Serial.println("Enter new Device time zone (-12.0 to 14.0)");
     Serial.setTimeout(SERIAL_MENU_TIMEOUT);
+    int tempValue = readSerBufUntilDone().toInt();
 
-    String inputString;
-    incomingByte = 0;
-
-    while(incomingByte != '\r' && incomingByte != '\n')
-    {
-        if (serBuf.available())
-        {
-            incomingByte = serBuf.read();
-            if (incomingByte != '\r' && incomingByte != '\n')
-            {
-                inputString += (char)incomingByte;
-            }
-        }
-    }
-    int tempValue = inputString.toInt();
     Serial.println("");
 
     //min is the year 2000, max is the year 2100
@@ -3363,9 +3349,6 @@ void uploadOfflineData()
 void printToSerial()
 {
     int i = 0;
-    // Hav to set a specfic size here. This gives us up to 100 files that can have 100 chars
-    /*char listOfFiles[100][100] = { {}, };
-    char name[100];*/
     char * listOfFiles = reinterpret_cast<char*>(malloc(sizeof(char) * 100 /* Fname size */ * 100 /* Num entries */));
     //Make sure the array is clear
     memset(listOfFiles, 0, sizeof(char) * 10000);
@@ -3387,19 +3370,14 @@ void printToSerial()
         Serial.println("openNext failed");
         file.close();
     } else {
-        Serial.println("End of Files.");
+        Serial.println("End of List.");
         file.close();
     }
     int fileLocation = readSerBufUntilDone().toInt();
 
-    Serial.println(fileLocation);
     int numbers = 100*fileLocation;
 
-    Serial.println(numbers);
-    Serial.println(int(listOfFiles+numbers));
-
     file.open(listOfFiles+numbers, O_READ);
-    Serial.println("Opened the file");
 
     char line[1000];
     int n;
