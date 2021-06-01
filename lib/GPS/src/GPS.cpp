@@ -4,18 +4,18 @@
 
 //set decimal value of latitude from NMEA string
 void GPS::set_lat_decimal(String latString, char nsString){
-    String whole_str = latString.substring(0,2);
-    String frac_str = latString.substring(2,10);
+    String whole_str = latString.substring(2,4);
+    String frac_str = latString.substring(4,10);
     latWhole = whole_str.toInt();
     latFrac = frac_str.toInt();
 
     int whole_part = whole_str.toInt();
-    //Serial.print("Whole part:");
-    //Serial.println(whole_part);
+    // Serial.print("Whole part:");
+    // Serial.println(whole_part);
 
     double frac_part = frac_str.toFloat();
-    //Serial.print("Frac part:");
-    //Serial.println(frac_part, 5);
+    // Serial.print("Frac part:");
+    // Serial.println(frac_part, 5);
 
 
     latitude = whole_part;
@@ -28,20 +28,20 @@ void GPS::set_lat_decimal(String latString, char nsString){
 }
 
 void GPS::set_long_decimal(String longString, char ewString){
-    String whole_str = longString.substring(0,3);
-    String frac_str = longString.substring(3,10);
+    String whole_str = longString.substring(2,5);
+    String frac_str = longString.substring(5,10);
 
     longWhole = whole_str.toInt();
     longFrac = frac_str.toInt();
     int whole_part = whole_str.toInt();
-    //Serial.print("Whole string: ");
-    //Serial.println(whole_str);
-    //Serial.print("Whole part:");
-    //Serial.println(whole_part);
+    // Serial.print("Whole string: ");
+    // Serial.println(whole_str);
+    // Serial.print("Whole part:");
+    // Serial.println(whole_part);
 
     double frac_part = frac_str.toFloat();
-    //Serial.print("Frac part:");
-    //Serial.println(frac_part, 5);
+    // Serial.print("Frac part:");
+    // Serial.println(frac_part, 5);
 
 
     longitude = whole_part;

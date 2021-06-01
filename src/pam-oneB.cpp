@@ -667,7 +667,7 @@ void writeDefaultSettings(void)
     EEPROM.put(PRESSURE_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(RH_ZERO_MEM_ADDRESS, 0);
 
-    EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, 0);
+    EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
     EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, 0);
     EEPROM.put(OZONE_EN_MEM_ADDRESS, 0);
     EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
@@ -693,6 +693,7 @@ void writeDefaultSettings(void)
 void setup()
 {
 
+    serial_cellular_enabled = 1;
     status_word.status_int = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
     status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
@@ -1440,7 +1441,7 @@ float readHumidity(void)
 //read Carbon monoxide alphasense sensor
 float readCO_A(void)
 {
-    float float_offset;
+    //float float_offset;
     float CO_float;
 
     CO_float = readAlpha1();
@@ -1458,7 +1459,7 @@ float readCO_A(void)
 //read Carbon monoxide alphasense sensor
 float readCO_B(void)
 {
-    float float_offset;
+    //float float_offset;
     float CO_float;
 
     CO_float = readAlpha2();
@@ -2340,8 +2341,20 @@ void serialMenu()
             serialGetWifiCredentials();
             break;
 
+        // case 'y':
+        //     deleteFiles();
+        //     break;
         case 'y':
-            deleteFiles();
+            if (serial_cellular_enabled == 0)
+            {
+                Serial.println("Enabling Cellular.");
+            }
+            else
+            {
+                Serial.println("Cellular already enabled.");
+            }
+            serial_cellular_enabled = 1;
+            EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
             break;
 
         case 'z':
@@ -3361,17 +3374,24 @@ void printFileToSerial()
 
 void deleteFiles()
 {
+    SdFat sd;
+    sd.open("/");
     Serial.println();
     Serial.println("Give the number of the file you want to delete: ");
     Serial.println();
 
     String fileName = showAndChooseFiles();
     Serial.println(fileName);
+    //SdFile deleteFile;
+    //deleteFile = fileName;
+    //file.open(String(fileName), O_READ);
 
-    file.open(String(fileName), O_READ);
+    if (!sd.remove(fileName)) {
+        Serial.println("remove failed");
+    }
 
-    file.remove();
-    file.close();
+    //deleteFile.remove();
+    //file.close();
     Serial.print(String(fileName));
     Serial.println(" has been deleted");
 }
@@ -3423,7 +3443,7 @@ void outputSerialMenuOptions(void)
     Serial.println("u:  Enter new time zone");
     Serial.println("v:  Adjust the Device ID");
     Serial.println("w:  Get wifi credentials");
-    Serial.println("y:  Enable cellular");
+    Serial.println("y:  List files to choose what to delete");
     Serial.println("z:  List files to choose what to print in serial");
     Serial.println("1:  Adjust gas lower limit");
     Serial.println("2:  Adjust gas upper limit");
