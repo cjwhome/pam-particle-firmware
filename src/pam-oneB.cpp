@@ -3269,7 +3269,7 @@ void serialGetCoSlopeB(void)
         Serial.print("\n\rNew COB slope: ");
         Serial.println(String(CO_slopeB, 2));
 
-        EEPROM.put(CO_SLOPE_A_MEM_ADDRESS, tempValue);
+        EEPROM.put(CO_SLOPE_B_MEM_ADDRESS, tempValue);
     }
     else
     {
@@ -3292,7 +3292,7 @@ void serialGetCoZeroB(void)
         Serial.print("\n\rNew COB zero: ");
         Serial.println(tempValue);
         CO_zeroB = tempValue;
-        EEPROM.put(CO_ZERO_A_MEM_ADDRESS, tempValue);
+        EEPROM.put(CO_ZERO_B_MEM_ADDRESS, tempValue);
     }
     else
     {

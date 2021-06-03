@@ -1,54 +1,42 @@
-About
-===
-SdFat-Particle is a port of the SdFat library for [Particle](https://www.particle.io/) development boards.
+The Arduino SdFat library provides read/write access to FAT16/FAT32
+file systems on SD/SDHC flash cards.
 
-The SdFat library provides read/write access to FAT16/FAT32 file systems on SD/SDHC flash cards.
+SdFat requires Arduino 1.6x or greater.
 
-SdFat for Particle supports fast DMA access for all SPI interfaces on Particle devices.
+Key changes:
 
-SdFat supports long filenames.
+Support for multiple SPI ports now uses a pointer to a SPIClass object.
 
+See the STM32Test example.
+```
+explicit SdFat(SPIClass* spiPort);
+\\ or
+explicit SdFatEX(SPIClass* spiPort);
+```
 
-## Documentation
+Open flags now follow POSIX conventions.  O_RDONLY is the same as O_READ and O_WRONLY is the
+same as O_WRITE. One and only one of of the mode flags, O_RDONLY, O_RDWR, or
+O_WRONLY is required.
+ 
+Open flags for Particle Gen3 and ARM boards are now defined by fcntl.h.
+See SdFatConfig.h for options.
 
-Download the SdFat-Particle-doc repository from GitHub.
+Support for particle Gen3 devices.
 
-https://github.com/greiman/SdFat-Particle-doc
+New cluster allocation algorithm.
 
-Please read the html documentation in the html folder by opening SdFat.html.
+Please read changes.txt and the html documentation in the extras folder for more information.
 
-Look at the classes tab for details about class member functions.
+Please report problems as issues.
 
+A number of configuration options can be set by editing SdFatConfig.h
+define macros.  See the html documentation for details
 
-## Examples
+Please read the html documentation for this library.  Start with
+html/index.html and read the Main Page.  Next go to the Classes tab and
+read the documentation for the classes SdFat, SdFatEX, SdBaseFile,
+SdFile, File, StdioStream, ifstream, ofstream, and others.
+ 
+Please continue by reading the html documentation in SdFat/extras/html
 
-Please try the examples in the firmware/examples folder.
-
-Start with the TryMeFirst example.
-
-You can check the performance of your SD card with the bench example.
-
-Here is a list of example files I have tested on P1/photon.
-
-bench.cpp - Benchmark SD read/write speed.
-
-DirectoryFunctions.cpp - Demonstrate chdir(), ls(), mkdir(), and  rmdir().
-
-LowLatencyLogger.cpp - High speed binary data logger.
-
-OpenNext.cpp - Open all files in a directory.
-
-ReadCsvArray.cpp - Function to read an array from a csv file.
-
-ReadCsvFields.cpp - Function to read csv fields.
-
-SdFormatter.cpp - Format an SD card according to the SD standard.
-
-SdInfo.cpp - Display information about an SD card.
-
-Timestamp.cpp - Shows how to time-stamp files.
-
-TryMeFirst.cpp - A simple read/write example.
-
-VolumeFreeSpace.cpp - Determine free space in a volume.
-
+Updated 28 Dec 2018
