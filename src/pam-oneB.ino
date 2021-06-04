@@ -215,6 +215,7 @@ String fileName;
 //the PAM recieved when it didn't have cell service.
 String dataFileName;
 long numberOfLines = 0;
+bool sending_offline = false;
 
 
 // String diagnosticFileName;
@@ -2078,20 +2079,23 @@ void getEspAQSyncData(char incomingByte)
     if (incomingByte == 'Y')
     {
         sendToDataFile(receivedData);
-        if(Particle.connected())
+        if (sending_offline == true)
         {
-            Particle.publish("AQSync", receivedData, PRIVATE);
-            Particle.process(); //attempt at ensuring the publish is complete before sleeping
-            if (haveOfflineData) 
+            if(Particle.connected())
             {
-                uploadOfflineData();
-                haveOfflineData = false;
+                Particle.publish("AQSync", receivedData, PRIVATE);
+                Particle.process(); //attempt at ensuring the publish is complete before sleeping
+                if (haveOfflineData) 
+                {
+                    uploadOfflineData();
+                    haveOfflineData = false;
+                }
             }
-        }
-        else 
-        {
-            sendToUploadLater(receivedData);
-            haveOfflineData = true;
+            else 
+            {
+                sendToUploadLater(receivedData);
+                haveOfflineData = true;
+            }
         }
         
     }
@@ -2278,7 +2282,8 @@ void serialMenu()
             break;
 
         case 's':
-            Serial.println(Time.timeStr());
+            Serial.println("activating saving offline data to send later.");
+            sending_offline = true;
             break;
 
         case 't':
@@ -3394,7 +3399,7 @@ void outputSerialMenuOptions(void)
     Serial.println("d:  Adjust COB zero");
     Serial.println("q:  Enable serial debugging");
     Serial.println("r:  Disable serial debugging");
-    Serial.println("s:  Output header string");
+    Serial.println("s:  Activate sending offline data");
     Serial.println("t:  Enter new time and date");
     Serial.println("u:  Enter new time zone");
     Serial.println("v:  Adjust the Device ID");
