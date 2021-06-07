@@ -2123,8 +2123,6 @@ void getEspAQSyncData(char incomingByte)
     if (incomingByte == 'Y')
     {
         sendToDataFile(receivedData);
-        if (sending_offline == true)
-        {
             if(Particle.connected())
             {
                 Particle.publish("AQSync", receivedData, PRIVATE);
@@ -2140,7 +2138,6 @@ void getEspAQSyncData(char incomingByte)
                 sendToUploadLater(receivedData);
                 haveOfflineData = true;
             }
-        }
         
     }
     if (incomingByte == 'Q')
