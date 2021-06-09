@@ -424,7 +424,7 @@ void outputToCloud(String data, String sensible_data){
         String webhook_data = String(DEVICE_id) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1);
         if(ozone_enabled){
-            webhook_data += ",O3: " + O3_sum;
+            webhook_data += ",O3: " + String(O3_sum);
         } 
         webhook_data += "\n\r";
 
