@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 13
+#define BUILD_VERSION 15
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -138,8 +138,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,N/A,N/A,Date/Time"
-
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),Batt(%),Latitude,Longitude,Date/Time"
+#define HEADER_STRING_OZONE "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,Date/Time"
 
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
 
@@ -240,8 +240,8 @@ int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 
 
-char geolocation_latitude[12] = "111.1111111";
-char geolocation_longitude[13] = "22.22222222";
+char geolocation_latitude[12] = "999.9999999";
+char geolocation_longitude[13] = "99.9999999";
 char geolocation_accuracy[6] = "255.0";
 
 //used for averaging
@@ -421,8 +421,12 @@ void outputToCloud(String data, String sensible_data){
         //O3_sum /= measurements_to_average;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
+        String webhook_data = String(DEVICE_id) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
+        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1);
+        if(ozone_enabled){
+            webhook_data += ",O3: " + O3_sum;
+        } 
+        webhook_data += "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
@@ -982,10 +986,10 @@ void setup()
 
     enableContinuousGPS();
 
-    if(google_location_en){
+    /*if(google_location_en){
         Serial.println("Setting up google maps geolocation.");
         locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
-    }
+    }*/
 
     
     Log.info("System version: %s", (const char*)System.version());
@@ -1023,7 +1027,7 @@ void loop() {
         goToSleepBattery();
     }
     //Serial.println("locator loop");
-    locator.loop();
+   // locator.loop();
     
 
     if(output_only_particles == 1){
@@ -1053,11 +1057,6 @@ void loop() {
     CO_float = readCO();
 
 
-
-
-    //CO_float_2 += CO_zero_2;
-    //CO_float_2 *= CO_slope_2;
-
     CO2_float = readCO2();
 
 
@@ -1083,8 +1082,8 @@ void loop() {
 
 
     //sound_average = 0;
-    calculateAQI();
-    sound_average = readSound();
+    //calculateAQI();
+    //sound_average = readSound();
     //read PM values and apply calibration factors
     readPlantower();
 
@@ -2029,9 +2028,9 @@ void outputDataToESP(void){
     }
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     csv_output_string += String(fuel.getSoC(), 1) + ",";
-    cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
+    //cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
 
-    csv_output_string += String(sound_average, 0) + ",";
+    //csv_output_string += String(sound_average, 0) + ",";
     cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
 
     if(gps.get_latitude() != 0){
@@ -2062,14 +2061,14 @@ void outputDataToESP(void){
 
     cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
     if (gps.get_longitude() != 0) {
-        csv_output_string += String(gps.get_horizontalDillution() / 10.0) + ",";
+        //csv_output_string += String(gps.get_horizontalDillution() / 10.0) + ",";
         cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
     } else {
-        csv_output_string += String(geolocation_accuracy) + ",";
+        //csv_output_string += String(geolocation_accuracy) + ",";
         cloud_output_string += String(geolocation_accuracy);
     }
 
-    csv_output_string += String(status_word.status_int) + ",";
+    //csv_output_string += String(status_word.status_int) + ",";
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
@@ -3756,24 +3755,24 @@ void outputSerialMenuOptions(void){
     Serial.println("w:  Get wifi credentials");
     Serial.println("y:  Enable cellular");
     Serial.println("z:  Disable cellular");
-    Serial.println("1:  Adjust gas lower limit");
-    Serial.println("2:  Adjust gas upper limit");
+    //Serial.println("1:  Adjust gas lower limit");
+    //Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");
     Serial.println("4:  Enable Ozone");
     Serial.println("5:  Disable Ozone");
-    Serial.println("6:  Enable VOC's");
-    Serial.println("7:  Disable VOC's");
+    //Serial.println("6:  Enable VOC's");
+    //Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
-    Serial.println("9:  Increase the charge current by 64 mA");
-    Serial.println("0:  Increase the current input limit by 100 mA");
+    //Serial.println("9:  Increase the charge current by 64 mA");
+    //Serial.println("0:  Increase the current input limit by 100 mA");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celcius");
     Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
     Serial.println("F:  Change temperature units to Farenheit");
-    Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
-    Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
+    //Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
+    //Serial.println("H:  Read ozone");
     Serial.println("I:  Adjust frequency for uploading through cellular");
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");
@@ -3788,10 +3787,10 @@ void outputSerialMenuOptions(void){
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
     
-    Serial.println("W:  Enable/Disable google location services");
+    //Serial.println("W:  Enable/Disable google location services");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
-    Serial.println("!:  Continuous serial output of VOC's");
+    //Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
     Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
     Serial.println("?:  Output this menu");
