@@ -138,7 +138,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,N/A,N/A,Date/Time"
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,HorizontalDillution,Status,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
@@ -216,6 +216,9 @@ float CO2_float = 0;
 float CO2_float_previous = 0;
 int CO2_value = 0;
 float O3_float = 0;
+float O3_CellTemp = 0;
+float O3_CellPress = 0;
+float O3_Voltage = 0;
 int DEVICE_id = 555;       //default value
 int sample_counter = 0;
 float tempfloat = 0;
@@ -721,6 +724,7 @@ void check_wifi_file(void){
 
 void setup()
 {
+    Serial.println("Starting the initialization");
     status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
     status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
@@ -733,9 +737,9 @@ void setup()
     //setup i/o
     pinMode(lmp91000_1_en, OUTPUT);
     pinMode(lmp91000_2_en, OUTPUT);
-    pinMode(fiveVolt_en, OUTPUT);
+    //pinMode(fiveVolt_en, OUTPUT);
     pinMode(plantower_en, OUTPUT);
-    pinMode(power_led_en, OUTPUT);
+    //pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
     pinMode(blower_en, OUTPUT);
     pinMode(D4, INPUT);
@@ -756,26 +760,26 @@ void setup()
     powerCheck.loop();
 
     
-    if(car_topper_power_en && powerCheck.getHasPower() == 0){
-        goToSleepBattery();
-    }else if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
-            //Serial.println("Going to sleep because battery is below 20% charge");
-        goToSleepBattery();
-    }
-    //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D4, System.reset, RISING);
-    if(digitalRead(D4)){
-      goToSleep();
-    }
+    // if(car_topper_power_en && powerCheck.getHasPower() == 0){
+    //     goToSleepBattery();
+    // }else if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
+    //         //Serial.println("Going to sleep because battery is below 20% charge");
+    //     goToSleepBattery();
+    // }
+    // //if user presses power button during operation, reset and it will go to low power mode
+    // attachInterrupt(D4, System.reset, RISING);
+    // if(digitalRead(D4)){
+    //   goToSleep();
+    // }
 
     digitalWrite(lmp91000_1_en, HIGH);
     digitalWrite(lmp91000_2_en, HIGH);
-    digitalWrite(power_led_en, HIGH);
+    //digitalWrite(power_led_en, HIGH);
     digitalWrite(plantower_en, HIGH);
     digitalWrite(esp_wroom_en, HIGH);
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
-    digitalWrite(fiveVolt_en, HIGH);
+    //digitalWrite(fiveVolt_en, HIGH);
 
 
 
@@ -1075,11 +1079,8 @@ void loop() {
         Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
 
     }
-
-
-    if(ozone_enabled){
-        readOzone();
-    }
+    // This line will always grab the Ozone data from the 108. I am doing this because this is for the AQLite, which will always have a 108.
+    getEspOzoneData();
 
 
     //sound_average = 0;
@@ -1868,21 +1869,21 @@ float readAlpha2(void){
 }
 
 void readOzone(void){
-    int tempValue = 0;
-    if(ozone_analog_enabled){
-        tempValue = analogRead(A0);  // read the analogPin for ozone voltage
-        if(debugging_enabled){
-            Serial.print("Ozone Raw analog in:");
-            Serial.println(tempValue);
+    // int tempValue = 0;
+    // if(ozone_analog_enabled){
+    //     tempValue = analogRead(A0);  // read the analogPin for ozone voltage
+    //     if(debugging_enabled){
+    //         Serial.print("Ozone Raw analog in:");
+    //         Serial.println(tempValue);
 
-        }
-        O3_float = tempValue;
-        O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-        O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
-        O3_float += ozone_offset;
-    }else{
-        O3_float = getEspOzoneData();
-    }
+    //     }
+    //     O3_float = tempValue;
+    //     O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
+    //     O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
+    //     O3_float += ozone_offset;
+    // }else{
+    //     O3_float = getEspOzoneData();
+    // }
 }
 
 void writeLogFile(String data){
@@ -2301,6 +2302,7 @@ float getEspOzoneData(void){
         writeLogFile("Getting ozone data from esp");
       }
     Serial1.print(getOzoneData);
+    Serial.println("Sending the command to get data from esp.");
     while(!Serial1.available() && timeOut == false){
       //delay(1);
       counterIndex++;
@@ -2323,61 +2325,102 @@ float getEspOzoneData(void){
         Serial.println(recievedData);
         writeLogFile("Recieved data from ESP");
     }
+    Serial.print("RECIEVED DATA FROM ESP: ");
+    Serial.println(recievedData);
+    if (recievedData == "not available")
+    {
+        return 1.1;
+    }
+    String nextData;
+    // int i = 0;
+    // while (recievedData.indexOf(',') > 2)
+    // {
+    //     nextData = recievedData.substring(0, recievedData.indexOf(','));
+    //     recievedData= recievedData.substring(recievedData.indexOf(',')+1, recievedData.length());
+    // }
+    for (int i = 0; i < 4; i++)
+    {
+        nextData = recievedData.substring(0, recievedData.indexOf(','));
+        recievedData= recievedData.substring(recievedData.indexOf(',')+1, recievedData.length());
+        switch(i)
+        { 
+            case 0:
+                O3_float = nextData.toFloat();
+                break;
+            case 1:
+                O3_CellTemp = nextData.toFloat();
+                break;
+            case 2: 
+                O3_CellPress = nextData.toFloat();
+                break;
+            case 3:
+                O3_Voltage = nextData.toFloat();
+                break;
+            default:
+                break;
+        }
+    }
+    return 1.1;
+    
+    
+    
+    
+    
     //parse data if not null
-    int comma_count = 0;
-    int from_index = 0;
-    int index_of_comma = 0;
-    bool still_searching_for_commas = true;
-    String stringArray[NUMBER_OF_FEILDS];
+    // int comma_count = 0;
+    // int from_index = 0;
+    // int index_of_comma = 0;
+    // bool still_searching_for_commas = true;
+    // String stringArray[NUMBER_OF_FEILDS];
 
-    while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
-        //Serial.printf("From index: %d\n\r", from_index);
+    // while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
+    //     //Serial.printf("From index: %d\n\r", from_index);
 
-        index_of_comma = recievedData.indexOf(',', from_index);
-        if(debugging_enabled){
-          Serial.print("comma index: ");
-          Serial.println(index_of_comma);
-          //writeLogFile("got a comma");
+    //     index_of_comma = recievedData.indexOf(',', from_index);
+    //     if(debugging_enabled){
+    //       Serial.print("comma index: ");
+    //       Serial.println(index_of_comma);
+    //       //writeLogFile("got a comma");
 
-        }
+    //     }
 
-        //if the index of the comma is not zero, then there is data.
-        if(index_of_comma > 0){
-            stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
-            if(debugging_enabled){
-                Serial.printf("String[%d]:", comma_count);
-                Serial.println(stringArray[comma_count]);
-                //writeLogFile(stringArray[comma_count]);
-            }
-            comma_count++;
-            from_index = index_of_comma;
-            from_index += 1;
-        }else{
-            int index_of_cr = recievedData.indexOf('\r', from_index);
-            if(index_of_cr > 0){
-                stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
-                if(debugging_enabled){
-                    Serial.printf("String[%d]:", comma_count);
-                    Serial.println(stringArray[comma_count]);
-                }
-            }
-            still_searching_for_commas = false;
-        }
-    }
-    if(comma_count == NUMBER_OF_FIELDS_LOGGING){
-        ozone_value = stringArray[1].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 1 due to logging");
-            //writeLogFile("using string array index 1 due to logging");
-          }
-    }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
-        ozone_value = stringArray[0].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 0, not logging");
-            //writeLogFile("using string array index 0, not logging");
-          }
-    }
-    return ozone_value;
+    //     //if the index of the comma is not zero, then there is data.
+    //     if(index_of_comma > 0){
+    //         stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
+    //         if(debugging_enabled){
+    //             Serial.printf("String[%d]:", comma_count);
+    //             Serial.println(stringArray[comma_count]);
+    //             //writeLogFile(stringArray[comma_count]);
+    //         }
+    //         comma_count++;
+    //         from_index = index_of_comma;
+    //         from_index += 1;
+    //     }else{
+    //         int index_of_cr = recievedData.indexOf('\r', from_index);
+    //         if(index_of_cr > 0){
+    //             stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
+    //             if(debugging_enabled){
+    //                 Serial.printf("String[%d]:", comma_count);
+    //                 Serial.println(stringArray[comma_count]);
+    //             }
+    //         }
+    //         still_searching_for_commas = false;
+    //     }
+    // }
+    // if(comma_count == NUMBER_OF_FIELDS_LOGGING){
+    //     ozone_value = stringArray[1].toFloat();
+    //     if(debugging_enabled){
+    //         Serial.println("using string array index 1 due to logging");
+    //         //writeLogFile("using string array index 1 due to logging");
+    //       }
+    // }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
+    //     ozone_value = stringArray[0].toFloat();
+    //     if(debugging_enabled){
+    //         Serial.println("using string array index 0, not logging");
+    //         //writeLogFile("using string array index 0, not logging");
+    //       }
+    // }
+    // return ozone_value;
     //parseOzoneString(recievedData);
 }
 
@@ -3011,7 +3054,31 @@ void serialMenu(){
         co2_calibration_timer = 180;        //6 minutes if measurement cycle is 2 seconds
         
     
-    }else if(incomingByte == 'Z'){
+    }
+    else if(incomingByte == 'Y')
+    {
+        String getMenu = "Mm";
+        Serial.println("Going into the 108_L menu");
+        Serial1.print(getMenu);
+        String message108;
+        while (message108 != 'x')
+        {
+            String getMenu = Serial1.readString();
+            Serial.println(getMenu);
+            message108 = readSerBufUntilDone();
+            if (message108 == '?')
+            {
+                output108MenuOptions();
+            }
+            else 
+            {
+                // We add the c for the esp to know it is a command for the 108
+                Serial1.println('C'+message108);
+            }
+            delay(300);
+        }
+    }
+    else if(incomingByte == 'Z'){
         Serial.println("Getting cellular information, this may take a while...");
 
         Log.info("IMEI=%s", CellularHelper.getIMEI().c_str());
@@ -3031,6 +3098,9 @@ void serialMenu(){
   Serial.println("Exiting serial menu...");
 
 }
+
+
+
 
 void serialTestRemoteFunction(void){
 
@@ -3729,6 +3799,26 @@ void readAlpha1Constantly(void){
         Serial.printf("CO: %1.3f ppm\n\r", CO_float);
     }
 }
+
+String readSerBufUntilDone()
+{
+    String inputString;
+    char incomingByte = 0;
+
+    while(incomingByte != '\r' && incomingByte != '\n')
+    {
+        if (Serial.available())
+        {
+            incomingByte = Serial.read();
+            if (incomingByte != '\r' && incomingByte != '\n')
+            {
+                inputString += (char)incomingByte;
+            }
+        }
+    }
+    return inputString;
+}
+
 void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");
@@ -3787,13 +3877,38 @@ void outputSerialMenuOptions(void){
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
-    
-    Serial.println("W:  Enable/Disable google location services");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
+    Serial.println("W:  Enable/Disable google location services");
+
+    Serial.println("Y:  Go to 108_L serial menu");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
     Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
-  }
+}
+
+void output108MenuOptions(void){
+    Serial.println("Key_Stroke      Function");
+    Serial.println("a    Set average and output frequency.");
+    Serial.println("z    Set the zero offset calibration factor.");
+    Serial.println("s    Set the slope calibration factor.");
+    Serial.println("h    Output the serial header(also available during measurements).");
+    Serial.println("Y    Set all configuration to default.");
+    Serial.println("b    Adaptive filter difference.");
+    Serial.println("i    Adaptive filter percent.");
+    Serial.println("k    Adaptive filter long average length.");
+    Serial.println("m    Adaptive filter short average length.");
+    Serial.println("n    Output instrument serial number.");
+    Serial.println("p    Perform Lamp test.");
+    Serial.println("g    Set the relay OFF ozone level (when ozone is greater than this, the relay turns off).");
+    Serial.println("j    Set the relay ON ozone level (when ozone is less than this, the relay turns on).");
+    Serial.println("f    Set the analog output full scale in ppb.");
+    Serial.println("u    Set the ozone units (ppb, pphm, ppm, ug/m3, mg/m3).");
+    Serial.println("c    Set the temperature units.");
+    Serial.println("o    Set the pressure units.");
+    Serial.println("?    Output this help menu.");
+    Serial.println("x    Exits the serial menu.");
+    Serial.println("menu>");
+}
