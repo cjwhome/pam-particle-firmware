@@ -2186,10 +2186,10 @@ void outputDataToESP(void){
         }else if(i == 10){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
             floatBytes.myFloat = air_quality_score;
-        }/*else if(i == 11){
+        }else if(i == 11){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
             floatBytes.myFloat = O3_float;
-        }*/
+        }
 
         //bytes 5,6,7,8 - Measurement Value
         ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
@@ -3057,25 +3057,33 @@ void serialMenu(){
     }
     else if(incomingByte == 'Y')
     {
-        String getMenu = "Mm";
+        String getMenu = "M&";
         Serial.println("Going into the 108_L menu");
         Serial1.print(getMenu);
         String message108;
-        while (message108 != 'x')
+        while (message108 != "x")
         {
-            String getMenu = Serial1.readString();
-            Serial.println(getMenu);
-            message108 = readSerBufUntilDone();
-            if (message108 == '?')
+            if (Serial1.available() > 0)
             {
-                output108MenuOptions();
+                String getMenu = Serial1.readString();
+                Serial.println(getMenu);
             }
-            else 
-            {
-                // We add the c for the esp to know it is a command for the 108
-                Serial1.println('C'+message108);
-            }
+
+            if (Serial.available() > 0) {
+                message108 = readSerBufUntilDone();
+                if (message108 == "?")
+                {
+                    output108MenuOptions();
+                }
+                else 
+                {
+                    // We add the c for the esp to know it is a command for the 108
+                    Serial.println("Sending this message to the ESP: ");
+                    Serial.println("C"+message108+"&");
+                    Serial1.println("C"+message108+"&");
+                }
             delay(300);
+            }
         }
     }
     else if(incomingByte == 'Z'){
