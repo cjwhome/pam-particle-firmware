@@ -2292,7 +2292,7 @@ void sendWifiInfo(void){
 float getEspOzoneData(void){
     float ozone_value = 0.0;
     String getOzoneData = "Z&";
-    String recievedData = " ";
+    String recievedData = "";
     bool timeOut = false;
     double counterIndex = 0;
     //if esp doesn't answer, keep going
@@ -2302,7 +2302,6 @@ float getEspOzoneData(void){
         writeLogFile("Getting ozone data from esp");
       }
     Serial1.print(getOzoneData);
-    Serial.println("Sending the command to get data from esp.");
     while(!Serial1.available() && timeOut == false){
       //delay(1);
       counterIndex++;
@@ -2316,7 +2315,16 @@ float getEspOzoneData(void){
 
 
     delay(10);
-
+    char incomingByte = NULL;
+    Serial1.setTimeout(3000);
+    // while(recievedData == "" && timeout < )
+    // {
+    //     incomingByte = Serial1.read();
+    //     recievedData += incomingByte;
+    //     Serial.println("Going around the rosies. receivedData: ");
+    //     Serial.println(recievedData);
+    // }
+    // Serial1.flush();
     recievedData = Serial1.readString();
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
     if(debugging_enabled)
@@ -3071,18 +3079,8 @@ void serialMenu(){
 
             if (Serial.available() > 0) {
                 message108 = readSerBufUntilDone();
-                if (message108 == "?")
-                {
-                    output108MenuOptions();
-                }
-                else 
-                {
-                    // We add the c for the esp to know it is a command for the 108
-                    Serial.println("Sending this message to the ESP: ");
-                    Serial.println("C"+message108+"&");
-                    Serial1.println("C"+message108+"&");
-                }
-            delay(300);
+                Serial1.println("C"+message108+"&");
+                delay(300);
             }
         }
     }
