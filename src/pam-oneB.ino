@@ -141,7 +141,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,HorizontalDillution,Status,Date/Time"
 
 
-#define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
+#define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
 
 #define MAX_COUNTER_INDEX 15000
 
@@ -427,8 +427,11 @@ void outputToCloud(String data, String sensible_data){
         String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
+        Serial.println("About to pamup: ");
+
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
+            Serial.println("PampUpping now ");
             Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
@@ -724,6 +727,7 @@ void check_wifi_file(void){
 
 void setup()
 {
+    Serial.begin(9600);
     Serial.println("Starting the initialization");
     status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
@@ -821,7 +825,6 @@ void setup()
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
     //initialize main serial port for debug output
-    Serial.begin(9600);
 
 
 
@@ -982,8 +985,6 @@ void setup()
     Serial.print("Build: ");
     Serial.println(BUILD_VERSION);
 
-
-
     enableContinuousGPS();
 
     if(google_location_en){
@@ -1021,15 +1022,12 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-
-    if(car_topper_power_en && powerCheck.getHasPower() == 0){
+    // if(car_topper_power_en && powerCheck.getHasPower() == 0){
         
-        goToSleepBattery();
-    }
-    //Serial.println("locator loop");
+    //     goToSleepBattery();
+    // }
     locator.loop();
     
-
     if(output_only_particles == 1){
         outputParticles();
     }
@@ -1170,7 +1168,6 @@ void loop() {
             t6713.readStatus(1);
         }
     }
-
 }
 
 void calculateAQI(void){
@@ -2024,10 +2021,8 @@ void outputDataToESP(void){
     csv_output_string += String(bme.pressure / 100.0, 1) + ",";
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
     csv_output_string += String(readHumidity(), 1) + ",";
-    if(ozone_enabled){
         cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
         csv_output_string += String(O3_float, 1) + ",";
-    }
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     csv_output_string += String(fuel.getSoC(), 1) + ",";
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
@@ -2143,17 +2138,59 @@ void outputDataToESP(void){
         3-PM01Value
         4-PM2_5Value
         5-PM10Value
+        9-O3_float
         6-bme.temperature
         7-bme.pressure / 100.0
         8-bme.humidity
-        9-O3_float
+
         10-fuel.getSoC()
         11-sound_average
 
 
 
         */
-        if(i == 0){
+        // if(i == 0){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = CO_float;
+        // }else if(i == 1){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = CO2_float;
+        // }else if(i == 2){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
+        //     floatBytes.myFloat = fuel.getSoC();
+        // }else if(i == 3){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
+        //     floatBytes.myFloat = PM01Value;
+        // }else if(i == 4){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
+        //     floatBytes.myFloat = corrected_PM_25;
+        // }else if(i == 5){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
+        //     floatBytes.myFloat = PM10Value;
+        // }else if(i == 6){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = readTemperature();
+        // }else if(i == 7){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = bme.pressure / 100.0;
+        // }else if(i == 8){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
+        //     floatBytes.myFloat = readHumidity();
+        // }
+        // else if(i == 9){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = O3_float;
+        // }
+        // else if(i == 10){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
+        //     floatBytes.myFloat = sound_average;
+        // }else if(i == 11){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+        //     floatBytes.myFloat = air_quality_score;
+        // }
+
+
+                if(i == 0){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
             floatBytes.myFloat = CO_float;
         }else if(i == 1){
@@ -2171,24 +2208,27 @@ void outputDataToESP(void){
         }else if(i == 5){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
             floatBytes.myFloat = PM10Value;
-        }else if(i == 6){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
-            floatBytes.myFloat = readTemperature();
-        }else if(i == 7){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
-            floatBytes.myFloat = bme.pressure / 100.0;
-        }else if(i == 8){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
-            floatBytes.myFloat = readHumidity();
-        }else if(i == 9){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
-            floatBytes.myFloat = sound_average;
-        }else if(i == 10){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-            floatBytes.myFloat = air_quality_score;
-        }else if(i == 11){
+        }
+        else if(i == 6){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
             floatBytes.myFloat = O3_float;
+        }
+        else if(i == 7){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
+            floatBytes.myFloat = readTemperature();
+        }else if(i == 8){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
+            floatBytes.myFloat = bme.pressure / 100.0;
+        }else if(i == 9){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
+            floatBytes.myFloat = readHumidity();
+        }
+        else if(i == 10){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
+            floatBytes.myFloat = sound_average;
+        }else if(i == 11){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+            floatBytes.myFloat = air_quality_score;
         }
 
         //bytes 5,6,7,8 - Measurement Value
@@ -2729,7 +2769,7 @@ void serialMenu(){
   incomingByte = '0';
   while(incomingByte!= 'x')
   {
-    Serial.print("Menu>");
+    Serial.print("AQLite Menu>");
     Serial.flush();
     while(!Serial.available());
     incomingByte = Serial.read();
@@ -3074,15 +3114,18 @@ void serialMenu(){
             if (Serial1.available() > 0)
             {
                 String getMenu = Serial1.readString();
-                Serial.println(getMenu);
+                Serial.print(getMenu);
             }
 
             if (Serial.available() > 0) {
+                Serial1.flush();
                 message108 = readSerBufUntilDone();
                 Serial1.println("C"+message108+"&");
-                delay(300);
+                delay(10);
             }
         }
+        Serial.println();
+        Serial.println("Exiting the 108_L Menu... ");
     }
     else if(incomingByte == 'Z'){
         Serial.println("Getting cellular information, this may take a while...");
