@@ -439,7 +439,7 @@ void outputToCloud(String data, String sensible_data){
               writeLogFile("Published pamup data!");
             }
             if(sensible_iot_en){
-                Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
+                Particle.publish("sensibleAQLiteUp", sensible_data, PRIVATE);
                 //testsensible();
                 Particle.process();
                 if(debugging_enabled){
@@ -1946,7 +1946,7 @@ void outputDataToESP(void){
     String latitude_string = "";
     String longitude_string = "";
 
-    char sensible_buf[256];
+    char sensible_buf[259];
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
@@ -1965,6 +1965,7 @@ void outputDataToESP(void){
     writer.name("datetime").value(String(Time.format(time, "%Y-%m-%dT%H:%M:%SZ")));
     writer.name("CO2").value(String(CO2_float, 0));
     writer.name("CO").value(String(CO_float, 3));
+    writer.name("o3").value(String(O3_float, 3));
     writer.name("PM1_0").value(String(PM01Value));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
     writer.name("Temp").value(String(readTemperature(), 1));
