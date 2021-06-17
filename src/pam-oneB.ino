@@ -38,6 +38,7 @@ GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
+#define AQLITE_VERSION 1
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -983,7 +984,7 @@ void setup()
     Serial.print("FW Version: ");
     Serial.println(APP_VERSION);
     Serial.print("Build: ");
-    Serial.println(BUILD_VERSION);
+    Serial.println("AQLite-"+AQLITE_VERSION);
 
     enableContinuousGPS();
 
@@ -2993,7 +2994,7 @@ void serialMenu(){
         Serial.print("APP Version: ");
         Serial.println(APP_VERSION);
         Serial.print("Build: ");
-        Serial.println(BUILD_VERSION);
+        Serial.println("AQLITE: "+AQLITE_VERSION);
     }else if(incomingByte == '4'){
         if(ozone_enabled == 0){
             Serial.println("Enabling Ozone");
