@@ -2083,19 +2083,19 @@ void getEspAQSyncData(char incomingByte)
         {
             Particle.publish("AQSync", receivedData, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
-            if (sending_offline == true)
-            {
-                if (haveOfflineData) 
-                {
-                    uploadOfflineData();
-                    haveOfflineData = false;
-                }
-                else 
-                {
-                    sendToUploadLater(receivedData);
-                    haveOfflineData = true;
-                }
-            }
+            // if (sending_offline == true)
+            // {
+            //     if (haveOfflineData) 
+            //     {
+            //         uploadOfflineData();
+            //         haveOfflineData = false;
+            //     }
+            //     else 
+            //     {
+            //         sendToUploadLater(receivedData);
+            //         haveOfflineData = true;
+            //     }
+            // }
         }  
     }
     if (incomingByte == 'Q')
