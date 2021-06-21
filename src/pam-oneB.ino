@@ -337,6 +337,7 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 //todo: average everything except ozone
 void outputToCloud(){
+    Serial.println("Making the cloud output string: ");
     String cloud_output_string = "";    //create a clean string
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
@@ -859,21 +860,6 @@ void loop() {
           sample_counter = 0;
     }
 
-    // if (Serial.available() > 0) {
-    if (false) {
-        // read the incoming byte:
-        incomingByte = Serial.read();
-        if(debugging_enabled){
-            Serial.print("incomming byte:");
-            Serial.println(incomingByte);
-
-        }
-        Serial.println(incomingByte);
-        if(incomingByte == 'm'){
-          serialMenu();
-        }
-    }
-
     if(serial_cellular_enabled){
         status_word.status_int |= 0x01;
         //Serial.println("Cellular is enabled.");
@@ -1345,6 +1331,11 @@ void writeLogFile(String data){
   }
 }
 
+void sendDatatoSdCard()
+{
+    
+}
+
 void outputDataToESP(void){
     //used for converting double to bytes for latitude and longitude
     char buffer[2];
@@ -1783,23 +1774,16 @@ void outputParticles(){
     }wordBytes;
 
     while(!Serial.available()){
-        // if (! bme.performReading()) {
-        //   Serial.println("Failed to read BME680");
-
-        // }
-        // readPlantower();
         readGpsStream();
-        // CO2_float = t6713.readPPM();
+
         CO2_float = readCO2();
+
         //correct for altitude
-        // float pressure_correction = bme.pressure/100;
         float pressure_correction = tph_fusion.pressure->adj_value;
         if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
             pressure_correction /= SEALEVELPRESSURE_HPA;
             CO2_float *= pressure_correction;
         }
-        // pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-        // corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
         byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
 
