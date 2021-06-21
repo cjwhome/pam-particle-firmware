@@ -29,7 +29,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 8
+#define BUILD_VERSION 14
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -336,89 +336,89 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 
 //todo: average everything except ozone
-void outputToCloud(String data){
-    String webhook_data = " ";
-    // CO_sum += CO_float;
-    CO_sum += pamco.co.adj_value;
-    CO2_sum += t6713.CO2.adj_value;
-    O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
-    measurement_count++;
-
-    if(measurement_count == measurements_to_average){
-        CO_sum /= measurements_to_average;
-        CO2_sum /= measurements_to_average;
-        //O3_sum /= measurements_to_average;
-
-        measurement_count = 0;
-        // String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(tph_fusion.voc->adj_value, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + plantower.pm1.adj_value + ",PM2.5: " + plantower.pm2_5.adj_value + ", PM10: " + plantower.pm10.adj_value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        // webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
-        webhook_data += String(tph_fusion.pressure->adj_value, 1) + ",HUM: " + String(tph_fusion.humidity->adj_value, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
-
-        if(Particle.connected() && serial_cellular_enabled){
-            status_word.status_int |= 0x0002;
-            Particle.publish("pamup", data, PRIVATE);
-            Particle.process(); //attempt at ensuring the publish is complete before sleeping
-            if(debugging_enabled){
-              Serial.println("Published data!");
-              writeLogFile("Published data!");
-            }
-        }else{
-            if(serial_cellular_enabled == 0){
-                if(debugging_enabled){
-                    Serial.println("Cellular is disabled.");
-                    writeLogFile("Cellular is disabled.");
-
-                  }
-            }else{
-                status_word.status_int &= 0xFFFD;   //clear the connected bit
-                if(debugging_enabled){
-                    Serial.println("Couldn't connect to particle.");
-                    writeLogFile("Couldn't connect to particle.");
-                  }
-            }
-        }
-        CO_sum = 0;
-        CO2_sum = 0;
-        O3_sum = 0;
+void outputToCloud(){
+    String cloud_output_string = "";    //create a clean string
+    cloud_output_string += '^';         //start delimeter
+    cloud_output_string += String(1) + ";";           //header
+    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(pamco.co.adj_value, 3);
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(t6713.CO2.adj_value, 0);
+    if(voc_enabled){
+        cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
     }
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(plantower.pm1.adj_value);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(plantower.pm2_5.adj_value, 0);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(plantower.pm10.adj_value);
+    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(tph_fusion.pressure->adj_value, 1);
+    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
+    if(ozone_enabled){
+        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
+    }
+    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
+    cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
+    cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
+    if(gps.get_latitude() != 0){
+        if(gps.get_nsIndicator() == 0){
+            cloud_output_string += "-";
+	}
+	cloud_output_string += String(gps.get_latitude());
+    }else{
+        cloud_output_string += String(geolocation_latitude);
+    }
+
+    cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
+    if(gps.get_longitude() != 0){
+        if(gps.get_ewIndicator() == 0x01){
+            cloud_output_string += "-";
+        }
+        cloud_output_string += String(gps.get_longitude());
+    }else{
+        cloud_output_string += String(geolocation_longitude);
+    }
+
+    cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
+    if (gps.get_longitude() != 0) {
+        cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
+    } else {
+        cloud_output_string += String(geolocation_accuracy);
+    }
+
+    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
+    cloud_output_string += '&';
+        
+    //This lets us send the info through Wifi through the ESP. 
+    //TO DO: Implement this somewhere else. Not in output_cloud, out to ESP.
+    //Serial1.println(cloud_output_string);
+
+
+    if(Particle.connected() && serial_cellular_enabled){
+        status_word.status_int |= 0x0002;
+        Particle.publish("pamup", cloud_output_string, PRIVATE);
+        Particle.process(); //attempt at ensuring the publish is complete before sleeping
+        if(debugging_enabled){
+          Serial.println("Published data!");
+          writeLogFile("Published data!");
+        }
+    }else{
+        if(serial_cellular_enabled == 0){
+            if(debugging_enabled){
+                Serial.println("Cellular is disabled.");
+                writeLogFile("Cellular is disabled.");
+                }
+        }else{
+            status_word.status_int &= 0xFFFD;   //clear the connected bit
+            if(debugging_enabled){
+                Serial.println("Couldn't connect to particle.");
+                writeLogFile("Couldn't connect to particle.");
+              }
+        }
+    }
+    CO_sum = 0;
+    CO2_sum = 0;
+    O3_sum = 0;
 }
 
-//send memory address and value separated by a comma
-// int remoteWriteStoredVars(String addressAndValue){
-//     uint16_t tempValue = 0;
-
-//     int index_of_comma = addressAndValue.indexOf(',');
-//     Serial.print("Full address and value substring: ");
-//     Serial.println(addressAndValue);
-//     String addressString = addressAndValue.substring(0, index_of_comma);
-//     String valueString = addressAndValue.substring(index_of_comma + 1);
-
-//     Serial.printf("address substring: %s\n\r", addressString);
-//     Serial.printf("Value substring: %s\n\r", valueString);
-
-//     int numerical_mem_address = addressString.toInt();
-//     int numerical_value = valueString.toInt();
-
-//     if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
-//         EEPROM.put(numerical_mem_address, numerical_value);
-//         return 1;
-//     }else{
-//         return -1;
-//     }
-
-// }
-
-// int remoteReadStoredVars(String mem_address){
-//     uint16_t tempValue = 0;
-//     int numerical_mem_address = mem_address.toInt();
-//     if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
-//         EEPROM.get(numerical_mem_address, tempValue);
-//         return tempValue;
-//     }else{
-//         return -1;
-//     }
-// }
 //read all eeprom stored variables
 void readStoredVars(void){
     Serial.println("MAIN IS READING STORED VARS");
@@ -693,11 +693,6 @@ void setup()
     digitalWrite(CO2_EN, HIGH);
     digitalWrite(FIVE_VOLT_EN, HIGH);
 
-
-
-    // register the cloud function
-    // Particle.function("geteepromdata", remoteReadStoredVars);
-    //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
     //init serial4 to communicate with Plantower PMS5003
@@ -775,14 +770,7 @@ void setup()
     Serial.print("Build: ");
     Serial.println(BUILD_VERSION);
 
-
-
     enableContinuousGPS();
-
-    if(google_location_en){
-        Serial.println("Setting up google maps geolocation.");
-        locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
-    }
 
     PAMSensorManager *manager = PAMSensorManager::GetInstance();
     manager->addSensor(&t6713);
@@ -824,10 +812,6 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-
-
-    //Serial.println("locator loop");
-    locator.loop();
 
     PAMSensorManager::GetInstance()->loop();
     PAMSerial.loop();
@@ -1393,112 +1377,87 @@ void outputDataToESP(void){
     //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/
     //This is different than the ble packet in that we are putting all of the data that we have in one packet
     //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
-    String cloud_output_string = "";    //create a clean string
+
     String csv_output_string = "";
-    cloud_output_string += '^';         //start delimeter
-    cloud_output_string += String(1) + ";";           //header
-    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
+
     csv_output_string += String(DEVICE_id) + ",";
-    // cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(pamco.co.adj_value, 3);
-    // csv_output_string += String(CO_float, 3) + ",";
+
+
     csv_output_string += String(pamco.co.adj_value, 3) + ",";
-    #if AFE2_en
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_2, 3);
-    csv_output_string += String(CO_float_2, 3) + ",";
-    #endif
-    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
-    csv_output_string += String(CO2_float, 0) + ",";
+
+
+    csv_output_string += String(t6713.CO2.adj_value, 0) +  ",";
+
     if(voc_enabled){
-        cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
         csv_output_string += String(air_quality_score, 1) + ",";
     }
-    // cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(plantower.pm1.adj_value);
+
     // csv_output_string += String(PM01Value) + ",";
     csv_output_string += String(plantower.pm1.adj_value) + ",";
-    // cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(plantower.pm2_5.adj_value, 0);
+
     // csv_output_string += String(corrected_PM_25, 0) + ",";
     csv_output_string += String(plantower.pm2_5.adj_value, 0) + ",";
-    // cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(plantower.pm10.adj_value);
+
     // csv_output_string += String(PM10Value) + ",";
     csv_output_string += String(plantower.pm10.adj_value) + ",";
 
-    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
+
     csv_output_string += String(readTemperature(), 1) + ",";
-    // cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
-    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(tph_fusion.pressure->adj_value, 1);
+
     // csv_output_string += String(bme.pressure / 100.0, 1) + ",";
     csv_output_string += String(tph_fusion.pressure->adj_value, 1) + ",";
-    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
+
     csv_output_string += String(readHumidity(), 1) + ",";
     if(ozone_enabled){
-        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
         csv_output_string += String(O3_float, 1) + ",";
     }
-    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
+
     csv_output_string += String(fuel.getSoC(), 1) + ",";
-    cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
+
 
     csv_output_string += String(sound_average, 0) + ",";
-    cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
+
 
     if(gps.get_latitude() != 0){
         if(gps.get_nsIndicator() == 0){
             csv_output_string += "-";
-            cloud_output_string += "-";
         }
         csv_output_string += String(gps.get_latitude()) + ",";
-        cloud_output_string += String(gps.get_latitude());
     }else{
         csv_output_string += String(geolocation_latitude)+ ",";
-        cloud_output_string += String(geolocation_latitude);
     }
-
-    cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
 
     if(gps.get_longitude() != 0){
         if(gps.get_ewIndicator() == 0x01){
             csv_output_string += "-";
-            cloud_output_string += "-";
         }
         csv_output_string += String(gps.get_longitude()) + ",";
-        cloud_output_string += String(gps.get_longitude());
     }else{
         csv_output_string += String(geolocation_longitude) + ",";
-        cloud_output_string += String(geolocation_longitude);
     }
 
-    cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
     if (gps.get_longitude() != 0) {
         csv_output_string += String(gps.get_horizontalDillution() / 10.0) + ",";
-        cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
     } else {
         csv_output_string += String(geolocation_accuracy) + ",";
-        cloud_output_string += String(geolocation_accuracy);
     }
 
     csv_output_string += String(status_word.status_int) + ",";
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
-    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
-    cloud_output_string += '&';
     if(debugging_enabled){
         Serial.println("Line to write to cloud:");
-        Serial.println(cloud_output_string);
     }
     if(!esp_wifi_connection_status){
         if(debugging_enabled){
             Serial.println("No wifi from esp so trying cellular function...");
           }
-        outputToCloud(cloud_output_string);
+        outputToCloud();
     }else{
         if(debugging_enabled){
             Serial.println("Sending data to esp to upload via wifi...");
             writeLogFile("Sending data to esp to upload via wifi");
           }
-        Serial1.println(cloud_output_string);
+
     }
     PAMSerial.println(rd, csv_output_string);
 
