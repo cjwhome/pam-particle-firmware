@@ -25,6 +25,7 @@
 #include "Sensors/TPHFusion/TPHFusion.h"
 #include "Sensors/Plantower/Plantower.h"
 #include "Sensors/PAMCO/PAMCO.h"
+#include "TakeMeasurements/TakeMeasurements.h/"
 
 GoogleMapsDeviceLocator locator;
 
@@ -302,8 +303,6 @@ void writeLogFile(String data);
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
 void echoGps();
-void readOzone(void);
-// float readCO(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
@@ -332,92 +331,6 @@ void writeRegister(uint8_t reg, uint8_t value) {
     Wire3.write(value);
     Wire3.endTransmission(true);
 
-}
-
-
-//todo: average everything except ozone
-void outputToCloud(){
-    Serial.println("Making the cloud output string: ");
-    String cloud_output_string = "";    //create a clean string
-    cloud_output_string += '^';         //start delimeter
-    cloud_output_string += String(1) + ";";           //header
-    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(pamco.co.adj_value, 3);
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(t6713.CO2.adj_value, 0);
-    if(voc_enabled){
-        cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
-    }
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(plantower.pm1.adj_value);
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(plantower.pm2_5.adj_value, 0);
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(plantower.pm10.adj_value);
-    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
-    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(tph_fusion.pressure->adj_value, 1);
-    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
-    if(ozone_enabled){
-        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
-    }
-    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
-    cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
-    cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
-    if(gps.get_latitude() != 0){
-        if(gps.get_nsIndicator() == 0){
-            cloud_output_string += "-";
-	}
-	cloud_output_string += String(gps.get_latitude());
-    }else{
-        cloud_output_string += String(geolocation_latitude);
-    }
-
-    cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
-    if(gps.get_longitude() != 0){
-        if(gps.get_ewIndicator() == 0x01){
-            cloud_output_string += "-";
-        }
-        cloud_output_string += String(gps.get_longitude());
-    }else{
-        cloud_output_string += String(geolocation_longitude);
-    }
-
-    cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
-    if (gps.get_longitude() != 0) {
-        cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
-    } else {
-        cloud_output_string += String(geolocation_accuracy);
-    }
-
-    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
-    cloud_output_string += '&';
-        
-    //This lets us send the info through Wifi through the ESP. 
-    //TO DO: Implement this somewhere else. Not in output_cloud, out to ESP.
-    //Serial1.println(cloud_output_string);
-
-
-    if(Particle.connected() && serial_cellular_enabled){
-        status_word.status_int |= 0x0002;
-        Particle.publish("pamup", cloud_output_string, PRIVATE);
-        Particle.process(); //attempt at ensuring the publish is complete before sleeping
-        if(debugging_enabled){
-          Serial.println("Published data!");
-          writeLogFile("Published data!");
-        }
-    }else{
-        if(serial_cellular_enabled == 0){
-            if(debugging_enabled){
-                Serial.println("Cellular is disabled.");
-                writeLogFile("Cellular is disabled.");
-                }
-        }else{
-            status_word.status_int &= 0xFFFD;   //clear the connected bit
-            if(debugging_enabled){
-                Serial.println("Couldn't connect to particle.");
-                writeLogFile("Couldn't connect to particle.");
-              }
-        }
-    }
-    CO_sum = 0;
-    CO2_sum = 0;
-    O3_sum = 0;
 }
 
 //read all eeprom stored variables
@@ -642,6 +555,8 @@ void check_wifi_file(void){
 
 void setup()
 {
+    TakeMeasurements take_a_measurement = new TakeMeasurements();
+    MeasurementHandler send_measurement = new MeasurementHandler();
     Wire.begin();
 
 
@@ -789,29 +704,6 @@ void setup()
 
 }
 
-void locationCallback(float lat, float lon, float accuracy) {
-  // Handle the returned location data for the device. This method is passed three arguments:
-  // - Latitude
-  // - Longitude
-  // - Accuracy of estimated location (in meters)
-  Serial.println("google geolocation:");
-  Serial.printlnf("Latitude:%f, longitude:%f, acc:%f", lat, lon, accuracy);
-  snprintf(geolocation_latitude, sizeof(geolocation_latitude), "%.6f", lat);
-  snprintf(geolocation_longitude, sizeof(geolocation_longitude), "%.6f", lon);
-  snprintf(geolocation_accuracy, sizeof(geolocation_accuracy), "%3.2f", accuracy);
-  if(gps.get_latitude() == 0){
-      status_word.status_int |= 0x0008;
-      status_word.status_int &= 0xFFF3;
-      if(accuracy < 2){
-          status_word.status_int |= 0x000C;
-      }else if(accuracy < 5){
-          status_word.status_int |= 0x0008;
-      }else if(accuracy < 20){
-          status_word.status_int |= 0x0004;
-      }
-  }
-}
-
 void loop() {
 
     PAMSensorManager::GetInstance()->loop();
@@ -823,7 +715,8 @@ void loop() {
     }
     readGpsStream();
 
-    CO2_float = readCO2();
+    take_a_measurement->readCO2();
+    CO2_float = take_a_measurement->co2;
 
 
     //correct for altitude
@@ -844,17 +737,12 @@ void loop() {
 
 
     if(ozone_enabled){
-        readOzone();
+        take_a_measurement->readOzone();
     }
 
-
-    //sound_average = 0;
-    calculateAQI();
-    sound_average = readSound();
-
     //getEspWifiStatus();
-    outputDataToESP();
 
+    // Ask Craig or david about this. Where is this sample_counter shown in the esp app? I can't find this counter. I think it is not needed.
     sample_counter = ++sample_counter;
     if(sample_counter == 99)    {
           sample_counter = 0;
@@ -862,36 +750,15 @@ void loop() {
 
     if(serial_cellular_enabled){
         status_word.status_int |= 0x01;
-        //Serial.println("Cellular is enabled.");
       if (Particle.connected() == false && tried_cellular_connect == false) {
         tried_cellular_connect = true;
-          if(debugging_enabled){
-            Serial.println("Connecting to cellular network");
-            writeLogFile("Connecting to cellular network");
-          }
           Cellular.on();
-          if(debugging_enabled){
-            Serial.println("after cellularOn");
-            writeLogFile("After cellularOn");
-          }
           Particle.connect();
-          if(debugging_enabled){
-            Serial.println("After particle connect");
-            writeLogFile("After particle connect");
-          }
       }else if(Particle.connected() == true){  //this means that it is already connected
-        if(debugging_enabled){
-          Serial.println("setting tried_cellular_connect to false");
-        }
         tried_cellular_connect = false;
       }
     }else{
-        //Serial.println("Cellular is disabled.");
       if (Particle.connected() == true) {
-          if(debugging_enabled){
-            Serial.println("Disconnecting from cellular network");
-            writeLogFile("Disconnecting from cellular network");
-          }
           Cellular.off();
       }
     }
@@ -905,44 +772,9 @@ void loop() {
         goToSleepBattery();
     }
 
-}
 
-void calculateAQI(void){
-    //Calculate humidity contribution to IAQ index
-        // gas_reference = bme.gas_resistance/100;
-    gas_reference = tph_fusion.voc->adj_value;
-      float current_humidity = readHumidity();
-      if(debugging_enabled){
-          Serial.printf("gas resistance: %1.0f, humidity: %1.2f\n\r", gas_reference, current_humidity);
-
-      }
-      if (current_humidity >= 38 && current_humidity <= 42)
-        hum_score = 0.25*100; // Humidity +/-5% around optimum
-      else
-      { //sub-optimal
-        if (current_humidity < 38)
-          hum_score = 0.25/hum_reference*current_humidity*100;
-        else
-        {
-          hum_score = ((-0.25/(100-hum_reference)*current_humidity)+0.416666)*100;
-        }
-      }
-
-      //Calculate gas contribution to IAQ index
-
-      if (gas_reference > gas_upper_limit) gas_reference = gas_upper_limit;
-      if (gas_reference < gas_lower_limit) gas_reference = gas_lower_limit;
-      gas_score = (0.75/(gas_upper_limit-gas_lower_limit)*gas_reference -(gas_lower_limit*(0.75/(gas_upper_limit-gas_lower_limit))))*100;
-      if(debugging_enabled){
-        Serial.print("Gas score: ");
-        Serial.println(gas_score);
-        Serial.print("Humidity score: ");
-        Serial.println(hum_score);
-    }
-
-      //Combine results for the final IAQ index value (0-100% where 100% is good quality air)
-      air_quality_score = hum_score + gas_score;
-
+    send_measurement->output_data_to_esp();
+    send_measurement->output_data_to_sd();
 
 }
 
@@ -1263,57 +1095,6 @@ void printPacket(byte *packet, byte len)
     Serial.println();
 }
 
-float readTemperature(void){
-    return tph_fusion.temperature->adj_value;
-}
-
-float readHumidity(void){
-    return tph_fusion.humidity->adj_value;
-}
-//read sound from
-double readSound(void){
-    int val;
-    double sum = 0;
-    float average = 0;
-    for(int i=0; i< 10;i++){
-        val = analogRead(SOUND_INPUT);
-        sum += val;
-        //Serial.print("Sound level: ");
-        //Serial.println(val);
-    }
-    sum = sum/10;
-    sum /= 4095;
-    sum *= 100;
-    return sum;
-}
-
-
-float readCO2(void){
-    t6713.measure();
-    if (t6713.CO2.adj_value != 0 && t6713.CO2.adj_value != VALUE_UNKNOWN) {
-        CO2_float = t6713.CO2.adj_value;
-    }
-    return CO2_float;
-}
-
-void readOzone(void){
-    int tempValue = 0;
-    if(ozone_analog_enabled){
-        tempValue = analogRead(A0);  // read the analogPin for ozone voltage
-        if(debugging_enabled){
-            Serial.print("Ozone Raw analog in:");
-            Serial.println(tempValue);
-
-        }
-        O3_float = tempValue;
-        O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-        O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
-        O3_float += ozone_offset;
-    }else{
-        O3_float = getEspOzoneData();
-    }
-}
-
 void writeLogFile(String data){
   if (sd.begin(CS)){
       Serial.println("Writing data to log file.");
@@ -1331,291 +1112,7 @@ void writeLogFile(String data){
   }
 }
 
-void sendDatatoSdCard()
-{
-    
-}
 
-void outputDataToESP(void){
-    //used for converting double to bytes for latitude and longitude
-    char buffer[2];
-    union{
-	       double myDouble;
-	       unsigned char bytes[sizeof(double)];
-    } doubleBytes;
-    //doubleBytes.myDouble = double;
-    //
-
-    //used for converting float to bytes for measurement value
-    union {
-        float myFloat;
-        unsigned char bytes[4];
-    } floatBytes;
-
-    //used for converting word to bytes for lat and longitude
-    union {
-        int16_t myWord;
-        unsigned char bytes[2];
-    }wordBytes;
-
-
-    //get a current time string
-    time_t time = Time.now();
-    Time.setFormat(TIME_FORMAT_ISO8601_FULL);
-
-
-
-    //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/
-    //This is different than the ble packet in that we are putting all of the data that we have in one packet
-    //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
-
-    String csv_output_string = "";
-
-    csv_output_string += String(DEVICE_id) + ",";
-
-
-    csv_output_string += String(pamco.co.adj_value, 3) + ",";
-
-
-    csv_output_string += String(t6713.CO2.adj_value, 0) +  ",";
-
-    if(voc_enabled){
-        csv_output_string += String(air_quality_score, 1) + ",";
-    }
-
-    // csv_output_string += String(PM01Value) + ",";
-    csv_output_string += String(plantower.pm1.adj_value) + ",";
-
-    // csv_output_string += String(corrected_PM_25, 0) + ",";
-    csv_output_string += String(plantower.pm2_5.adj_value, 0) + ",";
-
-    // csv_output_string += String(PM10Value) + ",";
-    csv_output_string += String(plantower.pm10.adj_value) + ",";
-
-
-    csv_output_string += String(readTemperature(), 1) + ",";
-
-    // csv_output_string += String(bme.pressure / 100.0, 1) + ",";
-    csv_output_string += String(tph_fusion.pressure->adj_value, 1) + ",";
-
-    csv_output_string += String(readHumidity(), 1) + ",";
-    if(ozone_enabled){
-        csv_output_string += String(O3_float, 1) + ",";
-    }
-
-    csv_output_string += String(fuel.getSoC(), 1) + ",";
-
-
-    csv_output_string += String(sound_average, 0) + ",";
-
-
-    if(gps.get_latitude() != 0){
-        if(gps.get_nsIndicator() == 0){
-            csv_output_string += "-";
-        }
-        csv_output_string += String(gps.get_latitude()) + ",";
-    }else{
-        csv_output_string += String(geolocation_latitude)+ ",";
-    }
-
-    if(gps.get_longitude() != 0){
-        if(gps.get_ewIndicator() == 0x01){
-            csv_output_string += "-";
-        }
-        csv_output_string += String(gps.get_longitude()) + ",";
-    }else{
-        csv_output_string += String(geolocation_longitude) + ",";
-    }
-
-    if (gps.get_longitude() != 0) {
-        csv_output_string += String(gps.get_horizontalDillution() / 10.0) + ",";
-    } else {
-        csv_output_string += String(geolocation_accuracy) + ",";
-    }
-
-    csv_output_string += String(status_word.status_int) + ",";
-    csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
-    if(debugging_enabled){
-        Serial.println("Line to write to cloud:");
-    }
-    if(!esp_wifi_connection_status){
-        if(debugging_enabled){
-            Serial.println("No wifi from esp so trying cellular function...");
-          }
-        outputToCloud();
-    }else{
-        if(debugging_enabled){
-            Serial.println("Sending data to esp to upload via wifi...");
-            writeLogFile("Sending data to esp to upload via wifi");
-          }
-
-    }
-    PAMSerial.println(rd, csv_output_string);
-
-    //write data to file
-    if (sd.begin(CS)){
-        if(debugging_enabled)
-            Serial.println("Writing row to file.");
-        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
-        if(file_started == 0){
-            file.println("File Start timestamp: ");
-            file.println(Time.timeStr());
-            file.println(String(HEADER_STRING));
-            file_started = 1;
-        }
-        file.println(csv_output_string);
-
-        file.close();
-    }
-    //delay(5000);
-
-    //Serial.print("Successfully output Cloud string to ESP: ");
-    //Serial.println(cloud_output_string);
-
-    //create an array of binary data to store and send all data at once to the ESP
-    //Each "section" in the array is separated by a #
-    //we are using binary for the ble packets so we can compress the data into 19 bytes for the small payload
-
-    byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
-
-
-    for(int i=0; i<NUMBER_OF_SPECIES; i++){
-
-        //************Fill the ble output array**********************//
-        //Serial.printf("making array[%d]\n", i);
-        //byte 0 - version
-        ble_output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
-
-        //bytes 1,2 - Device ID
-        //DEVICE_id = 555;
-        wordBytes.myWord = DEVICE_id;
-        ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        //byte 3 - Measurement number
-        ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
-
-        //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
-        //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
-        //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
-        /*
-        0-CO_float
-        1-CO2_float
-        2-bme.gas_resistance / 1000.0
-        3-PM01Value
-        4-PM2_5Value
-        5-PM10Value
-        6-bme.temperature
-        7-bme.pressure / 100.0
-        8-bme.humidity
-        9-O3_float
-        10-fuel.getSoC()
-        11-sound_average
-
-
-
-        */
-        if(i == 0){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
-            // floatBytes.myFloat = CO_float;
-            floatBytes.myFloat = pamco.co.adj_value;
-        }else if(i == 1){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = CO2_float;
-        }else if(i == 2){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
-            floatBytes.myFloat = fuel.getSoC();
-        }else if(i == 3){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-            // floatBytes.myFloat = PM01Value;
-            floatBytes.myFloat = plantower.pm1.adj_value;
-        }else if(i == 4){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-            // floatBytes.myFloat = corrected_PM_25;
-            floatBytes.myFloat = plantower.pm2_5.adj_value;
-        }else if(i == 5){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-            // floatBytes.myFloat = PM10Value;
-            floatBytes.myFloat = plantower.pm10.adj_value;
-        }else if(i == 6){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
-            floatBytes.myFloat = readTemperature();
-        }else if(i == 7){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
-            // floatBytes.myFloat = bme.pressure / 100.0;
-            floatBytes.myFloat = tph_fusion.pressure->adj_value;
-        }else if(i == 8){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
-            floatBytes.myFloat = readHumidity();
-        }else if(i == 9){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
-            floatBytes.myFloat = sound_average;
-        }else if(i == 10){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-            floatBytes.myFloat = air_quality_score;
-        }/*else if(i == 11){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
-            floatBytes.myFloat = O3_float;
-        }*/
-
-        //bytes 5,6,7,8 - Measurement Value
-        ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
-        ble_output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
-        ble_output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
-        ble_output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
-
-
-        //bytes 9-12 - latitude
-        wordBytes.myWord = gps.get_latitudeWhole();
-        ble_output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        wordBytes.myWord = gps.get_latitudeFrac();
-        ble_output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        //bytes 14-17 - longitude
-        wordBytes.myWord = gps.get_longitudeWhole();
-        ble_output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        wordBytes.myWord = gps.get_longitudeFrac();
-        ble_output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-
-        //byte 18 - east west and north south indicator
-        //  LSB 0 = East, LSB 1 = West
-        //  MSB 0 = South, MSB 1 = North
-        int northSouth = gps.get_nsIndicator();
-        int eastWest = gps.get_ewIndicator();
-
-        ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
-        ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
-        ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[1];
-        ble_output_array[20 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[0];
-
-        ble_output_array[21 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
-
-    }
-
-    //send start delimeter to ESP
-    Serial1.print("$");
-    //send the packaged data with # delimeters in between packets
-    Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
-
-    //send ending delimeter
-    Serial1.print("&");
-
-    /*Serial.println("Successfully output BLE string to ESP");
-    for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
-        Serial.printf("array[%d]:%X ", i, ble_output_array[i]);
-        if(ble_output_array[i]=='#')
-            Serial.printf("\n\r");
-    }
-    Serial.println("End of array");*/
-
-}
 
 //ask the ESP if it has a wifi connection
 void getEspWifiStatus(void){
@@ -1656,99 +1153,6 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
-float getEspOzoneData(void){
-    float ozone_value = 0.0;
-    String getOzoneData = "Z&";
-    String recievedData = " ";
-    bool timeOut = false;
-    double counterIndex = 0;
-    //if esp doesn't answer, keep going
-    Serial1.setTimeout(3000);
-    if(debugging_enabled){
-        Serial.println("Getting ozone data from esp");
-        writeLogFile("Getting ozone data from esp");
-      }
-    Serial1.print(getOzoneData);
-    while(!Serial1.available() && timeOut == false){
-      //delay(1);
-      counterIndex++;
-      if(counterIndex > MAX_COUNTER_INDEX){
-        if(debugging_enabled){
-          Serial.printf("Unable to get ozone data from ESP, counter index: %1.1f\n\r", counterIndex);
-        }
-        timeOut = true;
-      }
-    }
-
-
-    delay(10);
-
-    recievedData = Serial1.readString();
-    //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
-    if(debugging_enabled)
-    {
-        Serial.print("RECIEVED DATA FROM ESP: ");
-        Serial.println(recievedData);
-        writeLogFile("Recieved data from ESP");
-    }
-    //parse data if not null
-    int comma_count = 0;
-    int from_index = 0;
-    int index_of_comma = 0;
-    bool still_searching_for_commas = true;
-    String stringArray[NUMBER_OF_FEILDS];
-
-    while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
-        //Serial.printf("From index: %d\n\r", from_index);
-
-        index_of_comma = recievedData.indexOf(',', from_index);
-        if(debugging_enabled){
-          Serial.print("comma index: ");
-          Serial.println(index_of_comma);
-          //writeLogFile("got a comma");
-
-        }
-
-        //if the index of the comma is not zero, then there is data.
-        if(index_of_comma > 0){
-            stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
-            if(debugging_enabled){
-                Serial.printf("String[%d]:", comma_count);
-                Serial.println(stringArray[comma_count]);
-                //writeLogFile(stringArray[comma_count]);
-            }
-            comma_count++;
-            from_index = index_of_comma;
-            from_index += 1;
-        }else{
-            int index_of_cr = recievedData.indexOf('\r', from_index);
-            if(index_of_cr > 0){
-                stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
-                if(debugging_enabled){
-                    Serial.printf("String[%d]:", comma_count);
-                    Serial.println(stringArray[comma_count]);
-                }
-            }
-            still_searching_for_commas = false;
-        }
-    }
-    if(comma_count == NUMBER_OF_FIELDS_LOGGING){
-        ozone_value = stringArray[1].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 1 due to logging");
-            //writeLogFile("using string array index 1 due to logging");
-          }
-    }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
-        ozone_value = stringArray[0].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 0, not logging");
-            //writeLogFile("using string array index 0, not logging");
-          }
-    }
-    return ozone_value;
-    //parseOzoneString(recievedData);
-}
-
 
 
 /***start of all plantower functions***/
@@ -1776,7 +1180,8 @@ void outputParticles(){
     while(!Serial.available()){
         readGpsStream();
 
-        CO2_float = readCO2();
+        take_a_measurement->readCO2();
+        CO2_float = take_a_measurement->co2;
 
         //correct for altitude
         float pressure_correction = tph_fusion.pressure->adj_value;

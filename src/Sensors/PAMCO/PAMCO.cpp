@@ -44,6 +44,8 @@ bool PAMCO::start()
 
 bool PAMCO::measure()
 {
+    Serial.print("lmp91000_1_en: ");
+    Serial.println(this->enable_pin);
     digitalWrite(this->enable_pin, LOW);
 
     if(Wire.requestFrom(0x49,1) == 0) {
@@ -99,6 +101,8 @@ bool PAMCO::measure()
     } else {
         sensorCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
     }
+
+
 
     this->co.raw_value = (sensorCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
     this->co.adj_value = (this->co.slope * this->co.raw_value) + this->co.zero;
