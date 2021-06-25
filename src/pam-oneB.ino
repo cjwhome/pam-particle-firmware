@@ -171,6 +171,7 @@ int esp_wroom_en = D7;
 int blower_en = D2;
 int sound_input = B5;  //ozone monitor's voltage output is connected to this input
 int co2_en = C5;        //enables the CO2 sensor power
+uint32_t buttonOffTime = 0;
 
 
 
@@ -732,6 +733,8 @@ void setup()
 
     String init_log; //intialization error log
 
+    
+
 
     setADCSampleTime(ADC_SampleTime_480Cycles);
     //setup i/o
@@ -768,6 +771,7 @@ void setup()
     }
     //if user presses power button during operation, reset and it will go to low power mode
     attachInterrupt(D4, System.reset, RISING);
+
     if(digitalRead(D4)){
       goToSleep();
     }
@@ -1023,11 +1027,19 @@ void locationCallback(float lat, float lon, float accuracy) {
 void loop() {
 
     if(car_topper_power_en && powerCheck.getHasPower() == 0){
-        
-        goToSleepBattery();
+        if (buttonOffTime == 0)
+        {
+            startCarTopperTimer();
+        }
+        else if(millis() - buttonOffTime > 30*60000UL)
+        {
+            goToSleepBattery();
+        }
     }
-    //Serial.println("locator loop");
-   // locator.loop();
+    else if (buttonOffTime > 0 && powerCheck.getHasPower() == 1)
+    {
+        buttonOffTime = 0;
+    }
     
 
     if(output_only_particles == 1){
@@ -3720,6 +3732,11 @@ void serialGetUpperLimit(void){
     }else{
         Serial.println("\n\rIncorrect password!");
     }
+}
+
+void startCarTopperTimer()
+{
+    buttonOffTime = millis();
 }
 
 void readAlpha1Constantly(void){
