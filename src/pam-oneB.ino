@@ -123,7 +123,7 @@ T6713 t6713;
 TPHFusion tph_fusion(0x27, false);
 Plantower plantower(Serial4);
 PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
-TakeMeasurements take_a_measurement;
+TakeMeasurements take_a_measurement(&t6713, &tph_fusion, &plantower, &pamco);
 
 
 FuelGauge fuel;
@@ -717,7 +717,7 @@ void loop() {
     readGpsStream();
 
 
-    take_a_measurement.readCO2(t6713);
+    take_a_measurement.readCO2();
     //take_a_measurement.readCO2(&t6713);
     CO2_float = take_a_measurement.get_co2();
 
@@ -1183,7 +1183,7 @@ void outputParticles(){
     while(!Serial.available()){
         readGpsStream();
 
-        take_a_measurement.readCO2(t6713);
+        take_a_measurement.readCO2();
         CO2_float = take_a_measurement.get_co2();
 
         //correct for altitude
