@@ -25,6 +25,8 @@
 #define SdSpi_h
 #include "SystemInclude.h"
 #include "SdFatConfig.h"
+
+#define USE_SPI_LIB_DMA 1
 //------------------------------------------------------------------------------
 /**
  * \class SdSpiBase

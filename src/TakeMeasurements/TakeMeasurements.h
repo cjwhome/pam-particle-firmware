@@ -8,24 +8,32 @@
 #ifndef __TAKE_MEASUREMENTS_H__
 #define __TAKE_MEASUREMENTS_H__
 
+#include"../Sensors/T6713/T6713.h"
+
 class TakeMeasurements {
 
-private:
-    TakeMeasurements();
-    ~TakeMeasurements();
-
-    void calculateAQI();
-    void readSound();
-    void getEspOzoneData();
-    void readCO2(T6713 t6713);
-    void readOzone();
+    private:
 
 
-public:
-    float air_quality_score;
-    float sound_average;
-    float ozone;
-    float co2;
+        float air_quality_score = 0;
+        float sound_average = 0;
+        float ozone = 0;
+        float co2 = 0;
+
+    public:
+        TakeMeasurements();
+        ~TakeMeasurements();
+
+        void calculateAQI();
+        void readSound();
+        void getEspOzoneData();
+        void readCO2(T6713 t6713);
+        void readOzone();
+
+        float get_air_quality_score();
+        float get_sound_average();
+        float get_ozone();
+        float get_co2();
 
 
 

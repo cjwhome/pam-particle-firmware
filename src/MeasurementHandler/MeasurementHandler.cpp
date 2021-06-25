@@ -9,6 +9,14 @@ MeasurementHandler::MeasurementHandler(T6713 T6713, TPHFusion Tph_fusion, Planto
     this->pamco = Pamco;
 }
 
+TakeMeasurements* TakeMeasurements::GetInstance(T6713 T6713, TPHFusion Tph_fusion, Plantower Plantower, PAMCO Pamco)
+{
+    if (instance == nullptr) {
+        instance = new TakeMeasurements(T6713, tph_fusion, Plantower, Pamco);
+    }
+    return instance;
+}
+
 void sendDatatoSdCard()
 {
     //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/

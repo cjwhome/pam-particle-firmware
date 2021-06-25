@@ -1,12 +1,32 @@
 #iclude "TakeMeasurements.h"
 
-TakeMeasurements::TakeMeasurements()
-{
+TakeMeasurements::TakeMeasurements() { }
 
+TakeMeasurements::~TakeMeasurements() {}
+
+float TakeMeasurements::get_air_quality_score()
+{
+  return this->air_quality_score;
+}
+
+float TakeMeasurements::get_sound_average()
+{
+  return this->sound_average;
+}
+
+float TakeMeasurements::get_ozone()
+{
+  return this->ozone;
+}
+
+float TakeMeasurements::get_co2()
+{
+  return this->co2;
 }
 
 
-void calculateAQI(void){
+
+void TakeMeasurements::calculateAQI(void){
     //Calculate humidity contribution to IAQ index
         // gas_reference = bme.gas_resistance/100;
     gas_reference = tph_fusion.voc->adj_value;
@@ -46,7 +66,7 @@ void calculateAQI(void){
 }
 
 //read sound from
-void readSound(void){
+void TakeMeasurements::readSound(void){
     int val;
     float sum = 0;
     float average = 0;
@@ -62,7 +82,7 @@ void readSound(void){
     this->sound_average;
 }
 
-void readOzone(void){
+void TakeMeasurements::readOzone(void){
     int tempValue = 0;
     if(ozone_analog_enabled){
         tempValue = analogRead(A0);  // read the analogPin for ozone voltage
@@ -81,7 +101,7 @@ void readOzone(void){
 }
 
 
-void getEspOzoneData(){
+void TakeMeasurements::getEspOzoneData(){
     float ozone_value = 0.0;
     String getOzoneData = "Z&";
     String recievedData = " ";
@@ -175,10 +195,13 @@ void getEspOzoneData(){
 }
 
 
-void readCO2(T6713 t6713){
+void TakeMeasurements::readCO2(T6713 t6713){
     t6713.measure();
     if (t6713.CO2.adj_value != 0 && t6713.CO2.adj_value != VALUE_UNKNOWN) {
-        CO2_float = t6713.CO2.adj_value;
+        this->co2 = t6713.CO2.adj_value;
     }
-    this->co2;
+    else 
+    {
+      this->co2 = 0;
+    }
 }

@@ -29,7 +29,6 @@ private:
 public:
 
 
-
 };
 
 #endif // __MEASUREMENT_HANDLER_H__

@@ -9,7 +9,7 @@
 #include "inttypes.h"
 #include "Particle.h"
 #include "PowerCheck.h"
-#include "SdFat.h"
+#include "../lib/SdFat/src/SdFat/SdFat.h"
 #include "HIH61XX.h"
 #include "google-maps-device-locator.h"
 #include "CellularHelper.h"
@@ -25,7 +25,7 @@
 #include "Sensors/TPHFusion/TPHFusion.h"
 #include "Sensors/Plantower/Plantower.h"
 #include "Sensors/PAMCO/PAMCO.h"
-#include "TakeMeasurements/TakeMeasurements.h/"
+#include "TakeMeasurements/TakeMeasurements.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -123,6 +123,7 @@ T6713 t6713;
 TPHFusion tph_fusion(0x27, false);
 Plantower plantower(Serial4);
 PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
+TakeMeasurements take_a_measurement;
 
 
 FuelGauge fuel;
@@ -175,8 +176,8 @@ int battery_threshold_enable;
 int CO_socket = 0;
 int google_location_en = 0;
 
-char geolocation_latitude[12] = "111.1111111";
-char geolocation_longitude[13] = "22.22222222";
+char geolocation_latitude[12] = "999.9999999";
+char geolocation_longitude[13] = "99.9999999";
 char geolocation_accuracy[6] = "255.0";
 
 //used for averaging
@@ -555,8 +556,8 @@ void check_wifi_file(void){
 
 void setup()
 {
-    TakeMeasurements take_a_measurement = new TakeMeasurements();
-    MeasurementHandler send_measurement = new MeasurementHandler();
+    //TakeMeasurements take_a_measurement = new TakeMeasurements();
+    //MeasurementHandler * send_measurement = new MeasurementHandler::GetInstance(&t6713, &tph_fusion, &plantower, &pamco);
     Wire.begin();
 
 
@@ -715,8 +716,10 @@ void loop() {
     }
     readGpsStream();
 
-    take_a_measurement->readCO2();
-    CO2_float = take_a_measurement->co2;
+
+    take_a_measurement.readCO2(t6713);
+    //take_a_measurement.readCO2(&t6713);
+    CO2_float = take_a_measurement.get_co2();
 
 
     //correct for altitude
@@ -737,7 +740,7 @@ void loop() {
 
 
     if(ozone_enabled){
-        take_a_measurement->readOzone();
+        take_a_measurement.readOzone();
     }
 
     //getEspWifiStatus();
@@ -773,8 +776,8 @@ void loop() {
     }
 
 
-    send_measurement->output_data_to_esp();
-    send_measurement->output_data_to_sd();
+    //send_measurement->output_data_to_esp();
+    //send_measurement->output_data_to_sd();
 
 }
 
@@ -1180,8 +1183,8 @@ void outputParticles(){
     while(!Serial.available()){
         readGpsStream();
 
-        take_a_measurement->readCO2();
-        CO2_float = take_a_measurement->co2;
+        take_a_measurement.readCO2(t6713);
+        CO2_float = take_a_measurement.get_co2();
 
         //correct for altitude
         float pressure_correction = tph_fusion.pressure->adj_value;
