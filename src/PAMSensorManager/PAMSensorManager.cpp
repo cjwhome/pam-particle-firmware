@@ -77,6 +77,9 @@ void PAMSensorManager::loop() {
         sensor->loop();
     }
 
+    // Creating a fixed rate at which we read and print the measurement
+    // This rate is determined by our measurement_period_ms, and can be changed at runtime
+    // If we wanted to output data as fast as possible, we would just set that value to 0
     if (millis() > (this->last_loop_ms + this->measurement_period_ms)) {
         this->last_loop_ms = millis();
 

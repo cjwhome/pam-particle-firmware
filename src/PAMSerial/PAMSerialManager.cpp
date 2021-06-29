@@ -53,12 +53,16 @@ void PAMSerialManager::clear_data()
 
 void PAMSerialManager::loop()
 {
-    if (this->active_responders.size() == 0) return;
+    if (this->active_responders.size() == 0) {
+        Serial.println("No active responsers!");
+        return;
+    };
 
     PAMSerialResponder *responder = this->responders[this->active_responders.top()];
     uint16_t rd = this->active_responders.size() - 1;
     while (this->serial->available() > 0) {
         uint8_t new_byte = this->serial->read();
+        Serial.printf("Received byte: 0x%X\n\r", new_byte);
         if (responder->getReadType() == PAMSerialResponder::BYTE) {
             PAMSerial.printf(rd, "onData::byte(%d,,)\n\r", rd);
             responder->onData(rd, &new_byte, 1);

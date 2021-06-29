@@ -260,7 +260,7 @@ uint16_t rd = 0;
 
 void testSerialOnData(uint16_t rd, uint8_t *data, uint8_t length) 
 {
-    PAMSerial.printf(rd, "Main received Data!\n\r");
+    Serial.printf("Main received Data!\n\r");
     if (length == 1 && *data == 'm') {
         PAMSerial.pushResponder(serial_menu_rd);
     }
@@ -852,8 +852,8 @@ void loop() {
         }
         CO2_float *= pressure_correction;
     }else{
-        Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
-        Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
+        // Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
+        // Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
 
     }
 
@@ -876,19 +876,19 @@ void loop() {
     }
 
     // if (Serial.available() > 0) {
-    if (false) {
-        // read the incoming byte:
-        incomingByte = Serial.read();
-        if(debugging_enabled){
-            Serial.print("incomming byte:");
-            Serial.println(incomingByte);
+    // if (false) {
+    //     // read the incoming byte:
+    //     incomingByte = Serial.read();
+    //     if(debugging_enabled){
+    //         Serial.print("incomming byte:");
+    //         Serial.println(incomingByte);
 
-        }
-        Serial.println(incomingByte);
-        if(incomingByte == 'm'){
-          serialMenu();
-        }
-    }
+    //     }
+    //     Serial.println(incomingByte);
+    //     if(incomingByte == 'm'){
+    //       serialMenu();
+    //     }
+    // }
 
     if(serial_cellular_enabled){
         status_word.status_int |= 0x01;
