@@ -156,8 +156,8 @@ void TakeMeasurements::getEspOzoneData(){
 
 void TakeMeasurements::readCO2(){
     this->t6713->measure();
-    if (this->t6713.CO2.adj_value != 0 && this->t6713->CO2->adj_value != VALUE_UNKNOWN) {
-        this->co2 = this->t6713->CO2->adj_value;
+    if (this->t6713->CO2.adj_value != 0 && this->t6713->CO2.adj_value != VALUE_UNKNOWN) {
+        this->co2 = this->t6713->CO2.adj_value;
     }
     else 
     {
