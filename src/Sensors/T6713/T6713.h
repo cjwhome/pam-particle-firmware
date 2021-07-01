@@ -20,7 +20,7 @@ public:
 
     PAMSpecie CO2;
 
-    Telaire_T6713 _t6713;
+    Telaire_T6713 t6713;
 
 };
 

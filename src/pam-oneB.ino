@@ -427,7 +427,6 @@ void readStoredVars(void){
     //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
 
 
-
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
     return ;
     if(DEVICE_id == -1){
@@ -2201,7 +2200,7 @@ void serialMenu(){
             abc_logic_enabled = 0;
             EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
             // t6713.disableABCLogic();
-            t6713._t6713.disableABCLogic();
+            t6713.t6713.disableABCLogic();
         }else{
             Serial.println("ABC logic already disabled");
         }
@@ -2212,7 +2211,7 @@ void serialMenu(){
             abc_logic_enabled = 1;
             EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
             // t6713.enableABCLogic();
-            t6713._t6713.enableABCLogic();
+            t6713.t6713.enableABCLogic();
 
         }else{
             Serial.println("ABC logic already enabled");
@@ -2245,7 +2244,7 @@ void serialMenu(){
     }else if(incomingByte == 'V'){
         Serial.println("Reseting the CO2 sensor");
         // t6713.resetSensor();
-        t6713._t6713.resetSensor();
+        t6713.t6713.resetSensor();
     }else if(incomingByte == '1'){
         serialGetLowerLimit();
     }else if(incomingByte == '2'){
@@ -2339,7 +2338,7 @@ void serialMenu(){
         //calibrate CO2 sensor
         //if(debugging_enabled){
             // t6713.calibrate(1);
-            t6713._t6713.calibrate(1);
+            t6713.t6713.calibrate(1);
         //}else{
          //   t6713.calibrate(0);
         //}
