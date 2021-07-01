@@ -704,78 +704,146 @@ void setup()
 }
 
 void loop() {
-
     PAMSensorManager::GetInstance()->loop();
     PAMSerial.loop();
 
-
-    if(output_only_particles == 1){
-        outputParticles();
-    }
-    readGpsStream();
-
-
+    Serial.print("This is the device Id: ");
+    Serial.println(DEVICE_id);
+    Serial.print("This is the CO: ");
+    Serial.println(pamco.co.adj_value);
+    Serial.print("This is the CO2: ");
     take_a_measurement.readCO2();
-    //take_a_measurement.readCO2(&t6713);
-    CO2_float = take_a_measurement.get_co2();
+    Serial.println(take_a_measurement.get_co2());
+    Serial.print("This is the VOC: ");
+    take_a_measurement.calculateAQI();
+    Serial.println(take_a_measurement.get_air_quality_score());
+    Serial.print("This is PM1: ");
+    Serial.println(plantower.pm1.adj_value);
+    Serial.print("This is PM2_5: ");
+    Serial.println(plantower.pm2_5.adj_value);
+    Serial.print("This is PM10: ");
+    Serial.println(plantower.pm10.adj_value);
+    Serial.print("This is the temp: ");
+    Serial.println(tph_fusion.temperature->adj_value);
+    Serial.print("This is the humidity: ");
+    Serial.println(tph_fusion.humidity->adj_value);
+    Serial.print("This is the ozone: ");
+    take_a_measurement.readOzone();
+    Serial.println(take_a_measurement.get_ozone());
+    Serial.print("This is the battery: ");
+    Serial.println(fuel.getSoC());
+    Serial.print("This is the sound: ");
+    take_a_measurement.readSound();
+    Serial.println(take_a_measurement.get_sound_average());
+    readGpsStream();
+    Serial.print("This is the lat: ");
+    Serial.println(String(gps.get_latitude()));
+    Serial.print("This is the long: ");
+    Serial.println(String(gps.get_longitude()));
+    Serial.print("this is the horizontal dillution: ");
+    Serial.println(gps.get_horizontalDillution());
+    Serial.print("This is the time: ");
+    Serial.println(Time.now());
+
+    delay(1000);
 
 
-    //correct for altitude
-    // float pressure_correction = bme.pressure/100;
-    float pressure_correction = tph_fusion.pressure->adj_value;
-    if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
-        pressure_correction /= SEALEVELPRESSURE_HPA;
-        if(debugging_enabled){
-            Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
-
-        }
-        CO2_float *= pressure_correction;
-    }else{
-        Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
-        Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
-
-    }
 
 
-    if(ozone_enabled){
-        take_a_measurement.readOzone();
-    }
-
-    //getEspWifiStatus();
-
-    // Ask Craig or david about this. Where is this sample_counter shown in the esp app? I can't find this counter. I think it is not needed.
-    sample_counter = ++sample_counter;
-    if(sample_counter == 99)    {
-          sample_counter = 0;
-    }
-
-    if(serial_cellular_enabled){
-        status_word.status_int |= 0x01;
-      if (Particle.connected() == false && tried_cellular_connect == false) {
-        tried_cellular_connect = true;
-          Cellular.on();
-          Particle.connect();
-      }else if(Particle.connected() == true){  //this means that it is already connected
-        tried_cellular_connect = false;
-      }
-    }else{
-      if (Particle.connected() == true) {
-          Cellular.off();
-      }
-    }
-
-    //check power
-    powerCheck.loop();
-
-	//Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
-    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
-        Serial.println("Going to sleep because battery is below 20% charge");
-        goToSleepBattery();
-    }
 
 
-    //send_measurement->output_data_to_esp();
-    //send_measurement->output_data_to_sd();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // PAMSensorManager::GetInstance()->loop();
+    // PAMSerial.loop();
+
+
+    // if(output_only_particles == 1){
+    //     outputParticles();
+    // }
+    // readGpsStream();
+
+
+    // take_a_measurement.readCO2();
+    // //take_a_measurement.readCO2(&t6713);
+    // CO2_float = take_a_measurement.get_co2();
+
+
+    // //correct for altitude
+    // // float pressure_correction = bme.pressure/100;
+    // float pressure_correction = tph_fusion.pressure->adj_value;
+    // if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
+    //     pressure_correction /= SEALEVELPRESSURE_HPA;
+    //     if(debugging_enabled){
+    //         Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
+
+    //     }
+    //     CO2_float *= pressure_correction;
+    // }else{
+    //     Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
+    //     Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
+
+    // }
+
+
+    // if(ozone_enabled){
+    //     take_a_measurement.readOzone();
+    // }
+
+    // //getEspWifiStatus();
+
+    // // Ask Craig or david about this. Where is this sample_counter shown in the esp app? I can't find this counter. I think it is not needed.
+    // sample_counter = ++sample_counter;
+    // if(sample_counter == 99)    {
+    //       sample_counter = 0;
+    // }
+
+    // if(serial_cellular_enabled){
+    //     status_word.status_int |= 0x01;
+    //   if (Particle.connected() == false && tried_cellular_connect == false) {
+    //     tried_cellular_connect = true;
+    //       Cellular.on();
+    //       Particle.connect();
+    //   }else if(Particle.connected() == true){  //this means that it is already connected
+    //     tried_cellular_connect = false;
+    //   }
+    // }else{
+    //   if (Particle.connected() == true) {
+    //       Cellular.off();
+    //   }
+    // }
+
+    // //check power
+    // powerCheck.loop();
+
+	// //Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
+    // if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
+    //     Serial.println("Going to sleep because battery is below 20% charge");
+    //     goToSleepBattery();
+    // }
+
+
+    // //send_measurement->output_data_to_esp();
+    // //send_measurement->output_data_to_sd();
 
 }
 
