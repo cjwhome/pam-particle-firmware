@@ -319,8 +319,6 @@ void changeFrequency(void);
 void sendPacket(byte *packet, byte len);
 void sendPacket(byte *packet, byte len);
 
-//google api callback
-void locationCallback(float lat, float lon, float accuracy);
 
 
 
