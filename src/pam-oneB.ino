@@ -429,6 +429,7 @@ void readStoredVars(void){
 
 
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
+    return ;
     if(DEVICE_id == -1){
         DEVICE_id = 1555;
         writeDefaultSettings();
@@ -643,6 +644,9 @@ void setup()
 {
     Wire.begin();
 
+    //initialize main serial port for debug output
+    Serial.begin(9600);
+
 
     status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
@@ -663,7 +667,7 @@ void setup()
     pinMode(CO2_EN, OUTPUT);
 
     //read all stored variables (calibration parameters)
-    // readStoredVars();
+     readStoredVars();
 
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
@@ -732,8 +736,6 @@ void setup()
 
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
-    //initialize main serial port for debug output
-    Serial.begin(9600);
 
     rd = PAMSerial.registerResponder(new TestSerialConnector());
     PAMSerial.pushResponder(rd);

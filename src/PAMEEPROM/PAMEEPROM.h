@@ -36,10 +36,12 @@ public:
         if (is_uninitialized) {
             // return default_value;
             target = default_value;
+            Serial.println("Using default EEPROM value");
         } else {
             // return value;
             // return to_bytes.value;
             target = to_bytes.value;
+            Serial.println("Using existing EEPROM value");
         }
     }
     
