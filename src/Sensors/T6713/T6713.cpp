@@ -34,9 +34,6 @@ bool T6713::measure() {
         return false;
     }
 
-    Serial.print("This is the raw measurement: ");
-    Serial.println(measurement);
-
     this->CO2.raw_value = measurement;
     this->CO2.adj_value = (this->CO2.slope * measurement) + this->CO2.zero;
 

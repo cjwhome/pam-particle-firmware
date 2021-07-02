@@ -123,6 +123,7 @@ int Telaire_T6713::readPPM()
   #endif
 
   queryPPM();
+  delay(10);    //test delay
   Wire.requestFrom(ADDR_6713, 4);    // request 6 bytes from slave device
 
    while(Wire.available() == 0);
