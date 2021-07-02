@@ -426,7 +426,6 @@ void readStoredVars(void){
     //just changing the rh calibration for temporary!! -- remove me!!
     //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
 
-    EEPROM.put(DEVICE_ID_MEM_ADDRESS, 1080);
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
     return ;
     if(DEVICE_id == -1){
@@ -645,8 +644,6 @@ void setup()
 
     //initialize main serial port for debug output
     Serial.begin(9600);
-
-    EEPROM.clear();
 
 
     status_word.status_int  = 0;
