@@ -1,6 +1,6 @@
 #include "TPHFusion.h"
 
-TPHFusion::TPHFusion(uint8_t hih_address, bool _hih_enabled)
+TPHFusion::TPHFusion(uint8_t hih_address, bool _hih_enabled) : air_quality_score(0x00, 0x00)
 {
     this->name = "Temp/Press/RH Fusion";
 
@@ -55,7 +55,7 @@ bool TPHFusion::measure()
     if (this->hih_enabled) {
         success &= this->hih8120->measure();
     }
-
+    calculateAQI();
     return success;
 }
 
@@ -103,4 +103,40 @@ bool TPHFusion::disable_hih()
     this->species.push_back(this->voc);
 
     return this->hih8120->stop();
+}
+
+
+
+void TPHFusion::calculateAQI(){
+    float hum_score;
+    float gas_reference = 250000;
+    float hum_reference = 40; 
+    //Calculate humidity contribution to IAQ index
+    gas_reference = this->voc->adj_value;
+
+        float current_humidity = this->humidity->adj_value;
+
+    if (current_humidity >= 38 && current_humidity <= 42)
+        hum_score = 0.25*100; // Humidity +/-5% around optimum
+    else
+    { //sub-optimal
+        if (current_humidity < 38)
+            hum_score = 0.25/hum_reference*current_humidity*100;
+        else
+        {
+            hum_score = ((-0.25/(100-hum_reference)*current_humidity)+0.416666)*100;
+        }
+    }
+
+    //Calculate gas contribution to IAQ index
+
+    if (gas_reference > gas_upper_limit) gas_reference = gas_upper_limit;
+    if (gas_reference < gas_lower_limit) gas_reference = gas_lower_limit;
+    float gas_score = (0.75/(gas_upper_limit-gas_lower_limit)*gas_reference -(gas_lower_limit*(0.75/(gas_upper_limit-gas_lower_limit))))*100;
+
+    //Combine results for the final IAQ index value (0-100% where 100% is good quality air)
+    this->air_quality_score.adj_value = hum_score + gas_score;
+
+    this->air_quality_score.accumulated_value += hum_score+ gas_score;
+    this->air_quality_score.number_of_measures++;
 }

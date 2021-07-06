@@ -31,7 +31,11 @@ bool T6713::measure() {
     }
 
     this->CO2.raw_value = measurement;
-    this->CO2.adj_value = (this->CO2.slope * measurement) + this->CO2.zero;
+    float adj_value = (this->CO2.slope * measurement) + this->CO2.zero;
+    this->CO2.adj_value = adj_value;
+
+    this->CO2.accumulated_value += adj_value;
+    this->CO2.number_of_measures++;
 
     return true;
 }

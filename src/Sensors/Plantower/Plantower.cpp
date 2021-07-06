@@ -48,7 +48,11 @@ void Plantower::loop()
         if(this->buff[0] == 0x4d){
             if(this->verifyPacket(this->buff)){ //All units are ug/m^3
                 this->pm1.raw_value = (this->buff[3] << 8) + this->buff[4];
-                this->pm1.adj_value = (this->pm1.slope * this->pm1.raw_value) + this->pm1.zero;
+                float adj_value = (this->pm1.slope * this->pm1.raw_value) + this->pm1.zero;
+                this->pm1.adj_value = adj_value;
+
+                this->pm1.accumulated_value += adj_value;
+                this->pm1.number_of_measures++;
 
                 float pm2_5_correction_factor = 1;
                 std::vector<PAMSpecie *> *humidity_species = PAMSensorManager::GetInstance()->findSpeciesForName("humidity");
@@ -59,10 +63,18 @@ void Plantower::loop()
                 free(humidity_species);
 
                 this->pm2_5.raw_value = (this->buff[5] << 8) + this->buff[6];
-                this->pm2_5.adj_value = (this->pm2_5.slope * (this->pm2_5.raw_value / pm2_5_correction_factor)) + this->pm2_5.zero;
+                adj_value = (this->pm2_5.slope * (this->pm2_5.raw_value / pm2_5_correction_factor)) + this->pm2_5.zero;
+                this->pm2_5.adj_value = adj_value;
+
+                this->pm2_5.accumulated_value += adj_value;
+                this->pm2_5.number_of_measures++;
 
                 this->pm10.raw_value = (this->buff[7] << 8) + this->buff[8];
-                this->pm10.adj_value = (this->pm10.slope * this->pm10.raw_value) + this->pm10.zero;
+                adj_value = (this->pm10.slope * this->pm10.raw_value) + this->pm10.zero;
+                this->pm10.adj_value = adj_value;
+
+                this->pm10.accumulated_value += adj_value;
+                this->pm10.number_of_measures++;
             }
         }
     } else {

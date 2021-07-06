@@ -55,16 +55,32 @@ bool BME680::measure()
     }
 
     this->temperature.raw_value = this->_bme680.temperature;
-    this->temperature.adj_value = (this->temperature.slope * this->temperature.raw_value) + this->temperature.zero;
+    float adj_value = (this->temperature.slope * this->temperature.raw_value) + this->temperature.zero;
+    this->temperature.adj_value = adj_value;
+
+    this->temperature.accumulated_value += adj_value;
+    this->temperature.number_of_measures++;
 
     this->pressure.raw_value = this->_bme680.pressure;
-    this->pressure.adj_value = (this->pressure.slope * (this->pressure.raw_value / 100)) + this->pressure.zero;
+    adj_value = (this->pressure.slope * (this->pressure.raw_value / 100)) + this->pressure.zero;
+    this->pressure.adj_value = adj_value;
+
+    this->pressure.accumulated_value += adj_value;
+    this->pressure.number_of_measures++;
 
     this->humidity.raw_value = this->_bme680.humidity;
-    this->humidity.adj_value = (this->humidity.slope * this->humidity.raw_value) + this->humidity.zero;
+    adj_value = (this->humidity.slope * this->humidity.raw_value) + this->humidity.zero;
+    this->humidity.adj_value = adj_value;
+
+    this->humidity.accumulated_value += adj_value;
+    this->humidity.number_of_measures++;
 
     this->voc.raw_value = this->_bme680.gas_resistance;
-    this->voc.adj_value = (this->voc.slope * this->voc.raw_value) * this->voc.zero;
+    adj_value = (this->voc.slope * this->voc.raw_value) * this->voc.zero;
+    this->voc.adj_value = adj_value;
+
+    this->voc.accumulated_value += adj_value;
+    this->voc.number_of_measures++;
 
     return true;
 }

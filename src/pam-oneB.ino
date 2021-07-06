@@ -19,13 +19,15 @@
 
 #include "PAMSerial/PAMSerial.h"
 #include "PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
+#include "PAMSerial/PAMSerialEditEEPROMValue/PAMSerialEditEEPROMValue.h"
 
 #include "PAMSensorManager/PAMSensorManager.h"
 #include "Sensors/T6713/T6713.h"
 #include "Sensors/TPHFusion/TPHFusion.h"
 #include "Sensors/Plantower/Plantower.h"
 #include "Sensors/PAMCO/PAMCO.h"
-#include "TakeMeasurements/TakeMeasurements.h"
+//#include "Sensors/108L/108L.h"
+#include "Sensors/Practice/practice.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -123,7 +125,11 @@ T6713 t6713;
 TPHFusion tph_fusion(0x27, false);
 Plantower plantower(Serial4);
 PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
-TakeMeasurements take_a_measurement(&t6713, &tph_fusion, &plantower, &pamco);
+//PAM_108L pam_108L();
+//PRACTICE practice(ADS1115_1_ADDR, LMP91000_1_EN);
+
+
+time_t watch_time;
 
 
 FuelGauge fuel;
@@ -169,7 +175,6 @@ int temperature_units = 0;
 int output_only_particles = 0;
 int new_temperature_sensor_enabled = 0;
 int hih8120_enabled = 0;
-int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
 int battery_threshold_enable;
@@ -180,19 +185,9 @@ char geolocation_latitude[12] = "999.9999999";
 char geolocation_longitude[13] = "99.9999999";
 char geolocation_accuracy[6] = "255.0";
 
-//used for averaging
-float CO_sum = 0;
-float CO2_sum = 0;
-float O3_sum = 0;
-
-float PM25_sum = 0;
-float PM10_sum = 0;
-int measurement_count = 0;
-double sound_average;
+int averaging_time = 0;
 
 
-//calibration parameters
-int ozone_offset;
 int gas_lower_limit = 1200;   // Bad air quality limit
 int gas_upper_limit = 50000;  // Good air quality limit
 int measurements_to_average = 0;
@@ -342,6 +337,7 @@ void readStoredVars(void){
 
 
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
+    return ;
     if(DEVICE_id == -1){
         DEVICE_id = 1555;
         writeDefaultSettings();
@@ -392,8 +388,6 @@ void readStoredVars(void){
     EEPROM.get(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
     EEPROM.get(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
     EEPROM.get(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
-    EEPROM.get(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
-    EEPROM.get(OZONE_OFFSET_MEM_ADDRESS, ozone_offset);
     EEPROM.get(MEASUREMENTS_TO_AVG_MEM_ADDRESS, measurements_to_average);
     EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
@@ -554,8 +548,6 @@ void check_wifi_file(void){
 
 void setup()
 {
-    //TakeMeasurements take_a_measurement = new TakeMeasurements();
-    //MeasurementHandler * send_measurement = new MeasurementHandler::GetInstance(&t6713, &tph_fusion, &plantower, &pamco);
     Wire.begin();
 
 
@@ -578,7 +570,7 @@ void setup()
     pinMode(CO2_EN, OUTPUT);
 
     //read all stored variables (calibration parameters)
-    // readStoredVars();
+    readStoredVars();
 
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
@@ -687,12 +679,16 @@ void setup()
 
     enableContinuousGPS();
 
+    PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
+
     PAMSensorManager *manager = PAMSensorManager::GetInstance();
     manager->addSensor(&t6713);
     manager->addSensor(&tph_fusion);
     manager->addSensor(&plantower);
     manager->addSensor(&pamco);
+    manager->addSensor(&pam_108L);
     serial_menu.addResponder(PAMSensorManager::GetInstance()->serial_menu_rd, "Sensor Settings");
+    serial_menu.addResponder(averaging_measurement, "Set Averaging Time (seconds)");
 
     char *csv_header = manager->csvHeader();
     Serial.println(csv_header);
@@ -701,49 +697,68 @@ void setup()
     
     Log.info("System version: %s", (const char*)System.version());
 
+    watch_time = Time.now();
+
 }
 
 void loop() {
+    if (Time.now() > watch_time+averaging_time)
+    {
+        Serial.println("This is the accumulated CO: ");
+        Serial.println(pamco.co.accumulated_value);
+        Serial.println("Number of points: ");
+        Serial.println(pamco.co.number_of_measures);
+        Serial.println(pamco.co.averaged_value());
+        watch_time = Time.now();
+    }
+
+
     PAMSensorManager::GetInstance()->loop();
     PAMSerial.loop();
+    // Serial.println("Regular co: ");
+    // Serial.println(pamco.co.adj_value);
+    // Serial.println("Accumulated CO: ");
+    // Serial.println(pamco.co.accumulated_value);
+    // Serial.println("Number of points: ");
+    // Serial.println(pamco.co.number_of_measures);
 
-    Serial.print("This is the device Id: ");
-    Serial.println(DEVICE_id);
-    Serial.print("This is the CO: ");
-    Serial.println(pamco.co.adj_value);
-    Serial.print("This is the CO2: ");
-    take_a_measurement.readCO2();
-    Serial.println(take_a_measurement.get_co2());
-    Serial.print("This is the VOC: ");
-    take_a_measurement.calculateAQI();
-    Serial.println(take_a_measurement.get_air_quality_score());
-    Serial.print("This is PM1: ");
-    Serial.println(plantower.pm1.adj_value);
-    Serial.print("This is PM2_5: ");
-    Serial.println(plantower.pm2_5.adj_value);
-    Serial.print("This is PM10: ");
-    Serial.println(plantower.pm10.adj_value);
-    Serial.print("This is the temp: ");
-    Serial.println(tph_fusion.temperature->adj_value);
-    Serial.print("This is the humidity: ");
-    Serial.println(tph_fusion.humidity->adj_value);
-    Serial.print("This is the ozone: ");
-    take_a_measurement.readOzone();
-    Serial.println(take_a_measurement.get_ozone());
-    Serial.print("This is the battery: ");
-    Serial.println(fuel.getSoC());
-    Serial.print("This is the sound: ");
-    take_a_measurement.readSound();
-    Serial.println(take_a_measurement.get_sound_average());
-    readGpsStream();
-    Serial.print("This is the lat: ");
-    Serial.println(String(gps.get_latitude()));
-    Serial.print("This is the long: ");
-    Serial.println(String(gps.get_longitude()));
-    Serial.print("this is the horizontal dillution: ");
-    Serial.println(gps.get_horizontalDillution());
-    Serial.print("This is the time: ");
-    Serial.println(Time.now());
+    // Serial.print("This is the device Id: ");
+    // Serial.println(DEVICE_id);
+    // Serial.print("This is the CO: ");
+    // Serial.println(pamco.co.adj_value);
+    // Serial.print("This is the CO2: ");
+    // take_a_measurement.readCO2();
+    // Serial.println(take_a_measurement.get_co2());
+    // Serial.print("This is the VOC: ");
+    // take_a_measurement.calculateAQI();
+    // Serial.println(take_a_measurement.get_air_quality_score());
+    // Serial.print("This is PM1: ");
+    // Serial.println(plantower.pm1.adj_value);
+    // Serial.print("This is PM2_5: ");
+    // Serial.println(plantower.pm2_5.adj_value);
+    // Serial.print("This is PM10: ");
+    // Serial.println(plantower.pm10.adj_value);
+    // Serial.print("This is the temp: ");
+    // Serial.println(tph_fusion.temperature->adj_value);
+    // Serial.print("This is the humidity: ");
+    // Serial.println(tph_fusion.humidity->adj_value);
+    // Serial.print("This is the ozone: ");
+    // take_a_measurement.readOzone();
+    // Serial.println(take_a_measurement.get_ozone());
+    // Serial.print("This is the battery: ");
+    // Serial.println(fuel.getSoC());
+    // Serial.print("This is the sound: ");
+    // take_a_measurement.readSound();
+    // Serial.println(take_a_measurement.get_sound_average());
+    // readGpsStream();
+    // Serial.print("This is the lat: ");
+    // Serial.println(String(gps.get_latitude()));
+    // Serial.print("This is the long: ");
+    // Serial.println(String(gps.get_longitude()));
+    // Serial.print("this is the horizontal dillution: ");
+    // Serial.println(gps.get_horizontalDillution());
+    // Serial.print("This is the time: ");
+    // Serial.println(Time.now());
 
     delay(1000);
 
@@ -776,16 +791,7 @@ void loop() {
     // PAMSensorManager::GetInstance()->loop();
     // PAMSerial.loop();
 
-
-    // if(output_only_particles == 1){
-    //     outputParticles();
-    // }
     // readGpsStream();
-
-
-    // take_a_measurement.readCO2();
-    // //take_a_measurement.readCO2(&t6713);
-    // CO2_float = take_a_measurement.get_co2();
 
 
     // //correct for altitude
@@ -1222,144 +1228,6 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
-
-
-/***start of all plantower functions***/
-
-void outputParticles(){
-    union{
-	       double myDouble;
-	       unsigned char bytes[sizeof(double)];
-    } doubleBytes;
-    //doubleBytes.myDouble = double;
-    //
-
-    //used for converting float to bytes for measurement value
-    union {
-        float myFloat;
-        unsigned char bytes[4];
-    } floatBytes;
-
-    //used for converting word to bytes for lat and longitude
-    union {
-        int16_t myWord;
-        unsigned char bytes[2];
-    }wordBytes;
-
-    while(!Serial.available()){
-        readGpsStream();
-
-        take_a_measurement.readCO2();
-        CO2_float = take_a_measurement.get_co2();
-
-        //correct for altitude
-        float pressure_correction = tph_fusion.pressure->adj_value;
-        if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
-            pressure_correction /= SEALEVELPRESSURE_HPA;
-            CO2_float *= pressure_correction;
-        }
-
-        byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
-
-
-        for(int i=0; i<5; i++){
-
-            //************Fill the ble output array**********************//
-            //Serial.printf("making array[%d]\n", i);
-            //byte 0 - version
-            ble_output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
-
-            //bytes 1,2 - Device ID
-            //DEVICE_id = 555;
-            wordBytes.myWord = DEVICE_id;
-            ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            //byte 3 - Measurement number
-            ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
-
-            //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
-            //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
-            //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
-            /*
-            0-battery
-            1-PM01Value
-            2-PM2_5Value
-            3-PM10Value
-
-
-            */
-
-            if(i == 0){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
-                floatBytes.myFloat = fuel.getSoC();
-            }else if(i == 1){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-                // floatBytes.myFloat = PM01Value;
-                floatBytes.myFloat = plantower.pm1.adj_value;
-            }else if(i == 2){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-                // floatBytes.myFloat = corrected_PM_25;
-                floatBytes.myFloat = plantower.pm2_5.adj_value;
-            }else if(i == 3){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-                // floatBytes.myFloat = PM10Value;
-                floatBytes.myFloat = plantower.pm10.adj_value;
-            }else if(i == 4){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
-                floatBytes.myFloat = CO2_float;
-            }
-
-            //bytes 5,6,7,8 - Measurement Value
-            ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
-            ble_output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
-            ble_output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
-            ble_output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
-
-
-            //bytes 9-12 - latitude
-            wordBytes.myWord = gps.get_latitudeWhole();
-            ble_output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            wordBytes.myWord = gps.get_latitudeFrac();
-            ble_output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            //bytes 14-17 - longitude
-            wordBytes.myWord = gps.get_longitudeWhole();
-            ble_output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            wordBytes.myWord = gps.get_longitudeFrac();
-            ble_output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-
-            //byte 18 - east west and north south indicator
-            //  LSB 0 = East, LSB 1 = West
-            //  MSB 0 = South, MSB 1 = North
-            int northSouth = gps.get_nsIndicator();
-            int eastWest = gps.get_ewIndicator();
-
-            ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
-            ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
-
-            ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
-
-        }
-
-        //send start delimeter to ESP
-        Serial1.print("$");
-        //send the packaged data with # delimeters in between packets
-        Serial1.write(ble_output_array, 5*BLE_PAYLOAD_SIZE);
-
-        //send ending delimeter
-        Serial1.print("&");
-        sample_counter += 1;
-    }
-}
-
 void goToSleep(void){
     //Serial.println("Going to sleep:)");
     digitalWrite(POWER_LED_EN, LOW);
@@ -1550,25 +1418,7 @@ void serialMenu(){
         }
         EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled );
 
-    }else if(incomingByte == 'G'){      //enable analog reading of ozone and disable esp reading of ozone
-        if(ozone_analog_enabled == 1){
-            Serial.println("Analog reading of ozone already enabled");
-        }else{
-            ozone_analog_enabled = 1;
-            Serial.println("Analog reading of ozone now enabled");
-        }
-        EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
-
-    }else if(incomingByte == 'H'){      //disable analog reading of ozone and read from esp
-        if(ozone_analog_enabled == 0){
-            Serial.println("Digital reading of ozone already enabled");
-        }else{
-            ozone_analog_enabled = 0;
-            Serial.println("Digital reading of ozone now enabled");
-        }
-        EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
-
-    }else if(incomingByte == 'I'){      //disable analog reading of ozone and read from esp
+    }else if(incomingByte == 'I'){
         serialGetAverageTime();
     }else if(incomingByte == 'J'){
         resetESP();
@@ -2386,26 +2236,6 @@ void serialGetHumidityZero(void){
     }
 }
 
-void serialGetOzoneOffset(void){
-    Serial.println();
-    Serial.print("Current O3 analog offset:");
-    Serial.print(ozone_offset);
-    Serial.println(" ppb");
-    Serial.print("Enter new ozone offset\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -50 && tempValue < 50){
-        Serial.print("\n\rNew ozone offset: ");
-        Serial.println(tempValue);
-        ozone_offset = tempValue;
-        EEPROM.put(OZONE_OFFSET_MEM_ADDRESS, ozone_offset);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
 void serialGetLowerLimit(void){
     Serial.println();
     Serial.print("Current lower limit:");
@@ -2511,8 +2341,6 @@ void outputSerialMenuOptions(void){
     Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
     Serial.println("F:  Change temperature units to Farenheit");
-    Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
-    Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
     Serial.println("I:  Adjust frequency for uploading through cellular");
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");

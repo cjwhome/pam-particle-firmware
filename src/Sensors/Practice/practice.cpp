@@ -1,6 +1,6 @@
-#include "PAMCO.h"
+#include "practice.h"
 
-PAMCO::PAMCO(uint8_t _ads_address, uint8_t _enable_pin)
+PRACTICE::PRACTICE(uint8_t _ads_address, uint8_t _enable_pin)
     : co(CO_SLOPE_MEM_ADDRESS, CO_ZERO_MEM_ADDRESS)
 {
     this->name = "CO Sensor";
@@ -19,9 +19,9 @@ PAMCO::PAMCO(uint8_t _ads_address, uint8_t _enable_pin)
     this->species.push_back(&this->co);
 }
 
-PAMCO::~PAMCO() {} 
+PRACTICE::~PRACTICE() {} 
 
-bool PAMCO::start()
+bool PRACTICE::start()
 {
     digitalWrite(this->enable_pin, LOW);
     if(this->lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0) {
@@ -42,7 +42,7 @@ bool PAMCO::start()
     return true;
 }
 
-bool PAMCO::measure()
+bool PRACTICE::measure()
 {
     // Serial.print("lmp91000_1_en: ");
     // Serial.println(this->enable_pin);

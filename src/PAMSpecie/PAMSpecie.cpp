@@ -2,6 +2,10 @@
 
 PAMSpecie::PAMSpecie(uint16_t slope_address, uint16_t zero_address, float default_slope, float default_zero)
 {
+    if (slope_address == 0x00 && zero_address == 0x00)
+    {
+        return ;
+    }
     this->slope_responder = new PAMSerialEditEEPROMValue<float>(this->slope, slope_address, default_slope);
     this->slope_rd = this->serial_menu.addResponder(this->slope_responder, "Calibration Slope");
 
@@ -12,3 +16,10 @@ PAMSpecie::PAMSpecie(uint16_t slope_address, uint16_t zero_address, float defaul
 }
 
 PAMSpecie::~PAMSpecie() {}
+
+float PAMSpecie::averaged_value() { 
+    float averaged_number = this->accumulated_value/this->number_of_measures;
+    this->accumulated_value = 0;
+    this->number_of_measures = 0;
+    return averaged_number;
+};

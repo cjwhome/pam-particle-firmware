@@ -31,6 +31,7 @@ public:
 
     void becomesResponder(uint16_t rd, bool child_returned);
     void onData(uint16_t rd, uint8_t *data, uint8_t length);
+    void calculateAQI(void);
 
     bool enable_hih();
     bool disable_hih();
@@ -39,12 +40,15 @@ public:
     PAMSpecie *humidity = nullptr;
     PAMSpecie *pressure = nullptr;
     PAMSpecie *voc = nullptr;
+    PAMSpecie air_quality_score;
 
     BME680 bme680;
     HIH8120 *hih8120 = nullptr;
 
 private:
     bool hih_enabled = false;
+    int gas_upper_limit;
+    int gas_lower_limit;
 
 };
 

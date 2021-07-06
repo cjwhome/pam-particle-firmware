@@ -32,10 +32,19 @@ bool HIH8120::measure()
     }
     
     this->temperature.raw_value = this->_hih->temperature();
-    this->temperature.adj_value = (this->temperature.slope * this->temperature.raw_value) + this->temperature.zero;
+    float adj_value = (this->temperature.slope * this->temperature.raw_value) + this->temperature.zero;
+    this->temperature.adj_value = adj_value;
+
+    this->temperature.accumulated_value += adj_value;
+    this->temperature.number_of_measures++;
 
     this->humidity.raw_value = this->_hih->humidity();
-    this->humidity.adj_value = min(100, (this->humidity.slope * this->humidity.raw_value) + this->humidity.zero);
+    adj_value = min(100, (this->humidity.slope * this->humidity.raw_value) + this->humidity.zero);
+    this->humidity.adj_value = adj_value;
+
+    this->humidity.accumulated_value += adj_value;
+    this->humidity.number_of_measures++;
+
     return true;
 }
 

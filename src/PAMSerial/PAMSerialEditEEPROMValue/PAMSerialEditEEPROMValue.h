@@ -36,6 +36,11 @@ public:
         }
     }
 
+    uint16_t get_serial_handler_rd()
+    {
+        return serial_handler_rd;
+    }
+
 private:
     uint16_t eeprom_address;
     T *ptr = nullptr;

@@ -23,6 +23,7 @@
 #define HUMIDITY_PACKET_CONSTANT 'h'        //humidity as PERCENTAGE
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 #define DONT_ADVERTISE_CONSTANT '\0'
+#define OZONE_PACKET_CONSTANT 'O'           //Ozone
 
 #include "../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
 #include "../PAMSerial/PAMSerialEditEEPROMValue/PAMSerialEditEEPROMValue.h"
@@ -33,6 +34,8 @@ public:
     PAMSpecie(uint16_t slope_address, uint16_t zero_address, float default_slope = 1, float default_zero = 0);
     ~PAMSpecie();
 
+    virtual float averaged_value();
+
     char *name;
     char *units;
 
@@ -41,11 +44,13 @@ public:
 
     float raw_value = VALUE_UNKNOWN;
     float adj_value = VALUE_UNKNOWN;
+    uint16_t number_of_measures = 0;
+    float accumulated_value = 0;
 
     char packet_constant;
 
     uint16_t serial_menu_rd;
-
+    
 private:
     PAMSerialMenu serial_menu;
 

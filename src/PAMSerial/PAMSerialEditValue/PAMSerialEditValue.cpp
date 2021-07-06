@@ -43,6 +43,33 @@ void PAMSerialEditValue<float>::onData(uint16_t rd, uint8_t *data, uint8_t lengt
 }
 
 template<>
+void PAMSerialEditValue<int>::becomesResponder(uint16_t rd, bool child_returned)
+{
+    PAMSerial.printf(rd, "Current Value: %i\n\r", *this->ptr);
+    PAMSerial.println(rd, "Enter a new value ('x' to exit): ");
+}
+
+template<>
+void PAMSerialEditValue<int>::onData(uint16_t rd, uint8_t *data, uint8_t length)
+{
+    if (*data == 'x') {
+        PAMSerial.popResponder();
+    } else {
+        int temp = String((char *) data).toInt();
+        if (temp != 0 || (temp == 0 && data[0] == '0')) {
+            PAMSerial.printf(rd, "Setting new value to: %i\n\r", temp);
+            *(this->ptr) = temp;
+            if (this->callback != nullptr) {
+                this->callback(rd, this->ptr);
+            }
+            PAMSerial.popResponder();
+        } else {
+            PAMSerial.println(rd, "Could not read setting. Try again, or press 'x' to exit.");
+        }
+    }
+}
+
+template<>
 void PAMSerialEditValue<bool>::becomesResponder(uint16_t rd, bool child_returned)
 {
     PAMSerial.printf(rd, "Current value: ");
