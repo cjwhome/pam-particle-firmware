@@ -1,8 +1,4 @@
 
-#include <Adafruit_Sensor.h>
-#include "Adafruit_BME680.h"
-#include "Telaire_T6713.h"
-#include "LMP91000.h"
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
 #include "gps.h"
@@ -10,12 +6,9 @@
 #include "Particle.h"
 #include "PowerCheck.h"
 #include "../lib/SdFat/src/SdFat/SdFat.h"
-#include "HIH61XX.h"
-#include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 
 #include "Wiring.h"
-#include "Constants.h"
 
 #include "PAMSerial/PAMSerial.h"
 #include "PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
@@ -28,15 +21,10 @@
 #include "Sensors/PAMCO/PAMCO.h"
 #include "Sensors/108L/108L.h"
 
-GoogleMapsDeviceLocator locator;
-
 #define APP_VERSION 7
 #define BUILD_VERSION 14
 
 //define constants
-#define SEALEVELPRESSURE_HPA (1013.25)
-#define LOW_PRESSURE_LIMIT (100)
-#define HIGH_PRESSURE_LIMIT (1500)
 #define VOLTS_PER_UNIT (0.0008)   //3.3V/4096  3.3 is the adc reference voltage and the adc is 12 bits or 4096
 #define VOLTS_PER_PPB (0.0125)  //2.5V/200 ppb this is what you divide the voltage reading by to get ppb in ozone if the ozone monitor is set to 2.5V=200ppb
 
@@ -45,8 +33,7 @@ GoogleMapsDeviceLocator locator;
 #define TMP36_OFFSET 0.5
 #define TMP36_VPDC 0.01 //10mV per degree C
 
-//google maps API key:
-#define GOOGLE_API_KEY "AIzaSyAfgY0VX3KSMkVoIVvWAr9oVlT-AoQ68e0"
+
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
 #define sd_en 1
@@ -713,41 +700,41 @@ void loop() {
     PAMSensorManager::GetInstance()->loop();
     PAMSerial.loop();
 
-    Serial.print("This is the device Id: ");
-    Serial.println(DEVICE_id);
-    Serial.print("This is the CO: ");
-    Serial.println(pamco.co.adj_value);
-    Serial.print("This is the CO2: ");
-    Serial.println(t6713.CO2.adj_value);
-    Serial.print("This is the VOC: ");
-    Serial.println(tph_fusion.air_quality_score.adj_value);
-    Serial.print("This is PM1: ");
-    Serial.println(plantower.pm1.adj_value);
-    Serial.print("This is PM2_5: ");
-    Serial.println(plantower.pm2_5.adj_value);
-    Serial.print("This is PM10: ");
-    Serial.println(plantower.pm10.adj_value);
-    Serial.print("This is the temp: ");
-    Serial.println(tph_fusion.temperature->adj_value);
-    Serial.print("This is the humidity: ");
-    Serial.println(tph_fusion.humidity->adj_value);
-    if (pam_108L.ozone_enabled)
-    {
-        Serial.print("This is the ozone: ");
-        Serial.println(pam_108L.ozone.adj_value);
-    }
+    // Serial.print("This is the device Id: ");
+    // Serial.println(DEVICE_id);
+    // Serial.print("This is the CO: ");
+    // Serial.println(pamco.co.adj_value);
+    // Serial.print("This is the CO2: ");
+    // Serial.println(t6713.CO2.adj_value);
+    // Serial.print("This is the VOC: ");
+    // Serial.println(tph_fusion.air_quality_score.adj_value);
+    // Serial.print("This is PM1: ");
+    // Serial.println(plantower.pm1.adj_value);
+    // Serial.print("This is PM2_5: ");
+    // Serial.println(plantower.pm2_5.adj_value);
+    // Serial.print("This is PM10: ");
+    // Serial.println(plantower.pm10.adj_value);
+    // Serial.print("This is the temp: ");
+    // Serial.println(tph_fusion.temperature->adj_value);
+    // Serial.print("This is the humidity: ");
+    // Serial.println(tph_fusion.humidity->adj_value);
+    // if (pam_108L.ozone_enabled)
+    // {
+    //     Serial.print("This is the ozone: ");
+    //     Serial.println(pam_108L.ozone.adj_value);
+    // }
 
-    Serial.print("This is the battery: ");
-    Serial.println(fuel.getSoC());
-    readGpsStream();
-    Serial.print("This is the lat: ");
-    Serial.println(String(gps.get_latitude()));
-    Serial.print("This is the long: ");
-    Serial.println(String(gps.get_longitude()));
-    Serial.print("this is the horizontal dillution: ");
-    Serial.println(gps.get_horizontalDillution());
-    Serial.print("This is the time: ");
-    Serial.println(Time.now());
+    // Serial.print("This is the battery: ");
+    // Serial.println(fuel.getSoC());
+    // readGpsStream();
+    // Serial.print("This is the lat: ");
+    // Serial.println(String(gps.get_latitude()));
+    // Serial.print("This is the long: ");
+    // Serial.println(String(gps.get_longitude()));
+    // Serial.print("this is the horizontal dillution: ");
+    // Serial.println(gps.get_horizontalDillution());
+    // Serial.print("This is the time: ");
+    // Serial.println(Time.now());
 
     delay(2000);
 
@@ -768,41 +755,6 @@ void loop() {
 
 
 
-
-
-
-
-
-
-
-
-
-    // PAMSensorManager::GetInstance()->loop();
-    // PAMSerial.loop();
-
-    // readGpsStream();
-
-
-    // //correct for altitude
-    // // float pressure_correction = bme.pressure/100;
-    // float pressure_correction = tph_fusion.pressure->adj_value;
-    // if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
-    //     pressure_correction /= SEALEVELPRESSURE_HPA;
-    //     if(debugging_enabled){
-    //         Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
-
-    //     }
-    //     CO2_float *= pressure_correction;
-    // }else{
-    //     Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
-    //     Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
-
-    // }
-
-
-    // if(ozone_enabled){
-    //     take_a_measurement.readOzone();
-    // }
 
     // //getEspWifiStatus();
 
@@ -853,11 +805,6 @@ void echoGps(){
     }
 }
 
-/*void disableGPS(void){
-    Serial.println("Turning off gps");
-    String disableString = "";
-    Serial5.write()
-}*/
 void readGpsStream(void){
     String gps_sentence = "init";
     int stringFound = 0;
@@ -1302,39 +1249,7 @@ void serialMenu(){
     Serial.flush();
     while(!Serial.available());
     incomingByte = Serial.read();
-    if(incomingByte == 'a'){
-        serialGetCo2Slope();
-    }else if(incomingByte == 'b'){
-        serialGetCo2Zero();
-    }else if(incomingByte == 'c'){
-        serialGetCoSlope();
-    }else if(incomingByte == 'd'){
-        serialGetCoZero();
-    }else if(incomingByte == 'e'){
-        serialGetPm1Slope();
-    }else if(incomingByte == 'f'){
-         serialGetPm1Zero();
-    }else if(incomingByte == 'g'){
-        serialGetPm25Slope();
-    }else if(incomingByte == 'h'){
-        serialGetPm25Zero();
-    }else if(incomingByte == 'i'){
-        serialGetPm10Slope();
-    }else if(incomingByte == 'j'){
-        serialGetPm10Zero();
-    }else if(incomingByte == 'k'){
-        serialGetTemperatureSlope();
-    }else if(incomingByte == 'l'){
-        serialGetTemperatureZero();
-    }else if(incomingByte == 'm'){
-        serialGetPressureSlope();
-    }else if(incomingByte == 'n'){
-        serialGetPressureZero();
-    }else if(incomingByte == 'o'){
-        serialGetHumiditySlope();
-    }else if(incomingByte == 'p'){
-        serialGetHumidityZero();
-    }else if(incomingByte == 'q'){
+    if(incomingByte == 'q'){
         Serial.println("Serial debugging enabled.");
         debugging_enabled = 1;
         EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
@@ -1407,8 +1322,6 @@ void serialMenu(){
         }
         EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled );
 
-    }else if(incomingByte == 'I'){
-        serialGetAverageTime();
     }else if(incomingByte == 'J'){
         resetESP();
         Serial.println("ESP reset!");
@@ -1500,10 +1413,6 @@ void serialMenu(){
         Serial.println("Reseting the CO2 sensor");
         // t6713.resetSensor();
         t6713._t6713.resetSensor();
-    }else if(incomingByte == '1'){
-        serialGetLowerLimit();
-    }else if(incomingByte == '2'){
-        serialGetUpperLimit();
     }else if(incomingByte == '3'){
         Serial.print("APP Version: ");
         Serial.println(APP_VERSION);
@@ -1553,8 +1462,6 @@ void serialMenu(){
         serialIncreaseChargeCurrent();
     }else if(incomingByte == '0'){
         serialIncreaseInputCurrent();
-    }else if(incomingByte == 'A'){
-        readAlpha1Constantly();
     }else if(incomingByte == 'B'){
         if(output_only_particles == 1){
             output_only_particles = 0;
@@ -1850,443 +1757,9 @@ void serialGetZone(void){
     }
 }
 
-void serialGetAverageTime(void){
-    Serial.println();
-    Serial.print("Current Frequency: ");
-    Serial.print(measurements_to_average);
-    Serial.println("(~2 second) measurements");
-    Serial.print("Enter new amount\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= 1 && tempValue < 10000){
-        Serial.print("\n\rNew Frequency: ");
-        Serial.println(tempValue);
-        Serial.println("(~2 second) measurements");
-        measurements_to_average = tempValue;
-        EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetCo2Slope(void){
-
-    Serial.println();
-    Serial.print("Current CO2 slope:");
-    Serial.print(String(t6713.CO2.slope, 2));
-    Serial.println(" ppm");
-    Serial.print("Enter new CO2 slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if(tempfloat >= 0.5 && tempfloat < 10.0){
-        t6713.CO2.slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew CO2 slope: ");
-        Serial.println(String(t6713.CO2.slope,2));
-
-        EEPROM.put(CO2_SLOPE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetCo2Zero(void){
-    Serial.println();
-    Serial.print("Current CO2 zero:");
-    Serial.print(t6713.CO2.zero);
-    Serial.println(" ppm");
-    Serial.print("Enter new CO2 Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -1000 && tempValue < 1000){
-        Serial.print("\n\rNew CO2 zero: ");
-        Serial.println(tempValue);
-        t6713.CO2.zero = tempValue;
-        EEPROM.put(CO2_ZERO_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetCoSlope(void){
-
-    Serial.println();
-    Serial.print("Current CO slope:");
-    Serial.print(String(pamco.co.slope, 2));
-    Serial.println(" ppm");
-    Serial.print("Enter new CO slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if(tempfloat >= 0.1 && tempfloat < 2.0){
-        pamco.co.slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew CO slope: ");
-        Serial.println(String(pamco.co.slope,2));
-
-        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetCoZero(void){
-    Serial.println();
-    Serial.print("Current CO zero:");
-    Serial.print(pamco.co.zero);
-    Serial.println(" ppb");
-    Serial.print("Enter new CO Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -5000 && tempValue < 5000){
-        Serial.print("\n\rNew CO zero: ");
-        Serial.println(tempValue);
-        pamco.co.zero = tempValue;
-        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm1Slope(void){
-    Serial.println();
-    Serial.print("Current PM1 slope:");
-    Serial.print(String(plantower.pm1.slope, 2));
-    Serial.println(" ");
-    Serial.print("Enter new PM1 slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
-        plantower.pm1.slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew PM1 slope: ");
-        Serial.println(String(plantower.pm1.slope, 2));
-
-        EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm1Zero(void){
-    Serial.println();
-    Serial.print("Current PM1 zero:");
-    Serial.print(plantower.pm1.zero);
-    Serial.println(" ug/m3");
-    Serial.print("Enter new PM1 Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -1000 && tempValue < 1000){
-        Serial.print("\n\rNew PM1 zero: ");
-        Serial.println(tempValue);
-        plantower.pm1.zero = tempValue;
-        EEPROM.put(PM_1_ZERO_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm25Slope(void){
-    Serial.println();
-    Serial.print("Current PM2.5 slope:");
-    Serial.print(String(plantower.pm2_5.slope, 2));
-    Serial.println(" ");
-    Serial.print("Enter new PM2.5 slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
-        plantower.pm2_5.slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew PM2.5 slope: ");
-        Serial.println(String(plantower.pm2_5.slope,2));
-
-        EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm25Zero(void){
-    Serial.println();
-    Serial.print("Current PM2.5 zero:");
-    Serial.print(plantower.pm2_5.zero);
-    Serial.println(" ug/m3");
-    Serial.print("Enter new PM2.5 Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -1000 && tempValue < 1000){
-        Serial.print("\n\rNew PM2.5 zero: ");
-        Serial.println(tempValue);
-        plantower.pm2_5.zero = tempValue;
-        EEPROM.put(PM_25_ZERO_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm10Slope(void){
-    Serial.println();
-    Serial.print("Current PM10 slope:");
-    Serial.print(String(plantower.pm10.slope, 2));
-    Serial.println(" ");
-    Serial.print("Enter new PM10 slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
-        plantower.pm10.slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew PM10 slope: ");
-        Serial.println(String(plantower.pm10.slope,2));
-
-        EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPm10Zero(void){
-    Serial.println();
-    Serial.print("Current PM10 zero:");
-    Serial.print(plantower.pm10.zero);
-    Serial.println(" um/m3");
-    Serial.print("Enter new PM10 Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -1000 && tempValue < 1000){
-        Serial.print("\n\rNew PM10 zero: ");
-        Serial.println(tempValue);
-        plantower.pm10.zero = tempValue;
-        EEPROM.put(PM_10_ZERO_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetTemperatureSlope(void){
-    Serial.println();
-    Serial.print("Current Temperature slope:");
-    Serial.print(String(tph_fusion.temperature->slope, 2));
-    Serial.println(" Degrees C");
-    Serial.print("Enter new Temperature slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
-        tph_fusion.temperature->slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew Temperature slope: ");
-        Serial.println(String(tph_fusion.temperature->slope,2));
-
-        EEPROM.put(TEMP_SLOPE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetTemperatureZero(void){
-    Serial.println();
-    Serial.print("Current Temperature zero:");
-    Serial.print(tph_fusion.temperature->zero);
-    Serial.println(" Degrees C");
-    Serial.print("Enter new Temperature Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -30 && tempValue < 30){
-        Serial.print("\n\rNew Temperature zero: ");
-        Serial.println(tempValue);
-        tph_fusion.temperature->zero = tempValue;
-        EEPROM.put(TEMP_ZERO_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPressureSlope(void){
-    Serial.println();
-    Serial.print("Current Pressure slope:");
-    Serial.print(String(tph_fusion.pressure->slope, 2));
-    Serial.println(" torr");
-    Serial.print("Enter new Pressure slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if(tempfloat >= 0.5 && tempfloat < 1.5){
-        tph_fusion.pressure->slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew Pressure slope: ");
-        Serial.println(String(tph_fusion.pressure->slope,2));
-
-        EEPROM.put(PRESSURE_SLOPE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetPressureZero(void){
-    Serial.println();
-    Serial.print("Current Pressure zero:");
-    Serial.print(tph_fusion.pressure->zero);
-    Serial.println(" ppm");
-    Serial.print("Enter new Pressure Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -1000 && tempValue < 1000){
-        Serial.print("\n\rNew Pressure zero: ");
-        Serial.println(tempValue);
-        tph_fusion.pressure->zero = tempValue;
-        EEPROM.put(PRESSURE_ZERO_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetHumiditySlope(void){
-    Serial.println();
-    Serial.print("Current RH slope:");
-    Serial.print(String(tph_fusion.humidity->slope, 2));
-    Serial.println(" %");
-    Serial.print("Enter new RH slope\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    float tempfloat = tempString.toFloat();
-    int tempValue;
-
-    if(tempfloat >= 0.5 && tempfloat < 10){
-        tph_fusion.humidity->slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew RH slope: ");
-        Serial.println(String(tph_fusion.humidity->slope,2));
-
-        EEPROM.put(RH_SLOPE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetHumidityZero(void){
-    Serial.println();
-    Serial.print("Current RH zero:");
-    Serial.print(tph_fusion.humidity->zero);
-    Serial.println(" %");
-    Serial.print("Enter new RH Zero\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -50 && tempValue < 50){
-        Serial.print("\n\rNew RH zero: ");
-        Serial.println(tempValue);
-        tph_fusion.humidity->zero = tempValue;
-        EEPROM.put(RH_ZERO_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetLowerLimit(void){
-    Serial.println();
-    Serial.print("Current lower limit:");
-    Serial.println(gas_lower_limit);
-    Serial.println("Please enter password in order to change the lower limit");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
 
 
-    if(tempString == "bould"){
-        Serial.println("Password correct!");
-        Serial.println("Enter new lower limit:\n\r");
-        String tempString = Serial.readStringUntil('\r');
-        int tempValue = tempString.toInt();
-        Serial.println("");
-        if(tempValue > 0 && tempValue < 20000){
-            Serial.print("\n\rNew lower limit:");
-            Serial.println(tempValue);
-            gas_lower_limit = tempValue;
-            EEPROM.put(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
-        }else{
-            Serial.println("\n\rInvalid value!");
-        }
-    }else{
-        Serial.println("\n\rIncorrect password!");
-    }
-}
-void serialGetUpperLimit(void){
-    Serial.println();
-    Serial.print("Current upper limit:");
-    Serial.println(gas_upper_limit);
-    Serial.println("Please enter password in order to change the upper limit");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
 
-
-    if(tempString == "bould"){
-        Serial.println("Password correct!");
-        Serial.println("Enter new upper limit:\n\r");
-        String tempString = Serial.readStringUntil('\r');
-        int tempValue = tempString.toInt();
-        Serial.println("");
-        if(tempValue > 0 && tempValue < 50000){
-            Serial.print("\n\rNew upper limit:");
-            Serial.println(tempValue);
-            gas_upper_limit = tempValue;
-            EEPROM.put(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
-        }else{
-            Serial.println("\n\rInvalid value!");
-        }
-    }else{
-        Serial.println("\n\rIncorrect password!");
-    }
-}
-
-void readAlpha1Constantly(void){
-    while(!Serial.available()) {
-        // CO_float = readCO();
-        float value = pamco.co.adj_value;
-        Serial.printf("CO: %1.3f ppm\n\r", value);
-    }
-}
 void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");

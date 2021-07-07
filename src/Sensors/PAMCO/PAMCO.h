@@ -11,13 +11,13 @@
 #include "LMP91000.h"
 #include "Adafruit_ADS1X15.h"
 
-#include "../../Constants.h"
 #include "../../PAMSensorManager/PAMSensorManager.h"
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
 #include "../../PAMEEPROM/EEPROMAddresses.h"
 
 #define ALPHA_ADC_READ_AMOUNT (10)
+#define ADS_BIT_MV  (0.1875)
 
 class PAMCO: public PAMSensor {
 

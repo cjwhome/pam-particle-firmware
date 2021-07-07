@@ -29,9 +29,23 @@ bool T6713::measure() {
     if (measurement == 0) {
         return false;
     }
+    PAMSpecie * specie = this->manager->findSpecieByName("Pressure");
+
+        //correct for altitude
+    float pressure_correction = specie->adj_value/100;
+    if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
+        pressure_correction /= SEALEVELPRESSURE_HPA;
+        this->pressure_correct = true;
+    }
 
     this->CO2.raw_value = measurement;
+
     float adj_value = (this->CO2.slope * measurement) + this->CO2.zero;
+    if (this->pressure_correct)
+    {
+        this->pressure_correct = false;
+        adj_value *= pressure_correction;
+    }
     this->CO2.adj_value = adj_value;
 
     this->CO2.accumulated_value += adj_value;

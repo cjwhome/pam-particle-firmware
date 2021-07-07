@@ -71,6 +71,25 @@ std::vector<PAMSpecie *>* PAMSensorManager::findSpeciesForName(char *name)
     return species;
 }
 
+PAMSpecie * PAMSensorManager::findSpecieByName(char *name)
+{
+    PAMSpecie * specie;
+
+    for(size_t i = 0; i < this->sensors.size(); i++)
+    {
+        PAMSensor * sensor = this->sensors[i];
+        for(size_t j = 0; j < sensor->getSpecies()->size(); j++)
+        {
+            specie = sensor->getSpecies()->at(j);
+            if (strcmp(name, specie->name) == 0)
+            {
+                return specie;
+            }
+        }
+    }
+    return NULL;
+}
+
 void PAMSensorManager::loop() {
     for (size_t i = 0; i < this->sensors.size(); i++) {
         PAMSensor *sensor = this->sensors[i];

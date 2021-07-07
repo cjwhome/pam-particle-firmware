@@ -44,9 +44,9 @@ public:
 
     uint16_t serial_menu_rd;
 
+
 protected:
     std::vector<PAMSpecie *> species;
-
     PAMSerialMenu serial_menu;
     PAMSensorFeed *sensor_feed;
 };

@@ -25,6 +25,7 @@ private:
     ~PAMSensorManager();
 
     std::vector<PAMSensor *> sensors;
+    std::vector<PAMSpecie *> specie;
 
     uint64_t last_loop_ms = 0;
     
@@ -36,6 +37,7 @@ public:
     void addSensor(PAMSensor *sensor);
     char *csvHeader();
     std::vector<PAMSpecie *>* findSpeciesForName(char *name);
+    PAMSpecie * findSpecieByName(char *name);
 
     void sleep();
     void wakeup();
