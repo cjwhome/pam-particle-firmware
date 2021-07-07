@@ -18,7 +18,7 @@ public:
     // static void readStoredVars(void);
     // static void writeDefaultSettings(void);
 
-    static T ReadStoredVar(int address, T default_value, T &target) {
+    static void ReadStoredVar(int address, T default_value, T &target) {
         union {
             T value;
             uint8_t bytes[sizeof(T)];

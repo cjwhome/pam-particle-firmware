@@ -8,6 +8,7 @@
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
 #include "../../PAMEEPROM/EEPROMAddresses.h"
+#include "../../PAMSerial/PAMSerialEditEEPROMValue/PAMSerialEditEEPROMValue.h"
 
 class PAM_108L: public PAMSensor {
 

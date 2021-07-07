@@ -5,7 +5,7 @@ PAM_108L::PAM_108L() :
 {
     this->name = "108L";
 
-    EEPROM.get(OZONE_EN_MEM_ADDRESS, this->ozone_enabled);
+    this->ozone.serial_menu.addResponder(new PAMSerialEditEEPROMValue<bool>(this->ozone_enabled, OZONE_EN_MEM_ADDRESS, false), "Enable/Disable" );
 
     this->ozone.name = "ozone";
     this->ozone.units = "PPB";

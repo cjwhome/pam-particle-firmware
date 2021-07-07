@@ -47,8 +47,8 @@ public:
 
 private:
     bool hih_enabled = false;
-    int gas_upper_limit;
-    int gas_lower_limit;
+    float gas_upper_limit;
+    float gas_lower_limit;
 
 };
 

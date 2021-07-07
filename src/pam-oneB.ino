@@ -26,8 +26,7 @@
 #include "Sensors/TPHFusion/TPHFusion.h"
 #include "Sensors/Plantower/Plantower.h"
 #include "Sensors/PAMCO/PAMCO.h"
-//#include "Sensors/108L/108L.h"
-#include "Sensors/Practice/practice.h"
+#include "Sensors/108L/108L.h"
 
 GoogleMapsDeviceLocator locator;
 
@@ -125,9 +124,7 @@ T6713 t6713;
 TPHFusion tph_fusion(0x27, false);
 Plantower plantower(Serial4);
 PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
-//PAM_108L pam_108L();
-//PRACTICE practice(ADS1115_1_ADDR, LMP91000_1_EN);
-
+PAM_108L pam_108L;
 
 time_t watch_time;
 
@@ -715,52 +712,44 @@ void loop() {
 
     PAMSensorManager::GetInstance()->loop();
     PAMSerial.loop();
-    // Serial.println("Regular co: ");
-    // Serial.println(pamco.co.adj_value);
-    // Serial.println("Accumulated CO: ");
-    // Serial.println(pamco.co.accumulated_value);
-    // Serial.println("Number of points: ");
-    // Serial.println(pamco.co.number_of_measures);
 
-    // Serial.print("This is the device Id: ");
-    // Serial.println(DEVICE_id);
-    // Serial.print("This is the CO: ");
-    // Serial.println(pamco.co.adj_value);
-    // Serial.print("This is the CO2: ");
-    // take_a_measurement.readCO2();
-    // Serial.println(take_a_measurement.get_co2());
-    // Serial.print("This is the VOC: ");
-    // take_a_measurement.calculateAQI();
-    // Serial.println(take_a_measurement.get_air_quality_score());
-    // Serial.print("This is PM1: ");
-    // Serial.println(plantower.pm1.adj_value);
-    // Serial.print("This is PM2_5: ");
-    // Serial.println(plantower.pm2_5.adj_value);
-    // Serial.print("This is PM10: ");
-    // Serial.println(plantower.pm10.adj_value);
-    // Serial.print("This is the temp: ");
-    // Serial.println(tph_fusion.temperature->adj_value);
-    // Serial.print("This is the humidity: ");
-    // Serial.println(tph_fusion.humidity->adj_value);
-    // Serial.print("This is the ozone: ");
-    // take_a_measurement.readOzone();
-    // Serial.println(take_a_measurement.get_ozone());
-    // Serial.print("This is the battery: ");
-    // Serial.println(fuel.getSoC());
-    // Serial.print("This is the sound: ");
-    // take_a_measurement.readSound();
-    // Serial.println(take_a_measurement.get_sound_average());
-    // readGpsStream();
-    // Serial.print("This is the lat: ");
-    // Serial.println(String(gps.get_latitude()));
-    // Serial.print("This is the long: ");
-    // Serial.println(String(gps.get_longitude()));
-    // Serial.print("this is the horizontal dillution: ");
-    // Serial.println(gps.get_horizontalDillution());
-    // Serial.print("This is the time: ");
-    // Serial.println(Time.now());
+    Serial.print("This is the device Id: ");
+    Serial.println(DEVICE_id);
+    Serial.print("This is the CO: ");
+    Serial.println(pamco.co.adj_value);
+    Serial.print("This is the CO2: ");
+    Serial.println(t6713.CO2.adj_value);
+    Serial.print("This is the VOC: ");
+    Serial.println(tph_fusion.air_quality_score.adj_value);
+    Serial.print("This is PM1: ");
+    Serial.println(plantower.pm1.adj_value);
+    Serial.print("This is PM2_5: ");
+    Serial.println(plantower.pm2_5.adj_value);
+    Serial.print("This is PM10: ");
+    Serial.println(plantower.pm10.adj_value);
+    Serial.print("This is the temp: ");
+    Serial.println(tph_fusion.temperature->adj_value);
+    Serial.print("This is the humidity: ");
+    Serial.println(tph_fusion.humidity->adj_value);
+    if (pam_108L.ozone_enabled)
+    {
+        Serial.print("This is the ozone: ");
+        Serial.println(pam_108L.ozone.adj_value);
+    }
 
-    delay(1000);
+    Serial.print("This is the battery: ");
+    Serial.println(fuel.getSoC());
+    readGpsStream();
+    Serial.print("This is the lat: ");
+    Serial.println(String(gps.get_latitude()));
+    Serial.print("This is the long: ");
+    Serial.println(String(gps.get_longitude()));
+    Serial.print("this is the horizontal dillution: ");
+    Serial.println(gps.get_horizontalDillution());
+    Serial.print("This is the time: ");
+    Serial.println(Time.now());
+
+    delay(2000);
 
 
 

@@ -24,6 +24,7 @@
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 #define DONT_ADVERTISE_CONSTANT '\0'
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
+#define VOC_PACKET_CONSTANT 'g'             //air_quality_score
 
 #include "../PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
 #include "../PAMSerial/PAMSerialEditEEPROMValue/PAMSerialEditEEPROMValue.h"
@@ -48,11 +49,12 @@ public:
     float accumulated_value = 0;
 
     char packet_constant;
+    PAMSerialMenu serial_menu;
 
     uint16_t serial_menu_rd;
     
 private:
-    PAMSerialMenu serial_menu;
+
 
     PAMSerialEditEEPROMValue<float> *slope_responder;
     uint16_t slope_rd;
