@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/temp/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -93,12 +93,15 @@ void serialGetLowerLimit(void);
 void serialGetUpperLimit(void);
 void readAlpha1Constantly(void);
 String readSerBufUntilDone();
+void printFileToSerial();
+String showAndChooseFiles();
 void output108MenuOptions(void);
-#line 37 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 37 "c:/Users/abailly/temp/pam-particle-firmware/src/pam-oneB.ino"
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
+#define AQLITE_VERSION 1
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -202,7 +205,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,HorizontalDillution,Status,Date/Time"
 
 
-#define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
+#define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
 
 #define MAX_COUNTER_INDEX 15000
 
@@ -488,8 +491,11 @@ void outputToCloud(String data, String sensible_data){
         String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
+        Serial.println("About to pamup: ");
+
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
+            Serial.println("PampUpping now ");
             Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
@@ -497,7 +503,7 @@ void outputToCloud(String data, String sensible_data){
               writeLogFile("Published pamup data!");
             }
             if(sensible_iot_en){
-                Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
+                Particle.publish("sensibleAQLiteUp", sensible_data, PRIVATE);
                 //testsensible();
                 Particle.process();
                 if(debugging_enabled){
@@ -785,6 +791,7 @@ void check_wifi_file(void){
 
 void setup()
 {
+    Serial.begin(9600);
     Serial.println("Starting the initialization");
     status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
@@ -882,7 +889,6 @@ void setup()
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
     //initialize main serial port for debug output
-    Serial.begin(9600);
 
 
 
@@ -1041,9 +1047,7 @@ void setup()
     Serial.print("FW Version: ");
     Serial.println(APP_VERSION);
     Serial.print("Build: ");
-    Serial.println(BUILD_VERSION);
-
-
+    Serial.println("AQLite-"+AQLITE_VERSION);
 
     enableContinuousGPS();
 
@@ -1082,15 +1086,12 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-
-    if(car_topper_power_en && powerCheck.getHasPower() == 0){
+    // if(car_topper_power_en && powerCheck.getHasPower() == 0){
         
-        goToSleepBattery();
-    }
-    //Serial.println("locator loop");
+    //     goToSleepBattery();
+    // }
     locator.loop();
     
-
     if(output_only_particles == 1){
         outputParticles();
     }
@@ -1231,7 +1232,6 @@ void loop() {
             t6713.readStatus(1);
         }
     }
-
 }
 
 void calculateAQI(void){
@@ -2010,7 +2010,7 @@ void outputDataToESP(void){
     String latitude_string = "";
     String longitude_string = "";
 
-    char sensible_buf[256];
+    char sensible_buf[259];
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
@@ -2029,6 +2029,7 @@ void outputDataToESP(void){
     writer.name("datetime").value(String(Time.format(time, "%Y-%m-%dT%H:%M:%SZ")));
     writer.name("CO2").value(String(CO2_float, 0));
     writer.name("CO").value(String(CO_float, 3));
+    writer.name("o3").value(String(O3_float, 3));
     writer.name("PM1_0").value(String(PM01Value));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
     writer.name("Temp").value(String(readTemperature(), 1));
@@ -2085,10 +2086,8 @@ void outputDataToESP(void){
     csv_output_string += String(bme.pressure / 100.0, 1) + ",";
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
     csv_output_string += String(readHumidity(), 1) + ",";
-    if(ozone_enabled){
         cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
         csv_output_string += String(O3_float, 1) + ",";
-    }
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     csv_output_string += String(fuel.getSoC(), 1) + ",";
     cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
@@ -2204,17 +2203,59 @@ void outputDataToESP(void){
         3-PM01Value
         4-PM2_5Value
         5-PM10Value
+        9-O3_float
         6-bme.temperature
         7-bme.pressure / 100.0
         8-bme.humidity
-        9-O3_float
+
         10-fuel.getSoC()
         11-sound_average
 
 
 
         */
-        if(i == 0){
+        // if(i == 0){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = CO_float;
+        // }else if(i == 1){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = CO2_float;
+        // }else if(i == 2){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
+        //     floatBytes.myFloat = fuel.getSoC();
+        // }else if(i == 3){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
+        //     floatBytes.myFloat = PM01Value;
+        // }else if(i == 4){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
+        //     floatBytes.myFloat = corrected_PM_25;
+        // }else if(i == 5){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
+        //     floatBytes.myFloat = PM10Value;
+        // }else if(i == 6){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = readTemperature();
+        // }else if(i == 7){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = bme.pressure / 100.0;
+        // }else if(i == 8){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
+        //     floatBytes.myFloat = readHumidity();
+        // }
+        // else if(i == 9){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
+        //     floatBytes.myFloat = O3_float;
+        // }
+        // else if(i == 10){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
+        //     floatBytes.myFloat = sound_average;
+        // }else if(i == 11){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+        //     floatBytes.myFloat = air_quality_score;
+        // }
+
+
+                if(i == 0){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
             floatBytes.myFloat = CO_float;
         }else if(i == 1){
@@ -2232,25 +2273,28 @@ void outputDataToESP(void){
         }else if(i == 5){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
             floatBytes.myFloat = PM10Value;
-        }else if(i == 6){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
-            floatBytes.myFloat = readTemperature();
-        }else if(i == 7){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
-            floatBytes.myFloat = bme.pressure / 100.0;
-        }else if(i == 8){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
-            floatBytes.myFloat = readHumidity();
-        }else if(i == 9){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
-            floatBytes.myFloat = sound_average;
-        }else if(i == 10){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-            floatBytes.myFloat = air_quality_score;
-        }/*else if(i == 11){
+        }
+        else if(i == 6){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
             floatBytes.myFloat = O3_float;
-        }*/
+        }
+        else if(i == 7){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
+            floatBytes.myFloat = readTemperature();
+        }else if(i == 8){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
+            floatBytes.myFloat = bme.pressure / 100.0;
+        }else if(i == 9){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
+            floatBytes.myFloat = readHumidity();
+        }
+        else if(i == 10){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
+            floatBytes.myFloat = sound_average;
+        }else if(i == 11){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+            floatBytes.myFloat = air_quality_score;
+        }
 
         //bytes 5,6,7,8 - Measurement Value
         ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
@@ -2353,7 +2397,7 @@ void sendWifiInfo(void){
 float getEspOzoneData(void){
     float ozone_value = 0.0;
     String getOzoneData = "Z&";
-    String recievedData = " ";
+    String recievedData = "";
     bool timeOut = false;
     double counterIndex = 0;
     //if esp doesn't answer, keep going
@@ -2363,7 +2407,6 @@ float getEspOzoneData(void){
         writeLogFile("Getting ozone data from esp");
       }
     Serial1.print(getOzoneData);
-    Serial.println("Sending the command to get data from esp.");
     while(!Serial1.available() && timeOut == false){
       //delay(1);
       counterIndex++;
@@ -2377,7 +2420,16 @@ float getEspOzoneData(void){
 
 
     delay(10);
-
+    char incomingByte = NULL;
+    Serial1.setTimeout(3000);
+    // while(recievedData == "" && timeout < )
+    // {
+    //     incomingByte = Serial1.read();
+    //     recievedData += incomingByte;
+    //     Serial.println("Going around the rosies. receivedData: ");
+    //     Serial.println(recievedData);
+    // }
+    // Serial1.flush();
     recievedData = Serial1.readString();
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
     if(debugging_enabled)
@@ -2386,8 +2438,6 @@ float getEspOzoneData(void){
         Serial.println(recievedData);
         writeLogFile("Recieved data from ESP");
     }
-    Serial.print("RECIEVED DATA FROM ESP: ");
-    Serial.println(recievedData);
     if (recievedData == "not available")
     {
         return 1.1;
@@ -2782,7 +2832,7 @@ void serialMenu(){
   incomingByte = '0';
   while(incomingByte!= 'x')
   {
-    Serial.print("Menu>");
+    Serial.print("AQLite Menu>");
     Serial.flush();
     while(!Serial.available());
     incomingByte = Serial.read();
@@ -3005,7 +3055,7 @@ void serialMenu(){
         Serial.print("APP Version: ");
         Serial.println(APP_VERSION);
         Serial.print("Build: ");
-        Serial.println(BUILD_VERSION);
+        Serial.println("AQLITE: "+AQLITE_VERSION);
     }else if(incomingByte == '4'){
         if(ozone_enabled == 0){
             Serial.println("Enabling Ozone");
@@ -3094,15 +3144,8 @@ void serialMenu(){
         }
     
     }else if(incomingByte == 'W'){
-        if(google_location_en == 1){
-            Serial.println("Disabling google location services.");
-            google_location_en = 0;
-            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
-        }else{
-            Serial.println("Enabling google location services.");
-            google_location_en = 1;
-            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
-        }
+        printFileToSerial();
+        break;
         
     }else if(incomingByte == 'X'){
         //calibrate CO2 sensor
@@ -3118,26 +3161,27 @@ void serialMenu(){
     }
     else if(incomingByte == 'Y')
     {
-        String getMenu = "Mm";
+        String getMenu = "M&";
         Serial.println("Going into the 108_L menu");
         Serial1.print(getMenu);
         String message108;
-        while (message108 != 'x')
+        while (message108 != "x")
         {
-            String getMenu = Serial1.readString();
-            Serial.println(getMenu);
-            message108 = readSerBufUntilDone();
-            if (message108 == '?')
+            if (Serial1.available() > 0)
             {
-                output108MenuOptions();
+                String getMenu = Serial1.readString();
+                Serial.print(getMenu);
             }
-            else 
-            {
-                // We add the c for the esp to know it is a command for the 108
-                Serial1.println('C'+message108);
+
+            if (Serial.available() > 0) {
+                Serial1.flush();
+                message108 = readSerBufUntilDone();
+                Serial1.println("C"+message108+"&");
+                delay(10);
             }
-            delay(300);
         }
+        Serial.println();
+        Serial.println("Exiting the 108_L Menu... ");
     }
     else if(incomingByte == 'Z'){
         Serial.println("Getting cellular information, this may take a while...");
@@ -3880,6 +3924,58 @@ String readSerBufUntilDone()
     return inputString;
 }
 
+void printFileToSerial()
+{
+    Serial.println();
+    Serial.println("Give the number of the file you want: ");
+    Serial.println();
+
+    String fileName = showAndChooseFiles();
+    Serial.println(fileName);
+
+    file.open(fileName, O_READ);
+
+    char line[1000];
+    int n;
+    while ((n = file.fgets(line, sizeof(line))) > 0) 
+    {
+        Serial.println(line);
+    }
+    file1.close();
+}
+
+String showAndChooseFiles()
+{
+    int i = 0;
+    char * listOfFiles = reinterpret_cast<char*>(malloc(sizeof(char) * 100 /* Fname size */ * 100 /* Num entries */));
+    //Make sure the array is clear
+    memset(listOfFiles, 0, sizeof(char) * 10000);
+
+
+    file1.open("/");
+    while (file.openNext(&file1, O_RDONLY)) {
+        bool isSuccess = file.getName( listOfFiles + (i * 100), 86);
+
+        Serial.print(i);
+        Serial.print(": ");
+        Serial.println(listOfFiles + (i * 100));
+         i++;
+        file.close();
+    }
+    if (file1.getError()) {
+        Serial.println("openNext failed");
+        file.close();
+    } else {
+        Serial.println("End of List.");
+        file.close();
+    }
+    int fileLocation = readSerBufUntilDone().toInt();
+    int numbers = 100*fileLocation;
+    String fileName = String(listOfFiles+numbers);
+    free(listOfFiles);
+    return String(fileName);
+}
+
 void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");
@@ -3939,7 +4035,7 @@ void outputSerialMenuOptions(void){
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
-    Serial.println("W:  Enable/Disable google location services");
+    Serial.println("W:  List files to choose what to print in serial");
 
     Serial.println("Y:  Go to 108_L serial menu");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");

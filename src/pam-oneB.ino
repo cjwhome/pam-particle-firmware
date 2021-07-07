@@ -2375,8 +2375,6 @@ float getEspOzoneData(void){
         Serial.println(recievedData);
         writeLogFile("Recieved data from ESP");
     }
-    Serial.print("RECIEVED DATA FROM ESP: ");
-    Serial.println(recievedData);
     if (recievedData == "not available")
     {
         return 1.1;
@@ -3083,15 +3081,8 @@ void serialMenu(){
         }
     
     }else if(incomingByte == 'W'){
-        if(google_location_en == 1){
-            Serial.println("Disabling google location services.");
-            google_location_en = 0;
-            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
-        }else{
-            Serial.println("Enabling google location services.");
-            google_location_en = 1;
-            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
-        }
+        printFileToSerial();
+        break;
         
     }else if(incomingByte == 'X'){
         //calibrate CO2 sensor
@@ -3870,6 +3861,58 @@ String readSerBufUntilDone()
     return inputString;
 }
 
+void printFileToSerial()
+{
+    Serial.println();
+    Serial.println("Give the number of the file you want: ");
+    Serial.println();
+
+    String fileName = showAndChooseFiles();
+    Serial.println(fileName);
+
+    file.open(fileName, O_READ);
+
+    char line[1000];
+    int n;
+    while ((n = file.fgets(line, sizeof(line))) > 0) 
+    {
+        Serial.println(line);
+    }
+    file1.close();
+}
+
+String showAndChooseFiles()
+{
+    int i = 0;
+    char * listOfFiles = reinterpret_cast<char*>(malloc(sizeof(char) * 100 /* Fname size */ * 100 /* Num entries */));
+    //Make sure the array is clear
+    memset(listOfFiles, 0, sizeof(char) * 10000);
+
+
+    file1.open("/");
+    while (file.openNext(&file1, O_RDONLY)) {
+        bool isSuccess = file.getName( listOfFiles + (i * 100), 86);
+
+        Serial.print(i);
+        Serial.print(": ");
+        Serial.println(listOfFiles + (i * 100));
+         i++;
+        file.close();
+    }
+    if (file1.getError()) {
+        Serial.println("openNext failed");
+        file.close();
+    } else {
+        Serial.println("End of List.");
+        file.close();
+    }
+    int fileLocation = readSerBufUntilDone().toInt();
+    int numbers = 100*fileLocation;
+    String fileName = String(listOfFiles+numbers);
+    free(listOfFiles);
+    return String(fileName);
+}
+
 void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");
@@ -3929,7 +3972,7 @@ void outputSerialMenuOptions(void){
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
-    Serial.println("W:  Enable/Disable google location services");
+    Serial.println("W:  List files to choose what to print in serial");
 
     Serial.println("Y:  Go to 108_L serial menu");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
