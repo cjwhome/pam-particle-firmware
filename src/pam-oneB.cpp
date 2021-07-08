@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/temp/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -34,7 +34,7 @@
 #include "Particle.h"
 #include "PowerCheck.h"
 //#include "Serial1/Serial1.h"
-#include "SdFat.h"
+#include "../lib/SdFat/src/SdFat.h"
 #include "HIH61XX.h"
 #include "google-maps-device-locator.h"
 #include "CellularHelper.h"
@@ -96,7 +96,7 @@ String readSerBufUntilDone();
 void printFileToSerial();
 String showAndChooseFiles();
 void output108MenuOptions(void);
-#line 37 "c:/Users/abailly/temp/pam-particle-firmware/src/pam-oneB.ino"
+#line 37 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
@@ -491,11 +491,8 @@ void outputToCloud(String data, String sensible_data){
         String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
 
-        Serial.println("About to pamup: ");
-
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
-            Serial.println("PampUpping now ");
             Particle.publish("pamup", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
@@ -834,7 +831,7 @@ void setup()
     //         //Serial.println("Going to sleep because battery is below 20% charge");
     //     goToSleepBattery();
     // }
-    // //if user presses power button during operation, reset and it will go to low power mode
+    //if user presses power button during operation, reset and it will go to low power mode
     // attachInterrupt(D4, System.reset, RISING);
     // if(digitalRead(D4)){
     //   goToSleep();
@@ -893,7 +890,7 @@ void setup()
 
 
     #if sd_en
-     fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+     fileName = String(DEVICE_id) + "_" + String(Time.year()) +"_" + String(Time.month()) +"_" + String(Time.day()) + ".txt";
      Serial.println("Checking for sd card");
      logFileName = "log_" + fileName;
 
@@ -909,6 +906,7 @@ void setup()
       check_wifi_file();
       //look for a calibration file
       check_cal_file();*/
+
 
       Serial.print("Created new file to log to uSD card: ");
       Serial.println(fileName);
@@ -1949,7 +1947,6 @@ void readOzone(void){
 
 void writeLogFile(String data){
   if (sd.begin(CS)){
-      Serial.println("Writing data to log file.");
       log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
       if(log_file_started == 0){
           log_file.println("File Start timestamp: ");
@@ -3145,7 +3142,6 @@ void serialMenu(){
     
     }else if(incomingByte == 'W'){
         printFileToSerial();
-        break;
         
     }else if(incomingByte == 'X'){
         //calibrate CO2 sensor
@@ -3200,7 +3196,6 @@ void serialMenu(){
         outputSerialMenuOptions();
     }
   }
-  Serial.println("Exiting serial menu...");
 
 }
 
@@ -3939,7 +3934,8 @@ void printFileToSerial()
     int n;
     while ((n = file.fgets(line, sizeof(line))) > 0) 
     {
-        Serial.println(line);
+        Serial.print('\r');
+        Serial.print(line);
     }
     file1.close();
 }
