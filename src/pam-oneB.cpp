@@ -152,7 +152,6 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define GAS_LOWER_LIMIT_MEM_ADDRESS 76
 #define GAS_UPPER_LIMIT_MEM_ADDRESS 80
 #define TIME_ZONE_MEM_ADDRESS 84
-#define OZONE_EN_MEM_ADDRESS 88
 #define VOC_EN_MEM_ADDRESS 92
 #define TEMPERATURE_UNITS_MEM_ADDRESS 96
 #define OUTPUT_PARTICLES_MEM_ADDRESS 100
@@ -291,7 +290,6 @@ float air_quality_score = 0;
 int esp_wifi_connection_status = 0;
 int serial_cellular_enabled = 0;
 int debugging_enabled = 0;
-int ozone_enabled = 0;
 int voc_enabled = 0;
 int temperature_units = 0;
 int output_only_particles = 0;
@@ -615,7 +613,6 @@ void readStoredVars(void){
 
     EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
     EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
-    EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     EEPROM.get(VOC_EN_MEM_ADDRESS, voc_enabled);
     EEPROM.get(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
     EEPROM.get(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
@@ -690,7 +687,6 @@ void writeDefaultSettings(void){
 
     EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, 0);
     EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, 0);
-    EEPROM.put(OZONE_EN_MEM_ADDRESS, 0);
     EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
     EEPROM.put(GAS_LOWER_LIMIT_MEM_ADDRESS, 1000);
     EEPROM.put(GAS_UPPER_LIMIT_MEM_ADDRESS, 10000);
@@ -890,7 +886,7 @@ void setup()
 
 
     #if sd_en
-     fileName = String(DEVICE_id) + "_" + String(Time.year()) +"_" + String(Time.month()) +"_" + String(Time.day()) + ".txt";
+     fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
      Serial.println("Checking for sd card");
      logFileName = "log_" + fileName;
 
@@ -3053,22 +3049,6 @@ void serialMenu(){
         Serial.println(APP_VERSION);
         Serial.print("Build: ");
         Serial.println("AQLITE: "+AQLITE_VERSION);
-    }else if(incomingByte == '4'){
-        if(ozone_enabled == 0){
-            Serial.println("Enabling Ozone");
-        }else{
-            Serial.println("Ozone already enabled");
-        }
-        ozone_enabled = 1;
-        EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
-    }else if(incomingByte == '5'){
-        if(ozone_enabled == 1){
-            Serial.println("Disabling Ozone");
-        }else{
-            Serial.println("Ozone already disabled");
-        }
-        ozone_enabled = 0;
-        EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     }else if(incomingByte == '6'){
         if(voc_enabled == 0){
             Serial.println("Enabling VOC's");
@@ -3937,6 +3917,7 @@ void printFileToSerial()
         Serial.print('\r');
         Serial.print(line);
     }
+    //Serial.println('\r\n');
     file1.close();
 }
 
@@ -3952,9 +3933,15 @@ String showAndChooseFiles()
     while (file.openNext(&file1, O_RDONLY)) {
         bool isSuccess = file.getName( listOfFiles + (i * 100), 86);
 
-        Serial.print(i);
-        Serial.print(": ");
-        Serial.println(listOfFiles + (i * 100));
+
+        String fileName = listOfFiles + (i * 100);
+        if (fileName != "System Volume Information" && fileName != ".dropbox.device")
+        {
+            Serial.print(i);
+            Serial.print(": ");
+            Serial.println(fileName);
+        }
+        
          i++;
         file.close();
     }
@@ -3962,7 +3949,7 @@ String showAndChooseFiles()
         Serial.println("openNext failed");
         file.close();
     } else {
-        Serial.println("End of List.");
+        Serial.println("End of files on Sd.");
         file.close();
     }
     int fileLocation = readSerBufUntilDone().toInt();
@@ -4002,8 +3989,6 @@ void outputSerialMenuOptions(void){
     Serial.println("1:  Adjust gas lower limit");
     Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");
-    Serial.println("4:  Enable Ozone");
-    Serial.println("5:  Disable Ozone");
     Serial.println("6:  Enable VOC's");
     Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
@@ -4011,13 +3996,13 @@ void outputSerialMenuOptions(void){
     Serial.println("0:  Increase the current input limit by 100 mA");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
-    Serial.println("C:  Change temperature units to Celcius");
+    Serial.println("C:  Change temperature units to Celsius");
     Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
-    Serial.println("F:  Change temperature units to Farenheit");
+    Serial.println("F:  Change temperature units to Fahrenheit");
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
-    Serial.println("I:  Adjust frequency for uploading through cellular");
+    Serial.println("I:  Adjust averaging time for uploading");
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");
     Serial.println("L:  Write default settings");
