@@ -370,7 +370,7 @@ void outputToCloud(void);
 void echoGps();
 void readOzone(void);
 float readCO(void);
-float getEspOzoneData(void);
+void getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
 int remoteWriteStoredVars(String addressAndValue);
@@ -1860,24 +1860,6 @@ float readAlpha2(void){
       return alpha2_ppmraw;
 }
 
-void readOzone(void){
-    // int tempValue = 0;
-    // if(ozone_analog_enabled){
-    //     tempValue = analogRead(A0);  // read the analogPin for ozone voltage
-    //     if(debugging_enabled){
-    //         Serial.print("Ozone Raw analog in:");
-    //         Serial.println(tempValue);
-
-    //     }
-    //     O3_float = tempValue;
-    //     O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-    //     O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
-    //     O3_float += ozone_offset;
-    // }else{
-    //     O3_float = getEspOzoneData();
-    // }
-}
-
 void writeLogFile(String data){
   if (sd.begin(CS)){
       log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
@@ -2266,7 +2248,6 @@ void outputDataToESP(void){
         ble_output_array[21 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
 
     }
-
     //send start delimeter to ESP
     Serial1.print("$");
     //send the packaged data with # delimeters in between packets
@@ -2324,7 +2305,7 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
-float getEspOzoneData(void){
+void getEspOzoneData(void){
     float ozone_value = 0.0;
     String getOzoneData = "Z&";
     String recievedData = "";
@@ -2370,15 +2351,10 @@ float getEspOzoneData(void){
     }
     if (recievedData == "not available")
     {
-        return 1.1;
+        return ;
     }
     String nextData;
-    // int i = 0;
-    // while (recievedData.indexOf(',') > 2)
-    // {
-    //     nextData = recievedData.substring(0, recievedData.indexOf(','));
-    //     recievedData= recievedData.substring(recievedData.indexOf(',')+1, recievedData.length());
-    // }
+
     for (int i = 0; i < 4; i++)
     {
         nextData = recievedData.substring(0, recievedData.indexOf(','));
@@ -2401,68 +2377,7 @@ float getEspOzoneData(void){
                 break;
         }
     }
-    return 1.1;
-    
-    
-    
-    
-    
-    //parse data if not null
-    // int comma_count = 0;
-    // int from_index = 0;
-    // int index_of_comma = 0;
-    // bool still_searching_for_commas = true;
-    // String stringArray[NUMBER_OF_FEILDS];
-
-    // while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
-    //     //Serial.printf("From index: %d\n\r", from_index);
-
-    //     index_of_comma = recievedData.indexOf(',', from_index);
-    //     if(debugging_enabled){
-    //       Serial.print("comma index: ");
-    //       Serial.println(index_of_comma);
-    //       //writeLogFile("got a comma");
-
-    //     }
-
-    //     //if the index of the comma is not zero, then there is data.
-    //     if(index_of_comma > 0){
-    //         stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
-    //         if(debugging_enabled){
-    //             Serial.printf("String[%d]:", comma_count);
-    //             Serial.println(stringArray[comma_count]);
-    //             //writeLogFile(stringArray[comma_count]);
-    //         }
-    //         comma_count++;
-    //         from_index = index_of_comma;
-    //         from_index += 1;
-    //     }else{
-    //         int index_of_cr = recievedData.indexOf('\r', from_index);
-    //         if(index_of_cr > 0){
-    //             stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
-    //             if(debugging_enabled){
-    //                 Serial.printf("String[%d]:", comma_count);
-    //                 Serial.println(stringArray[comma_count]);
-    //             }
-    //         }
-    //         still_searching_for_commas = false;
-    //     }
-    // }
-    // if(comma_count == NUMBER_OF_FIELDS_LOGGING){
-    //     ozone_value = stringArray[1].toFloat();
-    //     if(debugging_enabled){
-    //         Serial.println("using string array index 1 due to logging");
-    //         //writeLogFile("using string array index 1 due to logging");
-    //       }
-    // }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
-    //     ozone_value = stringArray[0].toFloat();
-    //     if(debugging_enabled){
-    //         Serial.println("using string array index 0, not logging");
-    //         //writeLogFile("using string array index 0, not logging");
-    //       }
-    // }
-    // return ozone_value;
-    //parseOzoneString(recievedData);
+    return ;
 }
 
 
@@ -2833,7 +2748,7 @@ void serialMenu(){
         }
         serial_cellular_enabled = 0;
         EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
-    }else if(incomingByte == 'F'){
+    }else if(incomingByte == 'D'){
         if(temperature_units == CELCIUS){
             temperature_units = FARENHEIT;
 
@@ -2852,7 +2767,7 @@ void serialMenu(){
         }
 
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-    }else if(incomingByte == 'D'){
+    }else if(incomingByte == 'F'){
         if(new_temperature_sensor_enabled == 1){
             new_temperature_sensor_enabled = 0;
             Serial.println("Disabling new temperature sensor");
@@ -3923,9 +3838,10 @@ void outputSerialMenuOptions(void){
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celsius");
-    Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
+    Serial.println("D:  Change temperature units to Fahrenheit");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
-    Serial.println("F:  Change temperature units to Fahrenheit");
+    Serial.println("F:  Disable TMP36 temperature sensor and use BME680 temperature");
+
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
     Serial.println("I:  Adjust averaging time for uploading");

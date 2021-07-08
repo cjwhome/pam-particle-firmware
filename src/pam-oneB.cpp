@@ -95,7 +95,6 @@ void readAlpha1Constantly(void);
 String readSerBufUntilDone();
 void printFileToSerial();
 String showAndChooseFiles();
-void output108MenuOptions(void);
 #line 37 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 GoogleMapsDeviceLocator locator;
 
@@ -433,7 +432,7 @@ void outputToCloud(void);
 void echoGps();
 void readOzone(void);
 float readCO(void);
-float getEspOzoneData(void);
+void getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
 int remoteWriteStoredVars(String addressAndValue);
@@ -1923,24 +1922,6 @@ float readAlpha2(void){
       return alpha2_ppmraw;
 }
 
-void readOzone(void){
-    // int tempValue = 0;
-    // if(ozone_analog_enabled){
-    //     tempValue = analogRead(A0);  // read the analogPin for ozone voltage
-    //     if(debugging_enabled){
-    //         Serial.print("Ozone Raw analog in:");
-    //         Serial.println(tempValue);
-
-    //     }
-    //     O3_float = tempValue;
-    //     O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-    //     O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
-    //     O3_float += ozone_offset;
-    // }else{
-    //     O3_float = getEspOzoneData();
-    // }
-}
-
 void writeLogFile(String data){
   if (sd.begin(CS)){
       log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
@@ -2329,7 +2310,6 @@ void outputDataToESP(void){
         ble_output_array[21 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
 
     }
-
     //send start delimeter to ESP
     Serial1.print("$");
     //send the packaged data with # delimeters in between packets
@@ -2387,7 +2367,7 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
-float getEspOzoneData(void){
+void getEspOzoneData(void){
     float ozone_value = 0.0;
     String getOzoneData = "Z&";
     String recievedData = "";
@@ -2433,15 +2413,10 @@ float getEspOzoneData(void){
     }
     if (recievedData == "not available")
     {
-        return 1.1;
+        return ;
     }
     String nextData;
-    // int i = 0;
-    // while (recievedData.indexOf(',') > 2)
-    // {
-    //     nextData = recievedData.substring(0, recievedData.indexOf(','));
-    //     recievedData= recievedData.substring(recievedData.indexOf(',')+1, recievedData.length());
-    // }
+
     for (int i = 0; i < 4; i++)
     {
         nextData = recievedData.substring(0, recievedData.indexOf(','));
@@ -2464,68 +2439,7 @@ float getEspOzoneData(void){
                 break;
         }
     }
-    return 1.1;
-    
-    
-    
-    
-    
-    //parse data if not null
-    // int comma_count = 0;
-    // int from_index = 0;
-    // int index_of_comma = 0;
-    // bool still_searching_for_commas = true;
-    // String stringArray[NUMBER_OF_FEILDS];
-
-    // while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
-    //     //Serial.printf("From index: %d\n\r", from_index);
-
-    //     index_of_comma = recievedData.indexOf(',', from_index);
-    //     if(debugging_enabled){
-    //       Serial.print("comma index: ");
-    //       Serial.println(index_of_comma);
-    //       //writeLogFile("got a comma");
-
-    //     }
-
-    //     //if the index of the comma is not zero, then there is data.
-    //     if(index_of_comma > 0){
-    //         stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
-    //         if(debugging_enabled){
-    //             Serial.printf("String[%d]:", comma_count);
-    //             Serial.println(stringArray[comma_count]);
-    //             //writeLogFile(stringArray[comma_count]);
-    //         }
-    //         comma_count++;
-    //         from_index = index_of_comma;
-    //         from_index += 1;
-    //     }else{
-    //         int index_of_cr = recievedData.indexOf('\r', from_index);
-    //         if(index_of_cr > 0){
-    //             stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
-    //             if(debugging_enabled){
-    //                 Serial.printf("String[%d]:", comma_count);
-    //                 Serial.println(stringArray[comma_count]);
-    //             }
-    //         }
-    //         still_searching_for_commas = false;
-    //     }
-    // }
-    // if(comma_count == NUMBER_OF_FIELDS_LOGGING){
-    //     ozone_value = stringArray[1].toFloat();
-    //     if(debugging_enabled){
-    //         Serial.println("using string array index 1 due to logging");
-    //         //writeLogFile("using string array index 1 due to logging");
-    //       }
-    // }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
-    //     ozone_value = stringArray[0].toFloat();
-    //     if(debugging_enabled){
-    //         Serial.println("using string array index 0, not logging");
-    //         //writeLogFile("using string array index 0, not logging");
-    //       }
-    // }
-    // return ozone_value;
-    //parseOzoneString(recievedData);
+    return ;
 }
 
 
@@ -2896,7 +2810,7 @@ void serialMenu(){
         }
         serial_cellular_enabled = 0;
         EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
-    }else if(incomingByte == 'F'){
+    }else if(incomingByte == 'D'){
         if(temperature_units == CELCIUS){
             temperature_units = FARENHEIT;
 
@@ -2915,7 +2829,7 @@ void serialMenu(){
         }
 
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-    }else if(incomingByte == 'D'){
+    }else if(incomingByte == 'F'){
         if(new_temperature_sensor_enabled == 1){
             new_temperature_sensor_enabled = 0;
             Serial.println("Disabling new temperature sensor");
@@ -3109,17 +3023,6 @@ void serialMenu(){
             serialSetSensibleIotEnable();
             
         }
-    }else if(incomingByte == '#'){
-        if(car_topper_power_en == 1){
-            car_topper_power_en = 0;
-            Serial.println("Disabling car topper power.  ");
-            EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
-        }else{
-            car_topper_power_en = 1;
-            Serial.println("Enabling car topper power.  If no external power, system will turn off.");
-            EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
-        }
-    
     }else if(incomingByte == 'W'){
         printFileToSerial();
         
@@ -3997,9 +3900,10 @@ void outputSerialMenuOptions(void){
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celsius");
-    Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
+    Serial.println("D:  Change temperature units to Fahrenheit");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
-    Serial.println("F:  Change temperature units to Fahrenheit");
+    Serial.println("F:  Disable TMP36 temperature sensor and use BME680 temperature");
+
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone digitally (not through analog input - board dependent)");
     Serial.println("I:  Adjust averaging time for uploading");
@@ -4022,31 +3926,6 @@ void outputSerialMenuOptions(void){
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
-    Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
-}
-
-void output108MenuOptions(void){
-    Serial.println("Key_Stroke      Function");
-    Serial.println("a    Set average and output frequency.");
-    Serial.println("z    Set the zero offset calibration factor.");
-    Serial.println("s    Set the slope calibration factor.");
-    Serial.println("h    Output the serial header(also available during measurements).");
-    Serial.println("Y    Set all configuration to default.");
-    Serial.println("b    Adaptive filter difference.");
-    Serial.println("i    Adaptive filter percent.");
-    Serial.println("k    Adaptive filter long average length.");
-    Serial.println("m    Adaptive filter short average length.");
-    Serial.println("n    Output instrument serial number.");
-    Serial.println("p    Perform Lamp test.");
-    Serial.println("g    Set the relay OFF ozone level (when ozone is greater than this, the relay turns off).");
-    Serial.println("j    Set the relay ON ozone level (when ozone is less than this, the relay turns on).");
-    Serial.println("f    Set the analog output full scale in ppb.");
-    Serial.println("u    Set the ozone units (ppb, pphm, ppm, ug/m3, mg/m3).");
-    Serial.println("c    Set the temperature units.");
-    Serial.println("o    Set the pressure units.");
-    Serial.println("?    Output this help menu.");
-    Serial.println("x    Exits the serial menu.");
-    Serial.println("menu>");
 }
