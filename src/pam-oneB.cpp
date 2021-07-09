@@ -906,6 +906,7 @@ void setup()
 
 void loop() 
 {
+    Serial.println(System.deviceID());
     //Serial.println("Top of loop");
     measurement_number++;
 
