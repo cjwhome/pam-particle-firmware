@@ -198,7 +198,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs,PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,HorizontalDillution,Status,Date/Time"
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,HorizontalDillution,Status,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
@@ -481,7 +481,7 @@ void outputToCloud(String data, String sensible_data){
         //O3_sum /= measurements_to_average;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
+        String webhook_data = String(DEVICE_id) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
@@ -2042,10 +2042,10 @@ void outputDataToESP(void){
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
 
-    if(voc_enabled){
-        cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
-        csv_output_string += String(air_quality_score, 1) + ",";
-    }
+    // if(voc_enabled){
+    //     cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
+    //     csv_output_string += String(air_quality_score, 1) + ",";
+    // }
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
     csv_output_string += String(PM01Value) + ",";
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
@@ -2254,10 +2254,10 @@ void outputDataToESP(void){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
             floatBytes.myFloat = readHumidity();
         }
-        else if(i == 10){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-            floatBytes.myFloat = air_quality_score;
-        }
+        // else if(i == 10){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+        //     floatBytes.myFloat = air_quality_score;
+        // }
 
         //bytes 5,6,7,8 - Measurement Value
         ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
@@ -2952,23 +2952,25 @@ void serialMenu(){
         Serial.println(APP_VERSION);
         Serial.print("Build: ");
         Serial.println("AQLITE: "+AQLITE_VERSION);
-    }else if(incomingByte == '6'){
-        if(voc_enabled == 0){
-            Serial.println("Enabling VOC's");
-        }else{
-            Serial.println("VOC's already enabled");
-        }
-        voc_enabled = 1;
-        EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
-    }else if(incomingByte == '7'){
-        if(voc_enabled == 1){
-            Serial.println("Disabling VOC's");
-        }else{
-            Serial.println("VOC's already disabled");
-        }
-        voc_enabled = 0;
-        EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
-    }else if(incomingByte == '8'){
+    }
+    // else if(incomingByte == '6'){
+    //     if(voc_enabled == 0){
+    //         Serial.println("Enabling VOC's");
+    //     }else{
+    //         Serial.println("VOC's already enabled");
+    //     }
+    //     voc_enabled = 1;
+    //     EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+    // }else if(incomingByte == '7'){
+    //     if(voc_enabled == 1){
+    //         Serial.println("Disabling VOC's");
+    //     }else{
+    //         Serial.println("VOC's already disabled");
+    //     }
+    //     voc_enabled = 0;
+    //     EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+    // }
+    else if(incomingByte == '8'){
         Serial.print("Fault: ");
         byte fault = pmic.getFault();
         Serial.println(fault);
@@ -2992,18 +2994,20 @@ void serialMenu(){
         }
         EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
 
-    }else if(incomingByte == '!'){
+    }
+    // else if(incomingByte == '!'){
 
-        Serial.println("Outputting VOCs continuously!  Press any button to exit...");
-        while(!Serial.available()){
-            if (! bme.performReading()) {
-              Serial.println("Failed to read BME680");
-              return;
-            }else{
-                Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
-            }
-        }
-    }else if(incomingByte == '@'){
+    //     Serial.println("Outputting VOCs continuously!  Press any button to exit...");
+    //     while(!Serial.available()){
+    //         if (! bme.performReading()) {
+    //           Serial.println("Failed to read BME680");
+    //           return;
+    //         }else{
+    //             Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
+    //         }
+    //     }
+    // }
+    else if(incomingByte == '@'){
         if(sensible_iot_en == 1){
             Serial.println("Disabling sensible iot data push.");
             sensible_iot_en = 0;
@@ -3881,8 +3885,8 @@ void outputSerialMenuOptions(void){
     Serial.println("1:  Adjust gas lower limit");
     Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");
-    Serial.println("6:  Enable VOC's");
-    Serial.println("7:  Disable VOC's");
+    // Serial.println("6:  Enable VOC's");
+    // Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
     Serial.println("9:  Increase the charge current by 64 mA");
     Serial.println("0:  Increase the current input limit by 100 mA");
@@ -3913,7 +3917,7 @@ void outputSerialMenuOptions(void){
 
     Serial.println("Y:  Go to 108_L serial menu");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
-    Serial.println("!:  Continuous serial output of VOC's");
+    // Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
