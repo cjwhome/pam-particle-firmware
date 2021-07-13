@@ -130,7 +130,6 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define TEMPERATURE_FAHRENHEIT_PACKET_CONSTANT 'f'
 #define PRESSURE_PACKET_CONSTANT 'P'        //pressure as MILLIBARS
 #define HUMIDITY_PACKET_CONSTANT 'h'        //humidity as PERCENTAGE
-#define SOUND_PACKET_CONSTANT 's'           //sound as DECIBELS
 #define LATITUDE_PACKET_CONSTANT 'a'        //Latitude as DEGREES
 #define LONGITUDE_PACKET_CONSTANT 'o'       //Longitude as DEGREES
 #define ACCURACY_PACKET_CONSTANT 'c'
@@ -138,7 +137,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,HorizontalDillution,Status,Date/Time"
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs,PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,HorizontalDillution,Status,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
@@ -169,7 +168,6 @@ int power_led_en = D6;
 int kill_power = WKP;
 int esp_wroom_en = D7;
 int blower_en = D2;
-int sound_input = B5;  //ozone monitor's voltage output is connected to this input
 int co2_en = C5;        //enables the CO2 sensor power
 
 
@@ -242,8 +240,8 @@ int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 
 
-char geolocation_latitude[12] = "111.1111111";
-char geolocation_longitude[13] = "22.22222222";
+char geolocation_latitude[12] = "999.9999999";
+char geolocation_longitude[13] = "99.9999999";
 char geolocation_accuracy[6] = "255.0";
 
 //used for averaging
@@ -254,7 +252,6 @@ float O3_sum = 0;
 float PM25_sum = 0;
 float PM10_sum = 0;
 int measurement_count = 0;
-double sound_average;
 
 
 //calibration parameters
@@ -424,7 +421,7 @@ void outputToCloud(String data, String sensible_data){
 
         measurement_count = 0;
         String webhook_data = String(DEVICE_id) + ",VOC: " + String(bme.gas_resistance / 1000.0, 1) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",Snd: " + String(sound_average) + ",O3: " + O3_sum + "\n\r";
+        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
@@ -823,7 +820,26 @@ void setup()
 
 
     #if sd_en
-     fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+    if (Time.month() < 10)
+    {
+        if (Time.day() < 10)
+        {
+            fileName = String(DEVICE_id) + "_" + String(Time.year()) + '0' + String(Time.month()) + '0' + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+        }
+        else
+        {
+        fileName = String(DEVICE_id) + "_" + String(Time.year()) + '0' + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+        }
+    }
+    else if (Time.day() < 10)
+    {
+        fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + '0' + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+    }
+    else 
+    {
+        fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+    }
+
      Serial.println("Checking for sd card");
      logFileName = "log_" + fileName;
 
@@ -1076,9 +1092,7 @@ void loop() {
     getEspOzoneData();
 
 
-    //sound_average = 0;
     calculateAQI();
-    sound_average = readSound();
     //read PM values and apply calibration factors
     readPlantower();
 
@@ -1577,22 +1591,7 @@ float readHumidity(void){
     return humidity;
     //temperature = temperature +
 }
-//read sound from
-double readSound(void){
-    int val;
-    double sum = 0;
-    float average = 0;
-    for(int i=0; i< 10;i++){
-        val = analogRead(sound_input);
-        sum += val;
-        //Serial.print("Sound level: ");
-        //Serial.println(val);
-    }
-    sum = sum/10;
-    sum /= 4095;
-    sum *= 100;
-    return sum;
-}
+
 //read Carbon monoxide alphasense sensor
 float readCO(void){
     float float_offset;
@@ -2002,9 +2001,7 @@ void outputDataToESP(void){
         csv_output_string += String(O3_float, 1) + ",";
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     csv_output_string += String(fuel.getSoC(), 1) + ",";
-    cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
 
-    csv_output_string += String(sound_average, 0) + ",";
     cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
 
     if(gps.get_latitude() != 0){
@@ -2106,7 +2103,7 @@ void outputDataToESP(void){
         ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
 
         //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
-        //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
+        //t:Temperature, P:Pressure, h:humidity, O:Ozone,
         //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
         /*
         0-CO_float
@@ -2121,7 +2118,6 @@ void outputDataToESP(void){
         8-bme.humidity
 
         10-fuel.getSoC()
-        11-sound_average
 
 
 
@@ -2158,10 +2154,7 @@ void outputDataToESP(void){
         //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
         //     floatBytes.myFloat = O3_float;
         // }
-        // else if(i == 10){
-        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
-        //     floatBytes.myFloat = sound_average;
-        // }else if(i == 11){
+//else if(i == 11){
         //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
         //     floatBytes.myFloat = air_quality_score;
         // }
@@ -2201,9 +2194,6 @@ void outputDataToESP(void){
             floatBytes.myFloat = readHumidity();
         }
         else if(i == 10){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
-            floatBytes.myFloat = sound_average;
-        }else if(i == 11){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
             floatBytes.myFloat = air_quality_score;
         }
@@ -2444,7 +2434,7 @@ void outputParticles(){
             ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
 
             //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
-            //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
+            //t:Temperature, P:Pressure, h:humidity, O:Ozone,
             //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
             /*
             0-battery
