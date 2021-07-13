@@ -18,9 +18,8 @@ PAMSpecie::PAMSpecie(uint16_t slope_address, uint16_t zero_address, float defaul
 
 PAMSpecie::~PAMSpecie() {}
 
-float PAMSpecie::averaged_value() { 
-    float averaged_number = this->accumulated_value/this->number_of_measures;
+void PAMSpecie::averaged_value() { 
+    this->average = this->accumulated_value/this->number_of_measures;
     this->accumulated_value = 0;
     this->number_of_measures = 0;
-    return averaged_number;
 };

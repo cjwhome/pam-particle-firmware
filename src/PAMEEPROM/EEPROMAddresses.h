@@ -35,7 +35,6 @@
 #define ABC_ENABLE_MEM_ADDRESS                  (124)
 #define HIH8120_ENABLE_MEM_ADDRESS              (128)
 #define CO_SOCKET_MEM_ADDRESS                   (132)
-#define GOOGLE_LOCATION_MEM_ADDRESS             (136)
 
 #define VOC_SLOPE_MEM_ADDRESS                   (140)
 #define VOC_ZERO_MEM_ADDRESS                    (144)

@@ -42,6 +42,9 @@ public:
     void sleep();
     void wakeup();
 
+    std::vector<PAMSensor *> getSensors();
+    void runAllAverages();
+
     void loop();
     uint16_t measurement_period_ms = 5000;
 

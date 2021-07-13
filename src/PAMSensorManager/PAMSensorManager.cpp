@@ -121,3 +121,21 @@ void PAMSensorManager::loop() {
         PAMSerial.println(0, serial_line);
     }
 }
+
+std::vector<PAMSpecie *>* PAMSensorManager::getSensors()
+{
+    return this->sensors;
+}
+
+void PAMSensorManager::runAllAverages()
+{
+    std::vector<PAMSpecie *> *species = new std::vector<PAMSpecie *>();
+
+    for (size_t i = 0; i < this->sensors.size(); i++) {
+        PAMSensor *sensor = this->sensors[i];
+        for (size_t j = 0; j < sensor->getSpecies()->size(); j++) {
+            PAMSpecie *specie = sensor->getSpecies()->at(j);
+            specie->averaged_value();
+        }
+    }
+}

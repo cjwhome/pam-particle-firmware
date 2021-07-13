@@ -13,33 +13,26 @@
 #include "PAMSerial/PAMSerial.h"
 #include "PAMSerial/PAMSerialMenu/PAMSerialMenu.h"
 #include "PAMSerial/PAMSerialEditEEPROMValue/PAMSerialEditEEPROMValue.h"
-
 #include "PAMSensorManager/PAMSensorManager.h"
+
 #include "Sensors/T6713/T6713.h"
 #include "Sensors/TPHFusion/TPHFusion.h"
 #include "Sensors/Plantower/Plantower.h"
 #include "Sensors/PAMCO/PAMCO.h"
 #include "Sensors/108L/108L.h"
 
-#define APP_VERSION 7
-#define BUILD_VERSION 14
+#include "SendingData/SendingData.h"
 
-//define constants
-#define VOLTS_PER_UNIT (0.0008)   //3.3V/4096  3.3 is the adc reference voltage and the adc is 12 bits or 4096
-#define VOLTS_PER_PPB (0.0125)  //2.5V/200 ppb this is what you divide the voltage reading by to get ppb in ozone if the ozone monitor is set to 2.5V=200ppb
+#define APP_VERSION 8
+#define BUILD_VERSION 1
 
 #define CELCIUS 1
 #define FARENHEIT 0
-#define TMP36_OFFSET 0.5
-#define TMP36_VPDC 0.01 //10mV per degree C
 
 
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
 #define sd_en 1
-
-//enable AFE 2 (just for testing now using a second CO sensor connected to it)
-#define AFE2_en 0
 
 //define addresses of eeprom stored variables
 #include "PAMEEPROM/PAMEEPROM.h"
@@ -113,6 +106,8 @@ Plantower plantower(Serial4);
 PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
 PAM_108L pam_108L;
 
+SendingData send_measurements();
+
 time_t watch_time;
 
 
@@ -163,7 +158,6 @@ int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
 int battery_threshold_enable;
 int CO_socket = 0;
-int google_location_en = 0;
 
 char geolocation_latitude[12] = "999.9999999";
 char geolocation_longitude[13] = "99.9999999";
@@ -382,7 +376,6 @@ void readStoredVars(void){
         tph_fusion.disable_hih();
     }
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
-    EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
 
     //measurements_to_average = 5;
     if(measurements_to_average < 1 || measurements_to_average > 5000)
@@ -452,7 +445,6 @@ void writeDefaultSettings(void){
     EEPROM.put(ABC_ENABLE_MEM_ADDRESS, 0);
     EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, 1);
     EEPROM.put(CO_SOCKET_MEM_ADDRESS, 0);
-    EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, 0);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -688,11 +680,12 @@ void setup()
 void loop() {
     if (Time.now() > watch_time+averaging_time)
     {
-        Serial.println("This is the accumulated CO: ");
-        Serial.println(pamco.co.accumulated_value);
-        Serial.println("Number of points: ");
-        Serial.println(pamco.co.number_of_measures);
-        Serial.println(pamco.co.averaged_value());
+        manager->runAllAverages();
+        if (serial_cellular_enabled)
+        {
+
+        }
+        
         watch_time = Time.now();
     }
 
@@ -700,48 +693,24 @@ void loop() {
     PAMSensorManager::GetInstance()->loop();
     PAMSerial.loop();
 
-    // Serial.print("This is the device Id: ");
-    // Serial.println(DEVICE_id);
-    // Serial.print("This is the CO: ");
-    // Serial.println(pamco.co.adj_value);
-    // Serial.print("This is the CO2: ");
-    // Serial.println(t6713.CO2.adj_value);
-    // Serial.print("This is the VOC: ");
-    // Serial.println(tph_fusion.air_quality_score.adj_value);
-    // Serial.print("This is PM1: ");
-    // Serial.println(plantower.pm1.adj_value);
-    // Serial.print("This is PM2_5: ");
-    // Serial.println(plantower.pm2_5.adj_value);
-    // Serial.print("This is PM10: ");
-    // Serial.println(plantower.pm10.adj_value);
-    // Serial.print("This is the temp: ");
-    // Serial.println(tph_fusion.temperature->adj_value);
-    // Serial.print("This is the humidity: ");
-    // Serial.println(tph_fusion.humidity->adj_value);
-    // if (pam_108L.ozone_enabled)
-    // {
-    //     Serial.print("This is the ozone: ");
-    //     Serial.println(pam_108L.ozone.adj_value);
-    // }
-
-    // Serial.print("This is the battery: ");
-    // Serial.println(fuel.getSoC());
-    // readGpsStream();
-    // Serial.print("This is the lat: ");
-    // Serial.println(String(gps.get_latitude()));
-    // Serial.print("This is the long: ");
-    // Serial.println(String(gps.get_longitude()));
-    // Serial.print("this is the horizontal dillution: ");
-    // Serial.println(gps.get_horizontalDillution());
-    // Serial.print("This is the time: ");
-    // Serial.println(Time.now());
+    if(serial_cellular_enabled)
+    {
+        status_word.status_int |= 0x01;
+        if (Particle.connected() == false && tried_cellular_connect == false) 
+        {
+            tried_cellular_connect = true;
+            Cellular.on();
+            Particle.connect();
+        }
+        else if(Particle.connected() == true){  //this means that it is already connected
+            tried_cellular_connect = false;
+        }
+    }
+    else if (Particle.connected() == true) {
+          Cellular.off();
+    }
 
     delay(2000);
-
-
-
-
-
 
 
 
@@ -1204,25 +1173,6 @@ void goToSleepBattery(void){
 
     //Serial.println("Turning off batfet");
     writeRegister(7, 0b01101011);   //turn off batfet
-    //System.sleep(D4, RISING,sleepInterval * 2); //Put the Electron into Sleep Mode for 2 Mins + leave the Modem in Sleep Standby mode so when you wake up the modem is ready to send data vs a full reconnection process.
-
-    /*digitalWrite(plantower_en, LOW);
-    digitalWrite(esp_wroom_en, LOW);
-    digitalWrite(blower_en, LOW);
-    digitalWrite(co2_en, LOW);
-    digitalWrite(fiveVolt_en, LOW);
-    enableLowPowerGPS();
-
-    Serial.print("Sleeping...  Battery charge level:");
-    Serial.println(fuel.getSoC());
-    System.sleep(D4, RISING, sleepInterval * 10);
-
-    digitalWrite(plantower_en, HIGH);
-    digitalWrite(esp_wroom_en, HIGH);
-    digitalWrite(blower_en, HIGH);
-    digitalWrite(co2_en, HIGH);
-    digitalWrite(fiveVolt_en, HIGH);*/
-    //System.sleep(SLEEP_MODE_DEEP, 600);
 
 }
 
@@ -1362,18 +1312,21 @@ void serialMenu(){
 
         Serial.println("Allowing batfet to turn on");
         writeRegister(7, 0b01001011);   //allow batfet to turn on
-    }else if(incomingByte == 'R'){
+    }
+    else if(incomingByte == 'R'){
         if(abc_logic_enabled){
             Serial.println("Disabling ABC logic for CO2 sensor");
             abc_logic_enabled = 0;
             EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
             // t6713.disableABCLogic();
             t6713._t6713.disableABCLogic();
-        }else{
+        }
+        else{
             Serial.println("ABC logic already disabled");
         }
 
-    }else if(incomingByte == 'S'){
+    }
+    else if(incomingByte == 'S'){
         if(!abc_logic_enabled){
             Serial.println("Enabling abc logic for CO2 sensor");
             abc_logic_enabled = 1;
@@ -1381,68 +1334,82 @@ void serialMenu(){
             // t6713.enableABCLogic();
             t6713._t6713.enableABCLogic();
 
-        }else{
+        }
+        else{
             Serial.println("ABC logic already enabled");
         }
-    }else if(incomingByte == 'T'){
+    }
+    else if(incomingByte == 'T'){
         if (!hih8120_enabled) {
             Serial.println("Enabling HIH8120 RH sensor");
             hih8120_enabled = 1;
             tph_fusion.enable_hih();
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
 
-        } else {
+        } 
+        else {
             Serial.println("Disabling HIH8120 RH sensor");
             hih8120_enabled = 0;
             tph_fusion.disable_hih();
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
         }
 
-    }else if(incomingByte == 'U'){
+    }
+    else if(incomingByte == 'U'){
         if(!CO_socket){
             Serial.println("Now reading CO from U20-Alpha2");
             CO_socket = 1;
             EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
 
-        }else{
+        }
+        else{
             Serial.println("Now reading CO from U19-Alpha1");
             CO_socket = 0;
             EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
         }
-    }else if(incomingByte == 'V'){
+    }
+    else if(incomingByte == 'V'){
         Serial.println("Reseting the CO2 sensor");
         // t6713.resetSensor();
         t6713._t6713.resetSensor();
-    }else if(incomingByte == '3'){
+    }
+    else if(incomingByte == '3'){
         Serial.print("APP Version: ");
         Serial.println(APP_VERSION);
         Serial.print("Build: ");
         Serial.println(BUILD_VERSION);
-    }else if(incomingByte == '4'){
+    }
+    else if(incomingByte == '4'){
         if(ozone_enabled == 0){
             Serial.println("Enabling Ozone");
-        }else{
+        }
+        else{
             Serial.println("Ozone already enabled");
         }
         ozone_enabled = 1;
         EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
-    }else if(incomingByte == '5'){
+    }
+    else if(incomingByte == '5'){
         if(ozone_enabled == 1){
             Serial.println("Disabling Ozone");
-        }else{
+        }
+        else{
             Serial.println("Ozone already disabled");
         }
         ozone_enabled = 0;
         EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
-    }else if(incomingByte == '6'){
+    }
+    else if(incomingByte == '6'){
         if(voc_enabled == 0){
             Serial.println("Enabling VOC's");
-        }else{
+        }
+        else{
             Serial.println("VOC's already enabled");
         }
         voc_enabled = 1;
         EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
-    }else if(incomingByte == '7'){
+    }
+    else if(incomingByte == '7'){
         if(voc_enabled == 1){
             Serial.println("Disabling VOC's");
         }else{
@@ -1450,7 +1417,8 @@ void serialMenu(){
         }
         voc_enabled = 0;
         EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
-    }else if(incomingByte == '8'){
+    }
+    else if(incomingByte == '8'){
         Serial.print("Fault: ");
         byte fault = pmic.getFault();
         Serial.println(fault);
@@ -1458,21 +1426,26 @@ void serialMenu(){
         byte systemStatus = pmic.getSystemStatus();
         Serial.println(systemStatus);
 
-    }else if(incomingByte == '9'){
+    }
+    else if(incomingByte == '9'){
         serialIncreaseChargeCurrent();
-    }else if(incomingByte == '0'){
+    }
+    else if(incomingByte == '0'){
         serialIncreaseInputCurrent();
-    }else if(incomingByte == 'B'){
+    }
+    else if(incomingByte == 'B'){
         if(output_only_particles == 1){
             output_only_particles = 0;
             Serial.println("Outputting normally");
-        }else{
+        }
+        else{
             output_only_particles = 1;
             Serial.println("Outputting only PM");
         }
         EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
 
-    }else if(incomingByte == '!'){
+    }
+    else if(incomingByte == '!'){
 
         Serial.println("Outputting VOCs continuously!  Press any button to exit...");
         while(!Serial.available()){
@@ -1485,18 +1458,8 @@ void serialMenu(){
                 Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", tph_fusion.voc->adj_value, tph_fusion.temperature->adj_value, tph_fusion.pressure->adj_value, tph_fusion.humidity->adj_value);
             }
         }
-    }else if(incomingByte == 'W'){
-        if(google_location_en == 1){
-            Serial.println("Disabling google location services.");
-            google_location_en = 0;
-            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
-        }else{
-            Serial.println("Enabling google location services.");
-            google_location_en = 1;
-            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
-        }
-        
-    }else if(incomingByte == 'X'){
+    }
+    else if(incomingByte == 'X'){
         //calibrate CO2 sensor
         //if(debugging_enabled){
             // t6713.calibrate(1);
@@ -1508,7 +1471,8 @@ void serialMenu(){
         co2_calibration_timer = 180;        //6 minutes if measurement cycle is 2 seconds
         
     
-    }else if(incomingByte == 'Z'){
+    }
+    else if(incomingByte == 'Z'){
         Serial.println("Getting cellular information, this may take a while...");
 
         Log.info("IMEI=%s", CellularHelper.getIMEI().c_str());
@@ -1521,7 +1485,8 @@ void serialMenu(){
         //}else{
         //    Serial.println("Cellular not enabled.  Please enable cellular first!");
         //}
-    }else if(incomingByte == '?'){
+    }
+    else if(incomingByte == '?'){
         outputSerialMenuOptions();
     }
   }
@@ -1529,19 +1494,6 @@ void serialMenu(){
 
 }
 
-// void serialTestRemoteFunction(void){
-
-//   Serial.println("Enter string (address,value)");
-//   Serial.setTimeout(50000);
-//   String tempString = Serial.readStringUntil('\r');
-//   int response = remoteWriteStoredVars(tempString);
-//   if(response){
-//     Serial.println("sucess in writing");
-//   }else{
-//     Serial.println("failed writing string");
-//   }
-
-// }
 
 void serialIncreaseInputCurrent(void){
     int inputCurrent = pmic.getInputCurrentLimit();
@@ -1762,22 +1714,6 @@ void serialGetZone(void){
 
 void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
-    Serial.println("a:  Adjust CO2 slope");
-    Serial.println("b:  Adjust CO2 zero");
-    Serial.println("c:  Adjust CO slope");
-    Serial.println("d:  Adjust CO zero");
-    Serial.println("e:  Adjust PM1 slope");
-    Serial.println("f:  Adjust PM1 zero");
-    Serial.println("g:  Adjust PM2.5 slope");
-    Serial.println("h:  Adjust PM2.5 zero");
-    Serial.println("i:  Adjust PM10 slope");
-    Serial.println("j:  Adjust PM10 zero");
-    Serial.println("k:  Adjust Temperature slope");
-    Serial.println("l:  Adjust Temperature zero");
-    Serial.println("m:  Adjust Pressure slope");
-    Serial.println("n:  Adjust Pressure zero");
-    Serial.println("o:  Adjust Humidity slope");
-    Serial.println("p:  Adjust Humidity zero");
     Serial.println("q:  Enable serial debugging");
     Serial.println("r:  Disable serial debugging");
     Serial.println("s:  Output header string");
@@ -1816,10 +1752,9 @@ void outputSerialMenuOptions(void){
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
-    Serial.println("W:  Enable/Disable google location services");
     Serial.println("X:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
     Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
-  }
+}

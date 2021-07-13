@@ -35,7 +35,7 @@ public:
     PAMSpecie(uint16_t slope_address, uint16_t zero_address, float default_slope = 1, float default_zero = 0);
     ~PAMSpecie();
 
-    virtual float averaged_value();
+    virtual void averaged_value();
 
     char *name;
     char *units;
@@ -47,6 +47,7 @@ public:
     float adj_value = VALUE_UNKNOWN;
     uint16_t number_of_measures = 0;
     float accumulated_value = 0;
+    float average = 0;
 
     char packet_constant;
     PAMSerialMenu serial_menu;
