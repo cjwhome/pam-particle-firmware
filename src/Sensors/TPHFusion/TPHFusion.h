@@ -39,16 +39,16 @@ public:
     PAMSpecie *temperature = nullptr;
     PAMSpecie *humidity = nullptr;
     PAMSpecie *pressure = nullptr;
-    PAMSpecie *voc = nullptr;
-    PAMSpecie air_quality_score;
+    //PAMSpecie *voc = nullptr;
+    //PAMSpecie air_quality_score;
 
     BME680 bme680;
     HIH8120 *hih8120 = nullptr;
 
 private:
     bool hih_enabled = false;
-    float gas_upper_limit;
-    float gas_lower_limit;
+    // float gas_upper_limit;
+    // float gas_lower_limit;
 
 };
 

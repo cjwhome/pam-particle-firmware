@@ -24,7 +24,7 @@ public:
     PAMSpecie temperature;
     PAMSpecie humidity;
     PAMSpecie pressure;
-    PAMSpecie voc;
+    //PAMSpecie voc;
 
     Adafruit_BME680 _bme680;
 

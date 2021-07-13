@@ -2,7 +2,8 @@
 
 BME680::BME680()
     : temperature(TEMP_SLOPE_MEM_ADDRESS, TEMP_ZERO_MEM_ADDRESS), pressure(PRESSURE_SLOPE_MEM_ADDRESS, PRESSURE_ZERO_MEM_ADDRESS), 
-        humidity(RH_SLOPE_MEM_ADDRESS, RH_ZERO_MEM_ADDRESS), voc(VOC_SLOPE_MEM_ADDRESS, VOC_ZERO_MEM_ADDRESS)
+        humidity(RH_SLOPE_MEM_ADDRESS, RH_ZERO_MEM_ADDRESS)
+        //, voc(VOC_SLOPE_MEM_ADDRESS, VOC_ZERO_MEM_ADDRESS)
 {
     this->name = "BME680";
 
@@ -21,10 +22,10 @@ BME680::BME680()
     this->humidity.packet_constant = HUMIDITY_PACKET_CONSTANT;
     this->species.push_back(&this->humidity);
 
-    this->voc.name = "VOC";
-    this->voc.units = "";
-    this->voc.packet_constant = DONT_ADVERTISE_CONSTANT;
-    this->species.push_back(&this->voc);
+    // this->voc.name = "VOC";
+    // this->voc.units = "";
+    // this->voc.packet_constant = DONT_ADVERTISE_CONSTANT;
+    // this->species.push_back(&this->voc);
 }
 
 BME680::~BME680() {}
@@ -75,12 +76,12 @@ bool BME680::measure()
     this->humidity.accumulated_value += adj_value;
     this->humidity.number_of_measures++;
 
-    this->voc.raw_value = this->_bme680.gas_resistance;
-    adj_value = (this->voc.slope * this->voc.raw_value) * this->voc.zero;
-    this->voc.adj_value = adj_value;
+    // this->voc.raw_value = this->_bme680.gas_resistance;
+    // adj_value = (this->voc.slope * this->voc.raw_value) * this->voc.zero;
+    // this->voc.adj_value = adj_value;
 
-    this->voc.accumulated_value += adj_value;
-    this->voc.number_of_measures++;
+    // this->voc.accumulated_value += adj_value;
+    // this->voc.number_of_measures++;
 
     return true;
 }

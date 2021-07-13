@@ -52,7 +52,7 @@
 
 //define constants for species - to do in future - read from json file!
 #define DEVICE_ID_PACKET_CONSTANT 'Z'       //instrument ID number as INTEGER
-#define VOC_PACKET_CONSTANT 'g'             //VOCs as IAQ
+//#define VOC_PACKET_CONSTANT 'g'             //VOCs as IAQ
 #define CARBON_MONOXIDE_PACKET_CONSTANT 'M' //CO as PPM
 #define CARBON_DIOXIDE_PACKET_CONSTANT 'C'  //CO2 as PPM
 #define PM1_PACKET_CONSTANT 'r'             //PM1 as UG/M3
@@ -70,7 +70,7 @@
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,N/A,N/A,Date/Time"
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,N/A,N/A,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
@@ -182,13 +182,6 @@ char recieveStr[5];
 
 char incomingByte;  //serial connection from user
 
-//Air quality index variables for calculating from humidity and VOC from BME680
-float hum_weighting = 0.25; // so hum effect is 25% of the total air quality score
-float gas_weighting = 0.75; // so gas effect is 75% of the total air quality score
-
-float hum_score, gas_score;
-float gas_reference = 250000;
-float hum_reference = 40;
 
 
 union{
@@ -358,7 +351,7 @@ void readStoredVars(void){
     EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
     EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
     EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
-    EEPROM.get(VOC_EN_MEM_ADDRESS, voc_enabled);
+    // EEPROM.get(VOC_EN_MEM_ADDRESS, voc_enabled);
     EEPROM.get(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
     EEPROM.get(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
     EEPROM.get(TIME_ZONE_MEM_ADDRESS, tempValue);
@@ -430,7 +423,7 @@ void writeDefaultSettings(void){
     EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, 0);
     EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, 0);
     EEPROM.put(OZONE_EN_MEM_ADDRESS, 0);
-    EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+    // EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
     EEPROM.put(GAS_LOWER_LIMIT_MEM_ADDRESS, 1000);
     EEPROM.put(GAS_UPPER_LIMIT_MEM_ADDRESS, 10000);
     EEPROM.put(TIME_ZONE_MEM_ADDRESS, -7);
@@ -1399,25 +1392,25 @@ void serialMenu(){
         ozone_enabled = 0;
         EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     }
-    else if(incomingByte == '6'){
-        if(voc_enabled == 0){
-            Serial.println("Enabling VOC's");
-        }
-        else{
-            Serial.println("VOC's already enabled");
-        }
-        voc_enabled = 1;
-        EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
-    }
-    else if(incomingByte == '7'){
-        if(voc_enabled == 1){
-            Serial.println("Disabling VOC's");
-        }else{
-            Serial.println("VOC's already disabled");
-        }
-        voc_enabled = 0;
-        EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
-    }
+    // else if(incomingByte == '6'){
+    //     if(voc_enabled == 0){
+    //         Serial.println("Enabling VOC's");
+    //     }
+    //     else{
+    //         Serial.println("VOC's already enabled");
+    //     }
+    //     voc_enabled = 1;
+    //     EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+    // }
+    // else if(incomingByte == '7'){
+    //     if(voc_enabled == 1){
+    //         Serial.println("Disabling VOC's");
+    //     }else{
+    //         Serial.println("VOC's already disabled");
+    //     }
+    //     voc_enabled = 0;
+    //     EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+    // }
     else if(incomingByte == '8'){
         Serial.print("Fault: ");
         byte fault = pmic.getFault();
@@ -1445,20 +1438,20 @@ void serialMenu(){
         EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
 
     }
-    else if(incomingByte == '!'){
+    // else if(incomingByte == '!'){
 
-        Serial.println("Outputting VOCs continuously!  Press any button to exit...");
-        while(!Serial.available()){
-            // if (! bme.performReading()) {
-            if (! tph_fusion.measure()) {
-              Serial.println("Failed to read BME680");
-              return;
-            }else{
-                // Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
-                Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", tph_fusion.voc->adj_value, tph_fusion.temperature->adj_value, tph_fusion.pressure->adj_value, tph_fusion.humidity->adj_value);
-            }
-        }
-    }
+    //     Serial.println("Outputting VOCs continuously!  Press any button to exit...");
+    //     while(!Serial.available()){
+    //         // if (! bme.performReading()) {
+    //         if (! tph_fusion.measure()) {
+    //           Serial.println("Failed to read BME680");
+    //           return;
+    //         }else{
+    //             // Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
+    //             Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", tph_fusion.voc->adj_value, tph_fusion.temperature->adj_value, tph_fusion.pressure->adj_value, tph_fusion.humidity->adj_value);
+    //         }
+    //     }
+    // }
     else if(incomingByte == 'X'){
         //calibrate CO2 sensor
         //if(debugging_enabled){
@@ -1728,8 +1721,8 @@ void outputSerialMenuOptions(void){
     Serial.println("3:  Get build version");
     Serial.println("4:  Enable Ozone");
     Serial.println("5:  Disable Ozone");
-    Serial.println("6:  Enable VOC's");
-    Serial.println("7:  Disable VOC's");
+    // Serial.println("6:  Enable VOC's");
+    // Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
     Serial.println("9:  Increase the charge current by 64 mA");
     Serial.println("0:  Increase the current input limit by 100 mA");
@@ -1753,8 +1746,8 @@ void outputSerialMenuOptions(void){
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
     Serial.println("X:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
-    Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
-    Serial.println("!:  Continuous serial output of VOC's");
+    Serial.println("Z:  Output cellular information (ICCID, IMEI, etc)");
+    // Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
 }
