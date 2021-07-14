@@ -46,45 +46,17 @@
 
 
 
-//ble data output
 
-#define BLE_PAYLOAD_SIZE 22     //number of bytes allowed in payload - this is sent to the ESP chip to be output in ble broadcast packets
-
-//define constants for species - to do in future - read from json file!
-#define DEVICE_ID_PACKET_CONSTANT 'Z'       //instrument ID number as INTEGER
-//#define VOC_PACKET_CONSTANT 'g'             //VOCs as IAQ
-#define CARBON_MONOXIDE_PACKET_CONSTANT 'M' //CO as PPM
-#define CARBON_DIOXIDE_PACKET_CONSTANT 'C'  //CO2 as PPM
-#define PM1_PACKET_CONSTANT 'r'             //PM1 as UG/M3
-#define PM2PT5_PACKET_CONSTANT 'R'          //PM2.5 as UG/M3
-#define PM10_PACKET_CONSTANT 'q'            //PM10 as UG/M3
-#define TEMPERATURE_PACKET_CONSTANT 't'     //temperature as DEGREES CELSIUS
-#define TEMPERATURE_FAHRENHEIT_PACKET_CONSTANT 'f'
-#define PRESSURE_PACKET_CONSTANT 'P'        //pressure as MILLIBARS
-#define HUMIDITY_PACKET_CONSTANT 'h'        //humidity as PERCENTAGE
-#define SOUND_PACKET_CONSTANT 's'           //sound as DECIBELS
-#define LATITUDE_PACKET_CONSTANT 'a'        //Latitude as DEGREES
-#define LONGITUDE_PACKET_CONSTANT 'o'       //Longitude as DEGREES
-#define ACCURACY_PACKET_CONSTANT 'c'
-#define PARTICLE_TIME_PACKET_CONSTANT 'Y'   //result of now()
-#define OZONE_PACKET_CONSTANT 'O'           //Ozone
-#define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
 #define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,N/A,N/A,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
 
-#define MAX_COUNTER_INDEX 15000
 
 #define BATTERY_THRESHOLD 20    //if battery is below 20 percent, go into sleep mode
 
-//define pin functions
-//fix these so they are more consistent!
-#define BME_SCK 13
-#define BME_MISO 12
-#define BME_MOSI 11
-#define BME_CS 10
+
 #define CS A2               //Chip select for SPI/uSD card
 #define SLEEP_EN D3
 
@@ -107,6 +79,7 @@ PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
 PAM_108L pam_108L;
 
 SendingData send_measurements();
+PAMSensorManager *manager = PAMSensorManager::GetInstance();
 
 time_t watch_time;
 
@@ -158,6 +131,7 @@ int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
 int battery_threshold_enable;
 int CO_socket = 0;
+
 
 char geolocation_latitude[12] = "999.9999999";
 char geolocation_longitude[13] = "99.9999999";
@@ -650,7 +624,6 @@ void setup()
 
     PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
 
-    PAMSensorManager *manager = PAMSensorManager::GetInstance();
     manager->addSensor(&t6713);
     manager->addSensor(&tph_fusion);
     manager->addSensor(&plantower);
@@ -670,7 +643,8 @@ void setup()
 
 }
 
-void loop() {
+void loop() 
+{
     if (Time.now() > watch_time+averaging_time)
     {
         manager->runAllAverages();
@@ -1729,8 +1703,6 @@ void outputSerialMenuOptions(void){
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celcius");
-    Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
-    Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
     Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("I:  Adjust frequency for uploading through cellular");
     Serial.println("J:  Reset ESP, CO2, Plantower");

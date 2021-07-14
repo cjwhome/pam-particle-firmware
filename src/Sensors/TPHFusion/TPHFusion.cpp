@@ -1,6 +1,7 @@
 #include "TPHFusion.h"
 
-TPHFusion::TPHFusion(uint8_t hih_address, bool _hih_enabled) : air_quality_score(0x00, 0x00)
+TPHFusion::TPHFusion(uint8_t hih_address, bool _hih_enabled)
+//air_quality_score(0x00, 0x00)
 {
     this->name = "Temp/Press/RH Fusion";
 
@@ -38,7 +39,7 @@ TPHFusion::TPHFusion(uint8_t hih_address, bool _hih_enabled) : air_quality_score
     this->species.push_back(this->humidity);
     this->species.push_back(this->pressure);
     //this->species.push_back(this->voc);
-    this->species.push_back(&this->air_quality_score);
+    //this->species.push_back(&this->air_quality_score);
 }
 
 TPHFusion::~TPHFusion()

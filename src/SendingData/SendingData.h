@@ -11,6 +11,8 @@
 #include "../Sensors/T6713/T6713.h"
 #include "../PAMSensorManager/PAMSensorManager.h"
 #include "../PAMSensor/PAMSensor.h"
+#include "BLEconstants.h"
+#include "gps.h"
 
 
 class SendingData {
@@ -19,23 +21,24 @@ public:
     SendingData();
     ~SendingData();
 
-    SendDataToSd(); // done
-    SendDataToParticle(); //done
-    SendDataToESP(); //done
-    SendDataToSensible(); //done
+    void SendDataToSd(); // done
+    void SendDataToParticle(); //done
+    void SendDataToESP(); //done
+    void SendDataToSensible(); //done
 
     static SendingData *instance;
     String device_id = "";
 
 private: 
     static SendingData* GetInstance();
-    T6713 t6713 = NULL;
-    TPHFusion tph_fusion = NULL;
-    Plantower plantower = NULL;
-    PAMCO pamco = NULL;
-    PAMCO pamco2 = NULL;
-    PAM_108L pam_108L = NULL;
+    T6713 * t6713 = NULL;
+    TPHFusion * tph_fusion = NULL;
+    Plantower * plantower = NULL;
+    PAMCO * pamco = NULL;
+    PAMCO * pamco2 = NULL;
+    PAM_108L * pam_108L = NULL;
     int sample_counter = 0;
+    GPS gps;
 
 
 };
