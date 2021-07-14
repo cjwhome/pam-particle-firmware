@@ -303,8 +303,8 @@ int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 double measurement_number = 0;
 
-char geolocation_latitude[12] = "111.1111111";
-char geolocation_longitude[13] = "22.22222222";
+char geolocation_latitude[12] = "999.9999999";
+char geolocation_longitude[13] = "99.9999999";
 char geolocation_accuracy[6] = "255.0";
 
 //used for averaging
@@ -321,9 +321,9 @@ double sound_average;
 float CO2_slope;
 int CO2_zero;
 float CO_slopeA;
-int CO_zeroA;
+float CO_zeroA;
 float CO_slopeB;
-int CO_zeroB;
+float CO_zeroB;
 float PM_1_slope;
 float PM_25_slope;
 float PM_10_slope;
@@ -757,7 +757,7 @@ void setup()
     Particle.function("geteepromdata", remoteReadStoredVars);
     Particle.function("rebootaqsync", rebootAQSync);
     Particle.function("diagnostics", sendDiagnostics);
-    Particle.variable("CO_zeroA", CO_zeroA);
+    //Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -906,7 +906,6 @@ void setup()
 
 void loop() 
 {
-    Serial.println(System.deviceID());
     //Serial.println("Top of loop");
     measurement_number++;
 
@@ -3238,10 +3237,10 @@ void serialGetCoZeroA(void)
     Serial.println();
     Serial.print("Current CO_A zero:");
     Serial.print(CO_zeroA);
-    Serial.println(" ppb");
+    Serial.println(" ppm");
     Serial.print("Enter new CO Zero\n\r");
 
-    int tempValue = readSerBufUntilDone().toInt();
+    float tempValue = readSerBufUntilDone().toFloat();
 
     if (tempValue >= -5000 && tempValue < 5000)
     {
@@ -3287,10 +3286,10 @@ void serialGetCoZeroB(void)
     Serial.println();
     Serial.print("Current CO_B zero:");
     Serial.print(CO_zeroB);
-    Serial.println(" ppb");
+    Serial.println(" ppm");
     Serial.print("Enter new CO Zero\n\r");
 
-    int tempValue = readSerBufUntilDone().toInt();
+    float tempValue = readSerBufUntilDone().toFloat();
 
     if (tempValue >= -5000 && tempValue < 5000)
     {
