@@ -1,11 +1,9 @@
-
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
-#include "gps.h"
+//#include "gps.h"
 #include "inttypes.h"
 #include "Particle.h"
 #include "PowerCheck.h"
-#include "../lib/SdFat/src/SdFat/SdFat.h"
 #include "CellularHelper.h"
 
 #include "Wiring.h"
@@ -22,6 +20,7 @@
 #include "Sensors/108L/108L.h"
 
 #include "SendingData/SendingData.h"
+#include "global.h"
 
 #define APP_VERSION 8
 #define BUILD_VERSION 1
@@ -51,13 +50,11 @@
 #define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,N/A,N/A,Date/Time"
 
 
-#define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
+
 
 
 #define BATTERY_THRESHOLD 20    //if battery is below 20 percent, go into sleep mode
 
-
-#define CS A2               //Chip select for SPI/uSD card
 #define SLEEP_EN D3
 
 //constants for parsing ozone string from ozone monitor Model 106
@@ -71,21 +68,8 @@ SYSTEM_THREAD(ENABLED);
 
 //global objects
 
-// PAM Sensors
-T6713 t6713;
-TPHFusion tph_fusion(0x27, false);
-Plantower plantower(Serial4);
-PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
-PAM_108L pam_108L;
 
-SendingData send_measurements();
-PAMSensorManager *manager = PAMSensorManager::GetInstance();
-
-time_t watch_time;
-
-
-FuelGauge fuel;
-GPS gps;
+//GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
 //SerialLogHandler logHandler;
@@ -98,7 +82,6 @@ SdFat sd;
 SdFile file;
 SdFile log_file;
 File file1;
-String fileName;
 String logFileName;
 int file_started = 0;
 int log_file_started = 0;
@@ -133,9 +116,7 @@ int battery_threshold_enable;
 int CO_socket = 0;
 
 
-char geolocation_latitude[12] = "999.9999999";
-char geolocation_longitude[13] = "99.9999999";
-char geolocation_accuracy[6] = "255.0";
+
 
 int averaging_time = 0;
 
@@ -157,14 +138,24 @@ char recieveStr[5];
 char incomingByte;  //serial connection from user
 
 
+// PAM Sensors
+T6713 t6713;
+TPHFusion tph_fusion(0x27, false);
+Plantower plantower(Serial4);
+PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
+PAM_108L pam_108L;
+Global * globalVariables = Global::GetInstance();
 
-union{
-    uint16_t status_int;
-    char byte[2];
-}status_word;
+SendingData send_measurements();
+PAMSensorManager *manager = PAMSensorManager::GetInstance();
+
+time_t watch_time;
+
+
+FuelGauge fuel;
 
 char cellular_status = 0;
-char gps_status = 0;
+//char gps_status = 0;
 
 /*
 The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
@@ -494,9 +485,9 @@ void setup()
     Wire.begin();
 
 
-    status_word.status_int  = 0;
-    status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
-    status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
+    globalVariables->status_word->status_int  = 0;
+    globalVariables->status_word->status_int |= (APP_VERSION << 12) & 0xFF00;
+    globalVariables->status_word->status_int |= (BUILD_VERSION << 8) & 0xF00;
     //status_word.status_int |= 0x6500;
 
     String init_log; //intialization error log
@@ -587,9 +578,8 @@ void setup()
 
 
     #if sd_en
-     fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
      Serial.println("Checking for sd card");
-     logFileName = "log_" + fileName;
+     logFileName = "log_" + globalVariables->fileName;
 
     if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
       /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
@@ -605,7 +595,7 @@ void setup()
       check_cal_file();*/
 
       Serial.print("Created new file to log to uSD card: ");
-      Serial.println(fileName);
+      Serial.println(globalVariables->fileName);
     }else { //uSD is not functioning
         Serial.println("No uSD card detected.");
     }
@@ -662,7 +652,7 @@ void loop()
 
     if(serial_cellular_enabled)
     {
-        status_word.status_int |= 0x01;
+        globalVariables->status_word->status_int |= 0x01;
         if (Particle.connected() == false && tried_cellular_connect == false) 
         {
             tried_cellular_connect = true;
@@ -730,226 +720,226 @@ void loop()
 
 }
 
-void echoGps(){
-    char gps_byte = 0;
-    while(!Serial.available()){
-        if(Serial5.available() > 0){
-            gps_byte = Serial5.read();
-            Serial.print(gps_byte);
-        }
+// void echoGps(){
+//     char gps_byte = 0;
+//     while(!Serial.available()){
+//         if(Serial5.available() > 0){
+//             gps_byte = Serial5.read();
+//             Serial.print(gps_byte);
+//         }
 
-    }
-}
+//     }
+// }
 
-void readGpsStream(void){
-    String gps_sentence = "init";
-    int stringFound = 0;
-    int error = 0;
-    int comma_counter = 0;
-    while(!stringFound && !error){
-        gps_sentence = Serial5.readStringUntil('\r');
-        String prefix_string = gps_sentence.substring(4,7);
-        if(prefix_string.equals("GGA")){
+// void readGpsStream(void){
+//     String gps_sentence = "init";
+//     int stringFound = 0;
+//     int error = 0;
+//     int comma_counter = 0;
+//     while(!stringFound && !error){
+//         gps_sentence = Serial5.readStringUntil('\r');
+//         String prefix_string = gps_sentence.substring(4,7);
+//         if(prefix_string.equals("GGA")){
 
-            //
-            //Serial.print("prefix string: ");
-            //Serial.println(prefix_string);
-            //Serial.print("String:");
-            //Serial.println(gps_sentence);
-            stringFound = 1;
-        }else if(gps_sentence.equals("init")){
-            error = 1;
-            Serial.println("Error reading GPS");
-            writeLogFile("Error reading GPS");
-        }
-    }
-    if(stringFound){
+//             //
+//             //Serial.print("prefix string: ");
+//             //Serial.println(prefix_string);
+//             //Serial.print("String:");
+//             //Serial.println(gps_sentence);
+//             stringFound = 1;
+//         }else if(gps_sentence.equals("init")){
+//             error = 1;
+//             Serial.println("Error reading GPS");
+//             writeLogFile("Error reading GPS");
+//         }
+//     }
+//     if(stringFound){
 
-        //parse the gps string into latitude, longitude
-        //UTC time is after first comma
-        //Latitude is after second comma (ddmm.mmmm)
-        //N/S indicator is after 3rd comma
-        //longitude is after 4th comma (dddmm.mmmm)
-        //E/W indicator is after 5th comma
-        //quality is after 6th comma
-        //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
-        //
-        comma_counter = 0;
+//         //parse the gps string into latitude, longitude
+//         //UTC time is after first comma
+//         //Latitude is after second comma (ddmm.mmmm)
+//         //N/S indicator is after 3rd comma
+//         //longitude is after 4th comma (dddmm.mmmm)
+//         //E/W indicator is after 5th comma
+//         //quality is after 6th comma
+//         //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
+//         //
+//         comma_counter = 0;
 
-        for(int a = 0; a<gps_sentence.length(); a++){
-            if(gps_sentence.charAt(a) == ','){
-                if(comma_counter == TIME_FIELD_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String utc_string = gps_sentence.substring(a+1,a+11);
-                        //Serial.print("GPS utc string: ");
-                        if(debugging_enabled){
-                            Serial.print("GPS utc string: ");
-                            Serial.println(utc_string);
+//         for(int a = 0; a<gps_sentence.length(); a++){
+//             if(gps_sentence.charAt(a) == ','){
+//                 if(comma_counter == TIME_FIELD_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String utc_string = gps_sentence.substring(a+1,a+11);
+//                         //Serial.print("GPS utc string: ");
+//                         if(debugging_enabled){
+//                             Serial.print("GPS utc string: ");
+//                             Serial.println(utc_string);
 
-                        }
-                        //Serial.println(utc_string);
-                    }
-                }else if(comma_counter == LATITUDE_FIELD_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String latitudeString = gps_sentence.substring(a+1,a+10);
-                        if(debugging_enabled){
-                          Serial.print("Latitude string: ");
-                          Serial.print(latitudeString);
-                        }
-                        //Serial.print("Latitude string: ");
-                        //Serial.print(latitudeString);
-                        //Serial.print(" ");
-                        //Serial.println(gps_sentence.charAt(a+12));
-                        gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
-                        status_word.status_int &= 0xFFF7;
-                        //Serial.print("Latitude decimal: ");
-                        //Serial.println(gps.get_latitude(), 5);
-                    }
-                }else if(comma_counter == LONGITUDE_FIELD_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String longitudeString = gps_sentence.substring(a+1,a+11);
-                        if(debugging_enabled){
-                          Serial.print("longitude string: ");
-                          Serial.print(longitudeString);
-                        }
-                        //Serial.print(" ");
-                        //Serial.println(gps_sentence.charAt(a+13));
-                        gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
-                        //Serial.print("Longitude decimal: ");
-                        //Serial.println(gps.get_longitude(), 5);
-                    }
-                }else if(comma_counter == NUMBER_OF_SATELLITES_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String numberOfSatellitesString = gps_sentence.substring(a+1,a+3);
-                        gps.set_satellites(numberOfSatellitesString);
-                    }
-                }else if(comma_counter == HORZONTAL_DILLUTION_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String hdString = gps_sentence.substring(a+1,a+3);
-                        gps.set_horizontalDillution(hdString);
-                        status_word.status_int &= 0xFFF3;
-                        if(gps.get_horizontalDillution() < 2){
-                            status_word.status_int |= 0x000C;
-                        }else if(gps.get_horizontalDillution() < 5){
-                            status_word.status_int |= 0x0008;
-                        }else if(gps.get_horizontalDillution() < 20){
-                            status_word.status_int |= 0x0004;
-                        }
-
-
-                    }
-                }
-                comma_counter++;
-            }
-        }
-    }
-
-}
-
-void readGpsStreamDate(void){
-    String gps_sentence = "init";
-    int stringFound = 0;
-    int error = 0;
-    int comma_counter = 0;
-    while(!stringFound && !error){
-        gps_sentence = Serial5.readStringUntil('\r');
-        String prefix_string = gps_sentence.substring(4,7);
-        if(prefix_string.equals("RMC")){
-
-            //
-            //Serial.print("prefix string: ");
-            //Serial.println(prefix_string);
-            //Serial.print("String:");
-            //Serial.println(gps_sentence);
-            stringFound = 1;
-        }else if(gps_sentence.equals("init")){
-            error = 1;
-            Serial.println("Error reading GPS RMC");
-            writeLogFile("Error reading GPS RMC");
-        }
-    }
-    if(stringFound){
-
-        //parse the gps string into latitude, longitude
-        //UTC time is after first comma
-        //Latitude is after second comma (ddmm.mmmm)
-        //N/S indicator is after 3rd comma
-        //longitude is after 4th comma (dddmm.mmmm)
-        //E/W indicator is after 5th comma
-        //quality is after 6th comma
-        //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
-        //
-        comma_counter = 0;
-
-        for(int a = 0; a<gps_sentence.length(); a++){
-            if(gps_sentence.charAt(a) == ','){
-                if(comma_counter == DATE_FIELD_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String utc_string = gps_sentence.substring(a+1,a+11);
-                        //Serial.print("GPS utc string: ");
-                        if(debugging_enabled){
-                            Serial.print("GPS utc string: ");
-                            Serial.println(utc_string);
-
-                        }
-                        //Serial.println(utc_string);
-                    }
-                }else if(comma_counter == LATITUDE_FIELD_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String latitudeString = gps_sentence.substring(a+1,a+10);
-                        if(debugging_enabled){
-                          Serial.print("Latitude string: ");
-                          Serial.print(latitudeString);
-                        }
-                        //Serial.print("Latitude string: ");
-                        //Serial.print(latitudeString);
-                        //Serial.print(" ");
-                        //Serial.println(gps_sentence.charAt(a+12));
-                        gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
-                        status_word.status_int &= 0xFFF7;
-                        //Serial.print("Latitude decimal: ");
-                        //Serial.println(gps.get_latitude(), 5);
-                    }
-                }else if(comma_counter == LONGITUDE_FIELD_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String longitudeString = gps_sentence.substring(a+1,a+11);
-                        if(debugging_enabled){
-                          Serial.print("longitude string: ");
-                          Serial.print(longitudeString);
-                        }
-                        //Serial.print(" ");
-                        //Serial.println(gps_sentence.charAt(a+13));
-                        gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
-                        //Serial.print("Longitude decimal: ");
-                        //Serial.println(gps.get_longitude(), 5);
-                    }
-                }else if(comma_counter == NUMBER_OF_SATELLITES_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String numberOfSatellitesString = gps_sentence.substring(a+1,a+3);
-                        gps.set_satellites(numberOfSatellitesString);
-                    }
-                }else if(comma_counter == HORZONTAL_DILLUTION_INDEX){
-                    if(gps_sentence.charAt(a+1)!=','){
-                        String hdString = gps_sentence.substring(a+1,a+3);
-                        gps.set_horizontalDillution(hdString);
-                        status_word.status_int &= 0xFFF3;
-                        if(gps.get_horizontalDillution() < 2){
-                            status_word.status_int |= 0x000C;
-                        }else if(gps.get_horizontalDillution() < 5){
-                            status_word.status_int |= 0x0008;
-                        }else if(gps.get_horizontalDillution() < 20){
-                            status_word.status_int |= 0x0004;
-                        }
+//                         }
+//                         //Serial.println(utc_string);
+//                     }
+//                 }else if(comma_counter == LATITUDE_FIELD_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String latitudeString = gps_sentence.substring(a+1,a+10);
+//                         if(debugging_enabled){
+//                           Serial.print("Latitude string: ");
+//                           Serial.print(latitudeString);
+//                         }
+//                         //Serial.print("Latitude string: ");
+//                         //Serial.print(latitudeString);
+//                         //Serial.print(" ");
+//                         //Serial.println(gps_sentence.charAt(a+12));
+//                         gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
+//                         status_word.status_int &= 0xFFF7;
+//                         //Serial.print("Latitude decimal: ");
+//                         //Serial.println(gps.get_latitude(), 5);
+//                     }
+//                 }else if(comma_counter == LONGITUDE_FIELD_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String longitudeString = gps_sentence.substring(a+1,a+11);
+//                         if(debugging_enabled){
+//                           Serial.print("longitude string: ");
+//                           Serial.print(longitudeString);
+//                         }
+//                         //Serial.print(" ");
+//                         //Serial.println(gps_sentence.charAt(a+13));
+//                         gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
+//                         //Serial.print("Longitude decimal: ");
+//                         //Serial.println(gps.get_longitude(), 5);
+//                     }
+//                 }else if(comma_counter == NUMBER_OF_SATELLITES_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String numberOfSatellitesString = gps_sentence.substring(a+1,a+3);
+//                         gps.set_satellites(numberOfSatellitesString);
+//                     }
+//                 }else if(comma_counter == HORZONTAL_DILLUTION_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String hdString = gps_sentence.substring(a+1,a+3);
+//                         gps.set_horizontalDillution(hdString);
+//                         status_word.status_int &= 0xFFF3;
+//                         if(gps.get_horizontalDillution() < 2){
+//                             status_word.status_int |= 0x000C;
+//                         }else if(gps.get_horizontalDillution() < 5){
+//                             status_word.status_int |= 0x0008;
+//                         }else if(gps.get_horizontalDillution() < 20){
+//                             status_word.status_int |= 0x0004;
+//                         }
 
 
-                    }
-                }
-                comma_counter++;
-            }
-        }
-    }
+//                     }
+//                 }
+//                 comma_counter++;
+//             }
+//         }
+//     }
 
-}
+// }
+
+// void readGpsStreamDate(void){
+//     String gps_sentence = "init";
+//     int stringFound = 0;
+//     int error = 0;
+//     int comma_counter = 0;
+//     while(!stringFound && !error){
+//         gps_sentence = Serial5.readStringUntil('\r');
+//         String prefix_string = gps_sentence.substring(4,7);
+//         if(prefix_string.equals("RMC")){
+
+//             //
+//             //Serial.print("prefix string: ");
+//             //Serial.println(prefix_string);
+//             //Serial.print("String:");
+//             //Serial.println(gps_sentence);
+//             stringFound = 1;
+//         }else if(gps_sentence.equals("init")){
+//             error = 1;
+//             Serial.println("Error reading GPS RMC");
+//             writeLogFile("Error reading GPS RMC");
+//         }
+//     }
+//     if(stringFound){
+
+//         //parse the gps string into latitude, longitude
+//         //UTC time is after first comma
+//         //Latitude is after second comma (ddmm.mmmm)
+//         //N/S indicator is after 3rd comma
+//         //longitude is after 4th comma (dddmm.mmmm)
+//         //E/W indicator is after 5th comma
+//         //quality is after 6th comma
+//         //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
+//         //
+//         comma_counter = 0;
+
+//         for(int a = 0; a<gps_sentence.length(); a++){
+//             if(gps_sentence.charAt(a) == ','){
+//                 if(comma_counter == DATE_FIELD_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String utc_string = gps_sentence.substring(a+1,a+11);
+//                         //Serial.print("GPS utc string: ");
+//                         if(debugging_enabled){
+//                             Serial.print("GPS utc string: ");
+//                             Serial.println(utc_string);
+
+//                         }
+//                         //Serial.println(utc_string);
+//                     }
+//                 }else if(comma_counter == LATITUDE_FIELD_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String latitudeString = gps_sentence.substring(a+1,a+10);
+//                         if(debugging_enabled){
+//                           Serial.print("Latitude string: ");
+//                           Serial.print(latitudeString);
+//                         }
+//                         //Serial.print("Latitude string: ");
+//                         //Serial.print(latitudeString);
+//                         //Serial.print(" ");
+//                         //Serial.println(gps_sentence.charAt(a+12));
+//                         gps.set_lat_decimal(latitudeString, gps_sentence.charAt(a+12));
+//                         status_word.status_int &= 0xFFF7;
+//                         //Serial.print("Latitude decimal: ");
+//                         //Serial.println(gps.get_latitude(), 5);
+//                     }
+//                 }else if(comma_counter == LONGITUDE_FIELD_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String longitudeString = gps_sentence.substring(a+1,a+11);
+//                         if(debugging_enabled){
+//                           Serial.print("longitude string: ");
+//                           Serial.print(longitudeString);
+//                         }
+//                         //Serial.print(" ");
+//                         //Serial.println(gps_sentence.charAt(a+13));
+//                         gps.set_long_decimal(longitudeString, gps_sentence.charAt(a+13));
+//                         //Serial.print("Longitude decimal: ");
+//                         //Serial.println(gps.get_longitude(), 5);
+//                     }
+//                 }else if(comma_counter == NUMBER_OF_SATELLITES_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String numberOfSatellitesString = gps_sentence.substring(a+1,a+3);
+//                         gps.set_satellites(numberOfSatellitesString);
+//                     }
+//                 }else if(comma_counter == HORZONTAL_DILLUTION_INDEX){
+//                     if(gps_sentence.charAt(a+1)!=','){
+//                         String hdString = gps_sentence.substring(a+1,a+3);
+//                         gps.set_horizontalDillution(hdString);
+//                         status_word.status_int &= 0xFFF3;
+//                         if(gps.get_horizontalDillution() < 2){
+//                             status_word.status_int |= 0x000C;
+//                         }else if(gps.get_horizontalDillution() < 5){
+//                             status_word.status_int |= 0x0008;
+//                         }else if(gps.get_horizontalDillution() < 20){
+//                             status_word.status_int |= 0x0004;
+//                         }
+
+
+//                     }
+//                 }
+//                 comma_counter++;
+//             }
+//         }
+//     }
+
+// }
 // Send a packet to the receiver to change frequency to 100 ms.
 void changeFrequency()
 {
@@ -1242,10 +1232,12 @@ void serialMenu(){
     }else if(incomingByte == 'J'){
         resetESP();
         Serial.println("ESP reset!");
-    }else if(incomingByte == 'K'){
-      Serial.println("Outputting GPS continuously");
-      echoGps();
-    }else if(incomingByte == 'L'){
+    }
+    // else if(incomingByte == 'K'){
+    //   Serial.println("Outputting GPS continuously");
+    //   echoGps();
+    // }
+    else if(incomingByte == 'L'){
       serialResetSettings();
     }else if(incomingByte == 'M'){
       //serialTestRemoteFunction();
@@ -1267,12 +1259,14 @@ void serialMenu(){
           EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
       }
 
-    }else if(incomingByte == 'O'){
-        //Serial.println("Changing frequency for gps");
-        //changeFrequency();
-        Serial.println("Enabling low power for gps");
-        enableLowPowerGPS();
-    }else if(incomingByte  == 'P'){
+    }
+    // else if(incomingByte == 'O'){
+    //     //Serial.println("Changing frequency for gps");
+    //     //changeFrequency();
+    //     Serial.println("Enabling low power for gps");
+    //     enableLowPowerGPS();
+    // }
+    else if(incomingByte  == 'P'){
         Serial.println("Turning off batfet");
         writeRegister(7, 0b01101011);   //turn off batfet
     }else if(incomingByte == 'Q'){
@@ -1706,11 +1700,11 @@ void outputSerialMenuOptions(void){
     Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("I:  Adjust frequency for uploading through cellular");
     Serial.println("J:  Reset ESP, CO2, Plantower");
-    Serial.println("K:  Continuous serial output of GPS");
+    //Serial.println("K:  Continuous serial output of GPS");
     Serial.println("L:  Write default settings");
     Serial.println("M:  Enable 20% battery threshold limiting");
     Serial.println("N:  Disable 20% battery threshold limiting WARNING!!");
-    Serial.println("O:  Enable low power for GPS module");
+    //Serial.println("O:  Enable low power for GPS module");
     Serial.println("P:  Turn off BATFET");
     Serial.println("Q:  Allow BATFET to turn on");
     Serial.println("R:  Disable ABC logic for CO2 sensor");

@@ -2,8 +2,7 @@
 
 SendingData::SendingData()
 {
-    EEPROM.get(DEVICE_ID_MEM_ADDRESS, device_id);
-    PAMSensorManager sensorManager();
+    PAMSensorManager *sensorManager = PAMSensorManager::GetInstance();
     std::vector<PAMSensor *> sensors = sensorManager->getSensors();
     PAMSensor *sensor; 
     for (int i = 0; i < sensors.size(); i++)
@@ -11,34 +10,34 @@ SendingData::SendingData()
         sensor = sensors[i];
         if (sensor->name == "T6713")
         {
-            this->t6713 = sensor;
+            this->t6713 = (T6713*)(sensor);
         }
         else if (sensor->name == "Temp/Press/RH Fusion")
         {
-            this->tph_fusion = sensor;
+            this->tph_fusion = (TPHFusion*)(sensor);
         }
         else if (sensor->name == "Plantower")
         {
-            this->plantower = sensor;
+            this->plantower = (Plantower*)(sensor);
         }
         else if (sensor->name == "CO Sensor")
         {
-            this->pamco = sensor;
+            this->pamco = (PAMCO*)(sensor);
         }
         else if (sensor->name == "CO Sensor 2")
         {
-            this->pamco2 = sensor;
+            this->pamco2 = (PAMCO*)(sensor);
         }
         else if (sensor->name == "108L")
         {
-            this->pam_108L = sensor;
+            this->pam_108L = (PAM_108L*)(sensor);
         }
     }
 }
 
 SendingData::~SendingData() {}
 
-SendingData* SendingData::GetInstance()
+SendingData* GetInstance()
 {
     if (instance == nullptr) {
         instance = new SendingData();
@@ -56,6 +55,20 @@ void SendingData::SendDataToESP()
     }
     sample_counter++;
 
+
+
+    //used for converting float to bytes for measurement value
+    union {
+        float myFloat;
+        unsigned char bytes[4];
+    } floatBytes;
+
+    //used for converting word to bytes for lat and longitude
+    union {
+        int16_t myWord;
+        unsigned char bytes[2];
+    }wordBytes;
+
     //create an array of binary data to store and send all data at once to the ESP
     //Each "section" in the array is separated by a #
     //we are using binary for the ble packets so we can compress the data into 19 bytes for the small payload
@@ -72,7 +85,7 @@ void SendingData::SendDataToESP()
 
         //bytes 1,2 - Device ID
         //DEVICE_id = 555;
-        wordBytes.myWord = this->device_id;
+        wordBytes.myWord = this->globalVariables->device_id;
         ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
         ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
@@ -97,22 +110,22 @@ void SendingData::SendDataToESP()
         */
         if(i == 0){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = this->pamco.co->average;
+            floatBytes.myFloat = this->pamco->co.average;
         }else if(i == 1){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = this->t6713.CO2->average;
+            floatBytes.myFloat = this->t6713->CO2.average;
         }else if(i == 2){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
             floatBytes.myFloat = fuel.getSoC();
         }else if(i == 3){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-            floatBytes.myFloat = this->plantower.pm1->average;
+            floatBytes.myFloat = this->plantower->pm1.average;
         }else if(i == 4){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-            floatBytes.myFloat = this->plantower.pm2_5->average;
+            floatBytes.myFloat = this->plantower->pm2_5.average;
         }else if(i == 5){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-            floatBytes.myFloat = this->plantower.pm10->average;
+            floatBytes.myFloat = this->plantower->pm10.average;
         }else if(i == 6){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
             floatBytes.myFloat = this->tph_fusion->temperature->average;
@@ -122,14 +135,12 @@ void SendingData::SendDataToESP()
         }else if(i == 8){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
             floatBytes.myFloat = this->tph_fusion->humidity->average;
-        }else if(i == 9){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-            floatBytes.myFloat = this->tph_fusion->air_quality_score->average;
-        }else if(i == 10){
-            if (ozone_enabled)
+        }
+        else if(i == 10){
+            if (this->globalVariables->ozone_enabled)
             {
                 ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
-                floatBytes.myFloat = this->pam_108L->ozone->adj_value;
+                floatBytes.myFloat = this->pam_108L->ozone.adj_value;
             }
 
         }
@@ -168,8 +179,8 @@ void SendingData::SendDataToESP()
 
         ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
         ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
-        ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[1];
-        ble_output_array[20 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[0];
+        ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = this->globalVariables->status_word->byte[1];
+        ble_output_array[20 + i*(BLE_PAYLOAD_SIZE)] = this->globalVariables->status_word->byte[0];
 
         ble_output_array[21 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
 
@@ -192,24 +203,24 @@ void SendingData::SendDataToParticle()
     String cloud_output_string = "";    //create a clean string
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
-    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(this->device_id);   //device id
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(this->pamco->co->average, 3);
+    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(this->globalVariables->device_id);   //device id
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(this->pamco->co.average, 3);
 
     if (this->pamco2 != NULL)
     {
-        cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(this->pamco2->co->average, 3);
+        cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(this->pamco2->co.average, 3);
     }
 
-    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(this->t6713->CO2->average, 0);
+    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(this->t6713->CO2.average, 0);
 
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(this->plantower->pm1->average);
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(this->plantower->pm2_5->average, 0);
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(this->plantower->pm10->average);
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(this->plantower->pm1.average);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(this->plantower->pm2_5.average, 0);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(this->plantower->pm10.average);
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(this->tph_fusion->temperature->average, 1);
     cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(this->tph_fusion->pressure->average / 100.0, 1);
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(this->tph_fusion->humidity->average, 1);
-    if(ozone_enabled){
-        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(this->tph_fusion->ozone->adj_value, 1);
+    if(this->globalVariables->ozone_enabled){
+        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(this->pam_108L->ozone.adj_value, 1);
     }
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     //cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
@@ -260,24 +271,25 @@ void SendingData::SendDataToParticle()
 void SendingData::SendDataToSd()
 {
     String csv_output_string = "";
-    csv_output_string += String(this->device_id) + ",";
-    csv_output_string += String(this->pamco->co->average, 3) + ",";
+    csv_output_string += String(this->globalVariables->device_id) + ",";
+    csv_output_string += String(this->pamco->co.average, 3) + ",";
     if (this->pamco2 != NULL)
     {
-        csv_output_string += String(this->pamco2->co->average, 3) + ",";
+        csv_output_string += String(this->pamco2->co.average, 3) + ",";
     }
 
-    csv_output_string += String(this->t6713->CO2->average, 0) + ",";
+    csv_output_string += String(this->t6713->CO2.average, 0) + ",";
 
-    csv_output_string += String(this->plantower->pm1->average) + ",";
-    csv_output_string += String(this->plantower->pm2_5->average, 0) + ",";
-    csv_output_string += String(this->plantower->pm10->average) + ",";
+    csv_output_string += String(this->plantower->pm1.average) + ",";
+    csv_output_string += String(this->plantower->pm2_5.average, 0) + ",";
+    csv_output_string += String(this->plantower->pm10.average) + ",";
     csv_output_string += String(this->tph_fusion->temperature->average, 1) + ",";
     csv_output_string += String(this->tph_fusion->pressure->average / 100.0, 1) + ",";
 
     csv_output_string += String(this->tph_fusion->humidity->average, 1) + ",";
-    if(ozone_enabled){
-        csv_output_string += String(this->pam_108L->ozone->adj_value, 1) + ",";
+    if(this->globalVariables->ozone_enabled)
+    {
+        csv_output_string += String(this->pam_108L->ozone.adj_value, 1) + ",";
     }
 
     csv_output_string += String(fuel.getSoC(), 1) + ",";
@@ -314,7 +326,7 @@ void SendingData::SendDataToSd()
 
     //write data to file
     if (sd.begin(CS)){
-        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
+        file.open(this->globalVariables->fileName, O_CREAT | O_APPEND | O_WRITE);
         if(file_started == 0){
             file.println("File Start timestamp: ");
             file.println(Time.timeStr());
@@ -335,16 +347,16 @@ void SendingData::SendDataToSensible()
 
     JSONBufferWriter writer(sensible_buf, sizeof(sensible_buf) - 1);
     writer.beginObject();
-    String device_string = "PAM-" + String(this->device_id);
+    String device_string = "PAM-" + String(this->globalVariables->device_id);
     //String device_time = String(Time.format(time, "%Y/%m/%dT%H:%M:%SZ"));
     //String co2_string = String(CO2_float, 0);
     //String co_string = String(CO_float, 3);
     writer.name("instrumentKey").value(device_string);
     writer.name("datetime").value(String(Time.format(Time.now(), "%Y-%m-%dT%H:%M:%SZ")));
-    writer.name("CO2").value(String(this->t6713->CO2->average, 0));
-    writer.name("CO").value(String(this->pamco->co->average, 3));
-    writer.name("PM1_0").value(String(this->plantower->pm1->average));
-    writer.name("PM2_5").value(String(this->plantower->pm10->average, 0)); 
+    writer.name("CO2").value(String(this->t6713->CO2.average, 0));
+    writer.name("CO").value(String(this->pamco->co.average, 3));
+    writer.name("PM1_0").value(String(this->plantower->pm1.average));
+    writer.name("PM2_5").value(String(this->plantower->pm10.average, 0)); 
     writer.name("Temp").value(String(this->tph_fusion->temperature->average, 1));
     writer.name("Press").value(String(this->tph_fusion->pressure->average / 100.0, 1));
     writer.name("Hmdty").value(String(this->tph_fusion->humidity->average, 1));
