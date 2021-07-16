@@ -37,7 +37,7 @@ SendingData::SendingData()
 
 SendingData::~SendingData() {}
 
-SendingData* GetInstance()
+SendingData* SendingData::GetInstance()
 {
     if (instance == nullptr) {
         instance = new SendingData();

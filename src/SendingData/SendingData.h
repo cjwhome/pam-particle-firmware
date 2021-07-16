@@ -29,7 +29,7 @@ public:
     void SendDataToSensible(); //done
 
 private: 
-    static SendingData * instance;
+    static SendingData *instance;
     SendingData();
     ~SendingData();
 
