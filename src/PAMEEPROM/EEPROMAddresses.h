@@ -18,7 +18,7 @@
 #define PRESSURE_SLOPE_MEM_ADDRESS              (56)
 #define RH_ZERO_MEM_ADDRESS                     (60)
 #define RH_SLOPE_MEM_ADDRESS                    (64)
-#define SERIAL_CELLULAR_EN_MEM_ADDRESS          (68)
+#define CELLULAR_EN_MEM_ADDRESS                 (68)
 #define DEBUGGING_ENABLED_MEM_ADDRESS           (72)
 #define GAS_LOWER_LIMIT_MEM_ADDRESS             (76)
 #define GAS_UPPER_LIMIT_MEM_ADDRESS             (80)

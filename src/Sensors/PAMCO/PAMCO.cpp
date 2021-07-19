@@ -108,6 +108,7 @@ bool PAMCO::measure()
     float adj_value = (this->co.slope * this->co.raw_value) + this->co.zero;
     this->co.adj_value = adj_value;
 
+
     this->co.accumulated_value += adj_value;
     this->co.number_of_measures++;
 

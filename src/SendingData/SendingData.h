@@ -23,10 +23,10 @@ public:
     static SendingData* GetInstance();
 
 
-    void SendDataToSd(); // done
-    void SendDataToParticle(); //done
-    void SendDataToESP(); //done
-    void SendDataToSensible(); //done
+    void SendDataToSd();
+    void SendDataToParticle();
+    void SendDataToESP(); 
+    void SendDataToSensible();
 
 private: 
     static SendingData *instance;
@@ -46,6 +46,7 @@ private:
     char geolocation_longitude[13] = "99.9999999";
     char geolocation_accuracy[6] = "255.0";
     Global * globalVariables = Global::GetInstance();
+    PAMSensorManager *sensorManager = PAMSensorManager::GetInstance();
 
 
 

@@ -69,7 +69,7 @@ bool TPHFusion::measure()
     if (this->hih_enabled) {
         success &= this->hih8120->measure();
     }
-    calculateAQI();
+    // calculateAQI();
     return success;
 }
 

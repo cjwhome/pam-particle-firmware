@@ -1,10 +1,10 @@
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
-//#include "gps.h"
 #include "inttypes.h"
 #include "Particle.h"
 #include "PowerCheck.h"
 #include "CellularHelper.h"
+#include "SdFat.h"
 
 #include "Wiring.h"
 
@@ -102,7 +102,7 @@ float tempfloat = 0;
 int tempValue;
 float air_quality_score = 0;
 int esp_wifi_connection_status = 0;
-int serial_cellular_enabled = 0;
+int cellular_enabled = 0;
 int debugging_enabled = 0;
 int ozone_enabled = 0;
 int voc_enabled = 0;
@@ -146,7 +146,7 @@ PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
 PAM_108L pam_108L;
 Global * globalVariables = Global::GetInstance();
 
-SendingData send_measurements();
+SendingData * send_measurements = SendingData::GetInstance();
 PAMSensorManager *manager = PAMSensorManager::GetInstance();
 
 time_t watch_time;
@@ -313,7 +313,7 @@ void readStoredVars(void){
     EEPROM.get(PRESSURE_ZERO_MEM_ADDRESS, tph_fusion.pressure->zero);
     EEPROM.get(RH_ZERO_MEM_ADDRESS, tph_fusion.humidity->zero);
 
-    EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+    EEPROM.get(CELLULAR_EN_MEM_ADDRESS, cellular_enabled);
     EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
     EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     // EEPROM.get(VOC_EN_MEM_ADDRESS, voc_enabled);
@@ -385,7 +385,7 @@ void writeDefaultSettings(void){
     EEPROM.put(PRESSURE_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(RH_ZERO_MEM_ADDRESS, 0);
 
-    EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, 0);
+    EEPROM.put(CELLULAR_EN_MEM_ADDRESS, 0);
     EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, 0);
     EEPROM.put(OZONE_EN_MEM_ADDRESS, 0);
     // EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
@@ -483,6 +483,7 @@ void check_wifi_file(void){
 void setup()
 {
     Wire.begin();
+    Serial.begin(9600);
 
 
     globalVariables->status_word->status_int  = 0;
@@ -568,8 +569,7 @@ void setup()
 
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
-    //initialize main serial port for debug output
-    Serial.begin(9600);
+    //initialize main serial port for debug outpu
 
     rd = PAMSerial.registerResponder(new TestSerialConnector());
     PAMSerial.pushResponder(rd);
@@ -579,7 +579,6 @@ void setup()
 
     #if sd_en
      Serial.println("Checking for sd card");
-     logFileName = "log_" + globalVariables->fileName;
 
     if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
       /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
@@ -595,7 +594,7 @@ void setup()
       check_cal_file();*/
 
       Serial.print("Created new file to log to uSD card: ");
-      Serial.println(globalVariables->fileName);
+      //Serial.println(globalVariables->fileName);
     }else { //uSD is not functioning
         Serial.println("No uSD card detected.");
     }
@@ -614,10 +613,10 @@ void setup()
 
     PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
 
-    manager->addSensor(&t6713);
-    manager->addSensor(&tph_fusion);
-    manager->addSensor(&plantower);
     manager->addSensor(&pamco);
+    manager->addSensor(&t6713);
+    manager->addSensor(&plantower);
+    manager->addSensor(&tph_fusion);
     manager->addSensor(&pam_108L);
     serial_menu.addResponder(PAMSensorManager::GetInstance()->serial_menu_rd, "Sensor Settings");
     serial_menu.addResponder(averaging_measurement, "Set Averaging Time (seconds)");
@@ -637,8 +636,13 @@ void loop()
 {
     if (Time.now() > watch_time+averaging_time)
     {
+        Serial.println("Starting avergaing now: ");
         manager->runAllAverages();
-        if (serial_cellular_enabled)
+        send_measurements->SendDataToESP();
+        send_measurements->SendDataToParticle();
+        send_measurements->SendDataToSd();
+        send_measurements->SendDataToSensible();
+        if (cellular_enabled)
         {
 
         }
@@ -650,9 +654,9 @@ void loop()
     PAMSensorManager::GetInstance()->loop();
     PAMSerial.loop();
 
-    if(serial_cellular_enabled)
+    if(cellular_enabled)
     {
-        globalVariables->status_word->status_int |= 0x01;
+        //globalVariables->status_word->status_int |= 0x01;
         if (Particle.connected() == false && tried_cellular_connect == false) 
         {
             tried_cellular_connect = true;
@@ -1032,23 +1036,6 @@ void printPacket(byte *packet, byte len)
     Serial.println();
 }
 
-void writeLogFile(String data){
-  if (sd.begin(CS)){
-      Serial.println("Writing data to log file.");
-      log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
-      if(log_file_started == 0){
-          log_file.println("File Start timestamp: ");
-          log_file.println(Time.timeStr());
-          log_file_started = 1;
-      }
-      log_file.println(data);
-
-      log_file.close();
-  }else{
-    Serial.println("Unable to write to log file");
-  }
-}
-
 
 
 //ask the ESP if it has a wifi connection
@@ -1175,22 +1162,22 @@ void serialMenu(){
     }else if(incomingByte == 'w'){
         serialGetWifiCredentials();
     }else if(incomingByte == 'y'){
-        if(serial_cellular_enabled == 0){
+        if(cellular_enabled == 0){
             Serial.println("Enabling Cellular.");
         }else{
             Serial.println("Cellular already enabled.");
         }
-        serial_cellular_enabled = 1;
-        EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+        cellular_enabled = 1;
+        EEPROM.put(CELLULAR_EN_MEM_ADDRESS, cellular_enabled);
     }else if(incomingByte == 'z'){
-        if(serial_cellular_enabled == 1){
+        if(cellular_enabled == 1){
             Serial.println("Disabling Cellular");
             Cellular.off();
         }else{
             Serial.println("Cellular already disabled.");
         }
-        serial_cellular_enabled = 0;
-        EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+        cellular_enabled = 0;
+        EEPROM.put(CELLULAR_EN_MEM_ADDRESS, cellular_enabled);
     }else if(incomingByte == 'F'){
         if(temperature_units == CELCIUS){
             temperature_units = FARENHEIT;

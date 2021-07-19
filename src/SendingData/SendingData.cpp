@@ -2,7 +2,6 @@
 
 SendingData::SendingData()
 {
-    PAMSensorManager *sensorManager = PAMSensorManager::GetInstance();
     std::vector<PAMSensor *> sensors = sensorManager->getSensors();
     PAMSensor *sensor; 
     for (int i = 0; i < sensors.size(); i++)
@@ -37,6 +36,7 @@ SendingData::SendingData()
 
 SendingData::~SendingData() {}
 
+SendingData * SendingData::instance = nullptr;
 SendingData* SendingData::GetInstance()
 {
     if (instance == nullptr) {
@@ -254,18 +254,20 @@ void SendingData::SendDataToParticle()
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
 
-    if (Particle.connected() && serial_cellular_enabled){
-        status_word.status_int |= 0x0002;
+    if (Particle.connected() && this->globalVariables->cellular_enabled){
+        this->globalVariables->status_word->status_int |= 0x0002;
         Particle.publish("pamup", cloud_output_string, PRIVATE);
         Particle.process(); //attempt at ensuring the publish is complete before sleeping
 	}
-    else if(esp_wifi_connection_status){
-        if(debugging_enabled){
+    else if(this->globalVariables->esp_wifi_connection_status){
+        if(this->globalVariables->debugging_enabled){
             Serial.println("Sending data to esp to upload via wifi...");
-            writeLogFile("Sending data to esp to upload via wifi");
+            this->globalVariables->writeLogFile("Sending data to esp to upload via wifi");
           }
         Serial1.println(cloud_output_string);
     }
+    Serial.println("data to pamUp: ");
+    Serial.println(cloud_output_string);
 }
 
 void SendingData::SendDataToSd()
@@ -323,20 +325,23 @@ void SendingData::SendDataToSd()
     csv_output_string += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
     
     Serial.println(csv_output_string);
+    SdFile file = this->globalVariables->file;
 
     //write data to file
-    if (sd.begin(CS)){
+    if (this->globalVariables->sd.begin(CS)){
         file.open(this->globalVariables->fileName, O_CREAT | O_APPEND | O_WRITE);
-        if(file_started == 0){
+        if(this->globalVariables->file_started == false){
             file.println("File Start timestamp: ");
             file.println(Time.timeStr());
-            file.println(String(HEADER_STRING));
-            file_started = 1;
+            file.println(String(sensorManager->csvHeader()));
+            this->globalVariables->file_started = true;
         }
         file.println(csv_output_string);
 
         file.close();
     }
+    Serial.println("data to ssd card: ");
+    Serial.println(csv_output_string);
 }
 
 void SendingData::SendDataToSensible()
@@ -388,4 +393,8 @@ void SendingData::SendDataToSensible()
 
     Particle.publish("sensiblePamUp", sensible_buf, PRIVATE);
     Particle.process();
+
+    Serial.println("sensible data: ");
+    Serial.println(sensible_buf);
 }
+

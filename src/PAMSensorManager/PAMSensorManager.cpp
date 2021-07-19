@@ -122,7 +122,7 @@ void PAMSensorManager::loop() {
     }
 }
 
-std::vector<PAMSpecie *>* PAMSensorManager::getSensors()
+std::vector<PAMSensor *> PAMSensorManager::getSensors()
 {
     return this->sensors;
 }
