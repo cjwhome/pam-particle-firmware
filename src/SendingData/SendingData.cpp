@@ -2,6 +2,21 @@
 
 SendingData::SendingData()
 {
+}
+
+SendingData::~SendingData() {}
+
+SendingData * SendingData::instance = nullptr;
+SendingData* SendingData::GetInstance()
+{
+    if (instance == nullptr) {
+        instance = new SendingData();
+    }
+    return instance;
+}
+
+void SendingData::addSensors() 
+{
     std::vector<PAMSensor *> sensors = sensorManager->getSensors();
     PAMSensor *sensor; 
     for (int i = 0; i < sensors.size(); i++)
@@ -32,17 +47,6 @@ SendingData::SendingData()
             this->pam_108L = (PAM_108L*)(sensor);
         }
     }
-}
-
-SendingData::~SendingData() {}
-
-SendingData * SendingData::instance = nullptr;
-SendingData* SendingData::GetInstance()
-{
-    if (instance == nullptr) {
-        instance = new SendingData();
-    }
-    return instance;
 }
 
 
@@ -231,7 +235,7 @@ void SendingData::SendDataToParticle()
         }
         cloud_output_string += String(gps.get_latitude());
     }else{
-        cloud_output_string += String(geolocation_latitude);
+        cloud_output_string += this->geolocation_latitude;
     }
 
     cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
@@ -241,15 +245,12 @@ void SendingData::SendDataToParticle()
             cloud_output_string += "-";
         }
         cloud_output_string += String(gps.get_longitude());
-    }else{
-        cloud_output_string += String(geolocation_longitude);
     }
-
     cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
     if (gps.get_longitude() != 0) {
         cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
     } else {
-        cloud_output_string += String(geolocation_accuracy);
+        cloud_output_string += this->geolocation_accuracy;
     }
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
@@ -296,32 +297,32 @@ void SendingData::SendDataToSd()
 
     csv_output_string += String(fuel.getSoC(), 1) + ",";
 
-    //csv_output_string += String(sound_average, 0) + ",";
-
-    if(gps.get_latitude() != 0){
+    double latitude = gps.get_latitude();
+    if(latitude == 0)
+    {
+        csv_output_string += this->geolocation_latitude+ ",";
+    }
+    else 
+    {
         if(gps.get_nsIndicator() == 0){
             csv_output_string += "-";
         }
-        csv_output_string += String(gps.get_latitude()) + ",";
-    }else{
-        csv_output_string += String(geolocation_latitude)+ ",";
+        Serial.println("We are in gps for some reason. here is what it is: ");
+        Serial.println(latitude);
+        csv_output_string += String(latitude) + ",";
     }
-
-    if(gps.get_longitude() != 0){
+    double longitude = gps.get_longitude();
+    if(longitude == 0)
+    {
+        csv_output_string += this->geolocation_longitude+ ",";
+    }
+    else
+    {
         if(gps.get_ewIndicator() == 0x01){
             csv_output_string += "-";
         }
-        csv_output_string += String(gps.get_longitude()) + ",";
-    }else{
-        csv_output_string += String(geolocation_longitude) + ",";
+        csv_output_string += String(longitude) + ",";
     }
-    if (gps.get_longitude() != 0) {
-        //csv_output_string += String(gps.get_horizontalDillution() / 10.0) + ",";
-    } else {
-        //csv_output_string += String(geolocation_accuracy) + ",";
-    }
-
-    //csv_output_string += String(status_word.status_int) + ",";
     csv_output_string += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
     
     Serial.println(csv_output_string);
@@ -370,9 +371,9 @@ void SendingData::SendDataToSensible()
         if(gps.get_nsIndicator() == 0){
             latitude_string += "-";
         }
-    
         latitude_string += String(gps.get_latitude());
-    }else{
+    }
+    else{
         latitude_string = "";
     }
     writer.name("Lat").value(latitude_string);

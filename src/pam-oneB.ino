@@ -25,8 +25,9 @@
 #define APP_VERSION 8
 #define BUILD_VERSION 1
 
-#define CELCIUS 1
-#define FARENHEIT 0
+//manually control connection to cellular network
+SYSTEM_MODE(MANUAL);
+SYSTEM_THREAD(ENABLED);
 
 
 
@@ -37,8 +38,6 @@
 #include "PAMEEPROM/PAMEEPROM.h"
 
 
-//max and min values
-#define MIN_DEVICE_ID_NUMBER 1
 #define MAX_DEVICE_ID_NUMBER 9999
 
 //#define MEASUREMENTS_TO_AVERAGE 1       //change to 30 for 3 minute uploads
@@ -62,9 +61,25 @@
 #define NUMBER_OF_FIELDS_LOGGING 7
 
 
-//manually control connection to cellular network
-SYSTEM_MODE(MANUAL);
-SYSTEM_THREAD(ENABLED);
+
+// PAM Sensors
+T6713 t6713;
+TPHFusion tph_fusion(0x27, false);
+Plantower plantower(Serial4);
+PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
+PAM_108L pam_108L;
+Global * globalVariables = Global::GetInstance();
+
+SendingData * send_measurements = SendingData::GetInstance();
+PAMSensorManager *manager = PAMSensorManager::GetInstance();
+
+time_t watch_time;
+int averaging_time = 0;
+
+
+
+
+
 
 //global objects
 
@@ -108,7 +123,6 @@ int ozone_enabled = 0;
 int voc_enabled = 0;
 int temperature_units = 0;
 int output_only_particles = 0;
-int new_temperature_sensor_enabled = 0;
 int hih8120_enabled = 0;
 int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
@@ -118,7 +132,7 @@ int CO_socket = 0;
 
 
 
-int averaging_time = 0;
+
 
 
 int gas_lower_limit = 1200;   // Bad air quality limit
@@ -138,18 +152,7 @@ char recieveStr[5];
 char incomingByte;  //serial connection from user
 
 
-// PAM Sensors
-T6713 t6713;
-TPHFusion tph_fusion(0x27, false);
-Plantower plantower(Serial4);
-PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
-PAM_108L pam_108L;
-Global * globalVariables = Global::GetInstance();
 
-SendingData * send_measurements = SendingData::GetInstance();
-PAMSensorManager *manager = PAMSensorManager::GetInstance();
-
-time_t watch_time;
 
 
 FuelGauge fuel;
@@ -323,7 +326,6 @@ void readStoredVars(void){
     Time.zone(tempValue);
     EEPROM.get(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
     EEPROM.get(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
-    EEPROM.get(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
     EEPROM.get(MEASUREMENTS_TO_AVG_MEM_ADDRESS, measurements_to_average);
     EEPROM.get(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
@@ -422,63 +424,16 @@ size_t readField(File* file, char* str, size_t size, const char* delim) {
   return n;
 }
 
-void check_wifi_file(void){
-    file1 = sd.open("wifi.txt", O_READ);
-    size_t n;      // Length of returned field with delimiter.
-    char str[50];  // Must hold longest field with delimiter and zero byte.
-    // Read the file and print fields.
-    int cred = 0;
-    int i = 0;
-    Serial.println("Contents of wifi file line by line:");
-    while(1)
-    {
-        n = readField(&file1, str, sizeof(str), ",\n");
-        // done if Error or at EOF.
-        if (n == 0){
-            break;
-        }
-        //Serial.print("I:");
-        //Serial.print(i);
-        //Serial.print(":");
-        //Serial.println(str);
-        //the first field is "SSID,PASSWORD", the second is the actual values
-        if(i>1)
-        {
-            if (str[n-1] == ','){
-              str[n-1] = 0;
-              ssid = str;
-              ssid.trim();
-              cred++;
-            }
-            else if (str[n-1] == '\n') {
-              str[n-1] = 0;
-              password = str;
-              password.trim();
-              cred++;
-            }
-            else if(file1.available() == 0) { //There's a better way to do this. Buggy, fix soon!
-              password = str;
-              cred++;
-            }
-            else {
-              // At eof, too long, or read error.  Too long is error.
-              Serial.print(file1.available() ? F("error: ") : F("eof:   "));
-            }
-            if(cred >= 2){ //at least one pair of ssid and password
-              Serial.print("Found SSID:");
-              Serial.println(ssid);
-              Serial.print("Found password:");
-              Serial.println(password);
-              break;
-            }
-            //WiFi.setCredentials(ssid, password);
-        }
+void buildSerialMenu()
+{
+    PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
+    PAMSerialEditEEPROMValue<int> * device_id = new PAMSerialEditEEPROMValue<int>(globalVariables->device_id, DEVICE_ID_MEM_ADDRESS, -1);
 
-        i++;
-    }
-    file1.close();
-
+    serial_menu.addResponder(PAMSensorManager::GetInstance()->serial_menu_rd, "Sensor Settings");
+    serial_menu.addResponder(averaging_measurement, "Set Averaging Time (seconds)");
+    serial_menu.addResponder(device_id, "Set Device Id");
 }
+
 
 void setup()
 {
@@ -610,16 +565,15 @@ void setup()
     Serial.println(BUILD_VERSION);
 
     enableContinuousGPS();
-
-    PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
+    buildSerialMenu();
 
     manager->addSensor(&pamco);
     manager->addSensor(&t6713);
     manager->addSensor(&plantower);
     manager->addSensor(&tph_fusion);
     manager->addSensor(&pam_108L);
-    serial_menu.addResponder(PAMSensorManager::GetInstance()->serial_menu_rd, "Sensor Settings");
-    serial_menu.addResponder(averaging_measurement, "Set Averaging Time (seconds)");
+    send_measurements->addSensors();
+
 
     char *csv_header = manager->csvHeader();
     Serial.println(csv_header);
@@ -1178,45 +1132,8 @@ void serialMenu(){
         }
         cellular_enabled = 0;
         EEPROM.put(CELLULAR_EN_MEM_ADDRESS, cellular_enabled);
-    }else if(incomingByte == 'F'){
-        if(temperature_units == CELCIUS){
-            temperature_units = FARENHEIT;
-
-        }else{
-            Serial.println("Temperature units already set to Fareneit.");
-        }
-
-        EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-
-    }else if(incomingByte == 'C'){
-        if(temperature_units == FARENHEIT){
-            temperature_units = CELCIUS;
-
-        }else{
-            Serial.println("Temperature units already set to Celcius.");
-        }
-
-        EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-    }else if(incomingByte == 'D'){
-        if(new_temperature_sensor_enabled == 1){
-            new_temperature_sensor_enabled = 0;
-            Serial.println("Disabling new temperature sensor");
-        }else{
-
-            Serial.println("Temperature sensor already disabled");
-        }
-        EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
-
-    }else if(incomingByte == 'E'){
-        if(new_temperature_sensor_enabled == 1){
-            Serial.println("Temperature sensor already enabled");
-        }else{
-            new_temperature_sensor_enabled = 1;
-            Serial.println("Temperatue sensor now enabled");
-        }
-        EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled );
-
-    }else if(incomingByte == 'J'){
+    }
+    else if(incomingByte == 'J'){
         resetESP();
         Serial.println("ESP reset!");
     }
@@ -1581,35 +1498,6 @@ void serialGetWifiCredentials(void){
     }
 }
 
-void serialGetDeviceId(void){
-
-    Serial.println();
-    Serial.print("Current Device ID:");
-    Serial.println(DEVICE_id);
-    Serial.println("Please enter password in order to change the ID");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-
-
-    if(tempString == "bould"){
-        Serial.println("Password correct!");
-        Serial.println("Enter new Device ID:");
-        String tempString = Serial.readStringUntil('\r');
-        int tempValue = tempString.toInt();
-        Serial.println("");
-        if(tempValue > MIN_DEVICE_ID_NUMBER && tempValue < MAX_DEVICE_ID_NUMBER){
-            Serial.print("\n\rNew Device ID:");
-            Serial.println(tempValue);
-            DEVICE_id = tempValue;
-            EEPROM.put(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
-        }else{
-            Serial.println("\n\rInvalid value!");
-        }
-    }else{
-        Serial.println("\n\rIncorrect password!");
-    }
-}
-
 void serialResetSettings(void){
 
     Serial.println();
@@ -1667,31 +1555,18 @@ void outputSerialMenuOptions(void){
     Serial.println("s:  Output header string");
     Serial.println("t:  Enter new time and date");
     Serial.println("u:  Enter new time zone");
-    Serial.println("v:  Adjust the Device ID");
     Serial.println("w:  Get wifi credentials");
     Serial.println("y:  Enable cellular");
     Serial.println("z:  Disable cellular");
-    Serial.println("1:  Adjust gas lower limit");
-    Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");
-    Serial.println("4:  Enable Ozone");
-    Serial.println("5:  Disable Ozone");
-    // Serial.println("6:  Enable VOC's");
-    // Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
     Serial.println("9:  Increase the charge current by 64 mA");
     Serial.println("0:  Increase the current input limit by 100 mA");
-    Serial.println("A:  Ouptput CO constantly and rapidly");
-    Serial.println("B:  Output PM constantly and rapidly");
-    Serial.println("C:  Change temperature units to Celcius");
-    Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("I:  Adjust frequency for uploading through cellular");
     Serial.println("J:  Reset ESP, CO2, Plantower");
-    //Serial.println("K:  Continuous serial output of GPS");
     Serial.println("L:  Write default settings");
     Serial.println("M:  Enable 20% battery threshold limiting");
     Serial.println("N:  Disable 20% battery threshold limiting WARNING!!");
-    //Serial.println("O:  Enable low power for GPS module");
     Serial.println("P:  Turn off BATFET");
     Serial.println("Q:  Allow BATFET to turn on");
     Serial.println("R:  Disable ABC logic for CO2 sensor");
@@ -1700,7 +1575,62 @@ void outputSerialMenuOptions(void){
     Serial.println("U:  Switch socket where CO is read from");
     Serial.println("X:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (ICCID, IMEI, etc)");
-    // Serial.println("!:  Continuous serial output of VOC's");
-    Serial.println("?:  Output this menu");
-    Serial.println("x:  Exits this menu");
+}
+
+void check_wifi_file(void){
+    file1 = sd.open("wifi.txt", O_READ);
+    size_t n;      // Length of returned field with delimiter.
+    char str[50];  // Must hold longest field with delimiter and zero byte.
+    // Read the file and print fields.
+    int cred = 0;
+    int i = 0;
+    Serial.println("Contents of wifi file line by line:");
+    while(1)
+    {
+        n = readField(&file1, str, sizeof(str), ",\n");
+        // done if Error or at EOF.
+        if (n == 0){
+            break;
+        }
+        //Serial.print("I:");
+        //Serial.print(i);
+        //Serial.print(":");
+        //Serial.println(str);
+        //the first field is "SSID,PASSWORD", the second is the actual values
+        if(i>1)
+        {
+            if (str[n-1] == ','){
+              str[n-1] = 0;
+              ssid = str;
+              ssid.trim();
+              cred++;
+            }
+            else if (str[n-1] == '\n') {
+              str[n-1] = 0;
+              password = str;
+              password.trim();
+              cred++;
+            }
+            else if(file1.available() == 0) { //There's a better way to do this. Buggy, fix soon!
+              password = str;
+              cred++;
+            }
+            else {
+              // At eof, too long, or read error.  Too long is error.
+              Serial.print(file1.available() ? F("error: ") : F("eof:   "));
+            }
+            if(cred >= 2){ //at least one pair of ssid and password
+              Serial.print("Found SSID:");
+              Serial.println(ssid);
+              Serial.print("Found password:");
+              Serial.println(password);
+              break;
+            }
+            //WiFi.setCredentials(ssid, password);
+        }
+
+        i++;
+    }
+    file1.close();
+
 }

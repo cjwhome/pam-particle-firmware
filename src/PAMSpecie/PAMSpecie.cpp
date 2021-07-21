@@ -19,12 +19,6 @@ PAMSpecie::PAMSpecie(uint16_t slope_address, uint16_t zero_address, float defaul
 PAMSpecie::~PAMSpecie() {}
 
 void PAMSpecie::averaged_value() { 
-    Serial.print("This is specie: ");
-    Serial.println(this->name);
-    Serial.print("This is the accumulated_value and number_of_measures: ");
-    Serial.print(this->accumulated_value);
-    Serial.print(", ");
-    Serial.println(this->number_of_measures);
     this->average = this->accumulated_value/this->number_of_measures;
     this->accumulated_value = 0;
     this->number_of_measures = 0;

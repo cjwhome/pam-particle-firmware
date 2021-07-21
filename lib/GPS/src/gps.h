@@ -14,18 +14,18 @@
 
 class GPS {
     double utc_time;
-    double latitude;
-    double longitude;
-    float altitude;
-    int16_t latWhole;
-    int16_t latFrac;
-    int16_t longWhole;
-    int16_t longFrac;
+    double latitude = 0;
+    double longitude = 0;
+    float altitude = 0;
+    int16_t latWhole = 0;
+    int16_t latFrac = 0;
+    int16_t longWhole = 0;
+    int16_t longFrac = 0;
     int8_t ns_indicator;              //north south
     int8_t ew_indicator;              //'E' = east, 'W' = west
     int quality_indicator;          //0-2
-    int satellites_used;            //0-24
-    float horizontal_dillution;     //00.0-99.9
+    int satellites_used = 0;            //0-24
+    float horizontal_dillution = 0;     //00.0-99.9
 
 public:
     //(d)dd + (mm.mmmm/60) (* -1 for W and S)

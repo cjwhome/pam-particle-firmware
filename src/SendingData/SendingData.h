@@ -21,6 +21,7 @@ class SendingData {
 
 public:
     static SendingData* GetInstance();
+    void addSensors();
 
 
     void SendDataToSd();
@@ -42,9 +43,9 @@ private:
     int sample_counter = 0;
     GPS gps;
     FuelGauge fuel;
-    char geolocation_latitude[12] = "999.9999999";
-    char geolocation_longitude[13] = "99.9999999";
-    char geolocation_accuracy[6] = "255.0";
+    String geolocation_latitude = "999.9999999";
+    String geolocation_longitude = "99.9999999";
+    String geolocation_accuracy = "255.0";
     Global * globalVariables = Global::GetInstance();
     PAMSensorManager *sensorManager = PAMSensorManager::GetInstance();
 
