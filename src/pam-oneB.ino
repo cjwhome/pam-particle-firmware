@@ -2268,8 +2268,10 @@ void serialMenu()
             serialGetCoZeroB();
             break;
         case 'e':
-
-            serBuf.printf("SN", DEVICE_id);
+            serBuf.printf("S", DEVICE_id);
+            break;
+        case 'f':
+            serBuf.printf("f", System.deviceID());
             break;
 
         case 'q':
@@ -3401,6 +3403,7 @@ void outputSerialMenuOptions(void)
     Serial.println("c:  Adjust COB slope");
     Serial.println("d:  Adjust COB zero");
     Serial.println("e:  Get Device Id");
+    Serial.println("f:  Get coreid");
     Serial.println("q:  Enable serial debugging");
     Serial.println("r:  Disable serial debugging");
     Serial.println("s:  Activate sending offline data");
