@@ -16,6 +16,7 @@ public:
     bool ozone_enabled;
     String fileName;
     bool cellular_enabled;
+    bool sensible_iot_en;
     bool esp_wifi_connection_status = false;
     bool debugging_enabled;
 

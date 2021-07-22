@@ -13,7 +13,7 @@
 #include "../PAMSensor/PAMSensor.h"
 #include "BLEconstants.h"
 #include "gps.h"
-#include "../global.h"
+#include "../Global.h"
 #include "SdFat.h"
 
 

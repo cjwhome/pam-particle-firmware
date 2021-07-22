@@ -13,7 +13,7 @@ uint16_t PAMSerialManager::registerResponder(PAMSerialResponder *responder)
     // return this->registerResponder(responder->toStruct());
     this->serial->printf("[PAMSerialManager]::registerResponder\trd: %d\n\r", this->responders.size());
     this->responders.push_back(responder);
-    uint16_t rd = this->responders.size() - 1;
+    //uint16_t rd = this->responders.size() - 1;
     return this->responders.size() - 1;
 }
 
