@@ -1,5 +1,5 @@
-#ifndef __DATE_TIME_SET_H__
-#define __DATE_TIME_SET_H__
+#ifndef __TIME_ZONE_SET_H__
+#define __TIME_ZONE_SET_H__
 
 
 
@@ -9,25 +9,25 @@
 #include "CellularHelper.h"
 
 
-class DateTimeSet: public PAMSerialResponder {
+class TimeZoneSet: public PAMSerialResponder {
 
 public:
-    DateTimeSet() : PAMSerialResponder() { };
-    ~DateTimeSet() {};
+    TimeZoneSet() : PAMSerialResponder() { };
+    ~TimeZoneSet() {};
 
     void becomesResponder(uint16_t rd, bool child_returned)
     {
-        Serial.println("Enter new Device time and date (10 digit epoch timestamp):");
+        Serial.println("Enter new Device time zone (-12.0 to 14.0)");
         Serial.setTimeout(50000);
         String tempString = Serial.readStringUntil('\r');
         int tempValue = tempString.toInt();
         Serial.println("");
-        if(tempValue > 966012661 && tempValue < 4121686261){       //min is the year 2000, max is the year 2100
-            Time.setTime(tempValue);
-            Serial.print("\n\rNew Device Time:");
-            Serial.println(Time.timeStr());
-        }
-        else{
+        if(tempValue >= -12 && tempValue <= 14){
+            Time.zone(tempValue);
+            Serial.print("\n\rNew Device time zone:");
+            Serial.println(tempValue);
+            EEPROM.put(TIME_ZONE_MEM_ADDRESS, tempValue);
+        }else{
             Serial.println("\n\rInvalid value!");
         }
         return ;

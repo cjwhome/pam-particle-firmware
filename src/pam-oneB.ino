@@ -23,6 +23,7 @@
 #include "MenuFunctions/PrintHeader.h"
 #include "MenuFunctions/CellularInfo.h"
 #include "MenuFunctions/EspReset.h"
+#include "MenuFunctions/DateTimeSet.h"
 
 #define APP_VERSION 8
 #define BUILD_VERSION 1
@@ -60,6 +61,7 @@ EEPROMReset eepromReset = EEPROMReset();
 PrintHeader printHeader = PrintHeader();
 CellularInfo cellularInfo = CellularInfo();
 EspReset espReset = EspReset();
+DateTimeSet datetimeSet = DateTimeSet();
 
 
 PMIC pmic;
@@ -194,6 +196,8 @@ void buildSerialMenu()
     serial_menu.addResponder(cellular_enabled, "Enable/ Disable Cellular");
     serial_menu.addResponder(sensible_iot_en, "Enable/ Disable Sensible");
     serial_menu.addResponder(&espReset, "Reset the ESP, Plantower, CO2 Sensor and Blower");
+    serial_menu.addResponder(&datetimeSet, "Set the date time using EPOCH");
+
     //serial_menu.addResponder()
 }
 
@@ -804,73 +808,9 @@ void serialMenu(){
     Serial.flush();
     while(!Serial.available());
     incomingByte = Serial.read();
-    if(incomingByte == 't'){
-        serialGetTimeDate();
-    }else if(incomingByte == 'u'){
-        serialGetZone();
-    }
-    else if(incomingByte == 'y'){
-        if(cellular_enabled == 0){
-            Serial.println("Enabling Cellular.");
-        }else{
-            Serial.println("Cellular already enabled.");
-        }
-        cellular_enabled = 1;
-        EEPROM.put(CELLULAR_EN_MEM_ADDRESS, cellular_enabled);
-    }else if(incomingByte == 'z'){
-        if(cellular_enabled == 1){
-            Serial.println("Disabling Cellular");
-            Cellular.off();
-        }else{
-            Serial.println("Cellular already disabled.");
-        }
-        cellular_enabled = 0;
-        EEPROM.put(CELLULAR_EN_MEM_ADDRESS, cellular_enabled);
-    }
-    else if(incomingByte == 'J'){
-        resetESP();
-        Serial.println("ESP reset!");
-    }
-    // else if(incomingByte == 'K'){
-    //   Serial.println("Outputting GPS continuously");
-    //   echoGps();
-    // }
-    else if(incomingByte == 'M'){
-      //serialTestRemoteFunction();
-      if(battery_threshold_enable == 1){
-          Serial.println("Battery threshold already enabled");
-      }else{
-          Serial.println("Enabling battery threshold limiting");
-          battery_threshold_enable = 1;
-          EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
-      }
 
-    }else if(incomingByte == 'N'){
-      //serialTestRemoteFunction();
-      if(battery_threshold_enable == 0){
-          Serial.println("Battery threshold already disabled");
-      }else{
-          Serial.println("Disabling battery threshold limiting");
-          battery_threshold_enable = 0;
-          EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
-      }
 
-    }
-    // else if(incomingByte == 'O'){
-    //     //Serial.println("Changing frequency for gps");
-    //     //changeFrequency();
-    //     Serial.println("Enabling low power for gps");
-    //     enableLowPowerGPS();
-    // }
-    else if(incomingByte  == 'P'){
-        Serial.println("Turning off batfet");
-        writeRegister(7, 0b01101011);   //turn off batfet
-    }else if(incomingByte == 'Q'){
-
-        Serial.println("Allowing batfet to turn on");
-        writeRegister(7, 0b01001011);   //allow batfet to turn on
-    }
-    else if(incomingByte == 'R'){
+    if(incomingByte == 'R'){
         if(abc_logic_enabled){
             Serial.println("Disabling ABC logic for CO2 sensor");
             abc_logic_enabled = 0;
@@ -895,11 +835,6 @@ void serialMenu(){
         else{
             Serial.println("ABC logic already enabled");
         }
-    }
-    else if(incomingByte == 'V'){
-        Serial.println("Reseting the CO2 sensor");
-        // t6713.resetSensor();
-        t6713._t6713.resetSensor();
     }
     else if(incomingByte == '3'){
         Serial.print("APP Version: ");
@@ -1071,42 +1006,6 @@ void serialIncreaseChargeCurrent(void){
     chargeCurrent = pmic.getChargeCurrent();
     Serial.printf("new charge current of %d mA\n\r", total_current);
 }
-
-
-
-void serialGetTimeDate(void){
-    Serial.println("Enter new Device time and date (10 digit epoch timestamp):");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-    Serial.println("");
-    if(tempValue > 966012661 && tempValue < 4121686261){       //min is the year 2000, max is the year 2100
-        Time.setTime(tempValue);
-        Serial.print("\n\rNew Device Time:");
-        Serial.println(Time.timeStr());
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-void serialGetZone(void){
-    Serial.println("Enter new Device time zone (-12.0 to 14.0)");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-    Serial.println("");
-    if(tempValue >= -12 && tempValue <= 14){       //min is the year 2000, max is the year 2100
-        Time.zone(tempValue);
-        Serial.print("\n\rNew Device time zone:");
-        Serial.println(tempValue);
-        EEPROM.put(TIME_ZONE_MEM_ADDRESS, tempValue);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
-
-
 
 void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
