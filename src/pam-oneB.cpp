@@ -2312,10 +2312,10 @@ void serialMenu()
             serialGetCoZeroB();
             break;
         case 'e':
-            serBuf.printf("S", DEVICE_id);
+            serBuf.printf("S %i", DEVICE_id);
             break;
         case 'f':
-            serBuf.printf("f", System.deviceID());
+            serBuf.printf("f %s", System.deviceID());
             break;
 
         case 'q':
