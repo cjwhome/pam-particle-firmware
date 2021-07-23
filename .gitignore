@@ -3,7 +3,7 @@
 *.pch
 
 target/
-src/*.cpp
+src/pam-oneB.cpp
 # src/pam-oneB.cpp
 
 # Created by https://www.gitignore.io/api/particle,visualstudiocode

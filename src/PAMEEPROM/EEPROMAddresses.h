@@ -38,5 +38,6 @@
 
 
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS          (140)
+#define CAR_TOPPER_POWER_MEM_ADDRESS            (144)
 
 #endif // __EEPROM_ADDRESS_H__

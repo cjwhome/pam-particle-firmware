@@ -22,18 +22,6 @@ TPHFusion::TPHFusion(uint8_t hih_address, bool _hih_enabled)
     }
     this->pressure = &this->bme680.pressure;
 
-    // this->air_quality_score.name = "ozone";
-    // this->air_quality_score.units = "PPB";
-    //this->air_quality_score.packet_constant = VOC_PACKET_CONSTANT;
-
-    // this->serial_menu.addResponder(this->air_quality_score.serial_menu_rd, "Air Quality Score");
-
-    // PAMSerialEditEEPROMValue<float> *Gas_Upper_responder = new PAMSerialEditEEPROMValue<float>(this->gas_upper_limit, GAS_UPPER_LIMIT_MEM_ADDRESS, 10000);
-    // this->air_quality_score.serial_menu.addResponder(Gas_Upper_responder, "Gas Upper Limit");
-
-    // PAMSerialEditEEPROMValue<float> *Gas_Lower_responder = new PAMSerialEditEEPROMValue<float>(this->gas_lower_limit, GAS_LOWER_LIMIT_MEM_ADDRESS, 1000);
-    // this->air_quality_score.serial_menu.addResponder(Gas_Lower_responder, "Gas Lower Limit");
-
     this->species.push_back(this->temperature);
     this->species.push_back(this->humidity);
     this->species.push_back(this->pressure);

@@ -5,12 +5,16 @@
 #include "SdFat.h"
 
 #define CS A2               //Chip select for SPI/uSD card
+#define APP_VERSION 8
+#define BUILD_VERSION 1
 
 class Global {
 
 public:
     static Global* GetInstance();
     void writeLogFile(String data);
+
+
 
     int device_id;
     bool ozone_enabled;
@@ -19,6 +23,11 @@ public:
     bool sensible_iot_en;
     bool esp_wifi_connection_status = false;
     bool debugging_enabled;
+    bool temperature_units;
+    bool car_topper;
+    int app_version;
+    int build_version;
+    time_t car_topper_time = 0;
 
     SdFat sd;
     SdFile file;

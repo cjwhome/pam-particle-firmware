@@ -221,6 +221,7 @@ void SendingData::SendDataToParticle()
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(this->plantower->pm2_5.average, 0);
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(this->plantower->pm10.average);
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(this->tph_fusion->temperature->average, 1);
+
     cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(this->tph_fusion->pressure->average / 100.0, 1);
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(this->tph_fusion->humidity->average, 1);
     if(this->globalVariables->ozone_enabled){
@@ -255,7 +256,7 @@ void SendingData::SendDataToParticle()
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
 
-    if (Particle.connected() && this->globalVariables->cellular_enabled){
+    if (Particle.connected()){
         this->globalVariables->status_word->status_int |= 0x0002;
         Particle.publish("pamup", cloud_output_string, PRIVATE);
         Particle.process(); //attempt at ensuring the publish is complete before sleeping
@@ -267,8 +268,6 @@ void SendingData::SendDataToParticle()
           }
         Serial1.println(cloud_output_string);
     }
-    Serial.println("data to pamUp: ");
-    Serial.println(cloud_output_string);
 }
 
 void SendingData::SendDataToSd()
@@ -341,8 +340,6 @@ void SendingData::SendDataToSd()
 
         file.close();
     }
-    Serial.println("data to ssd card: ");
-    Serial.println(csv_output_string);
 }
 
 void SendingData::SendDataToSensible()
@@ -392,10 +389,11 @@ void SendingData::SendDataToSensible()
     writer.endObject();
     writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0;
 
-    Particle.publish("sensiblePamUp", sensible_buf, PRIVATE);
-    Particle.process();
 
-    Serial.println("sensible data: ");
-    Serial.println(sensible_buf);
+    if (Particle.connected())
+    {
+        Particle.publish("sensiblePamUp", sensible_buf, PRIVATE);
+        Particle.process();
+    }
 }
 

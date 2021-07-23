@@ -7,8 +7,17 @@ BME680::BME680()
 {
     this->name = "BME680";
 
+    globalVariables = Global::GetInstance();
+    if (globalVariables->temperature_units == 0)
+    {
+        this->temperature.units = "C";
+    }
+    else 
+    {
+        this->temperature.units = "F";
+    }
     this->temperature.name = "Temperature";
-    this->temperature.units = "C";
+
     this->temperature.packet_constant = TEMPERATURE_PACKET_CONSTANT;
     this->species.push_back(&this->temperature);
 
@@ -22,10 +31,6 @@ BME680::BME680()
     this->humidity.packet_constant = HUMIDITY_PACKET_CONSTANT;
     this->species.push_back(&this->humidity);
 
-    // this->voc.name = "VOC";
-    // this->voc.units = "";
-    // this->voc.packet_constant = DONT_ADVERTISE_CONSTANT;
-    // this->species.push_back(&this->voc);
 }
 
 BME680::~BME680() {}
@@ -57,6 +62,10 @@ bool BME680::measure()
 
     this->temperature.raw_value = this->_bme680.temperature;
     float adj_value = (this->temperature.slope * this->temperature.raw_value) + this->temperature.zero;
+    if (globalVariables->temperature_units == 1) // Farenheit
+    {
+        adj_value = adj_value*1.8+32;
+    }
     this->temperature.adj_value = adj_value;
 
     this->temperature.accumulated_value += adj_value;

@@ -5,6 +5,16 @@ HIH8120::HIH8120(uint8_t i2c_address)
 {
     this->name = "HIH8120";
 
+    globalVariables = Global::GetInstance();
+    if (globalVariables->temperature_units == 0)
+    {
+        this->temperature.units = "C";
+    }
+    else 
+    {
+        this->temperature.units = "F";
+    }
+
     this->_hih = new HIH61XX(i2c_address);
 
     this->temperature.name = "Temperature";
@@ -33,6 +43,10 @@ bool HIH8120::measure()
     
     this->temperature.raw_value = this->_hih->temperature();
     float adj_value = (this->temperature.slope * this->temperature.raw_value) + this->temperature.zero;
+    if (globalVariables->temperature_units == 1) // Farenheit
+    {
+        adj_value = adj_value*1.8+32;
+    }
     this->temperature.adj_value = adj_value;
 
     this->temperature.accumulated_value += adj_value;

@@ -12,6 +12,7 @@
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
 #include "../../PAMEEPROM/EEPROMAddresses.h"
+#include "../../global.h"
 
 class HIH8120: public PAMSensor {
 
@@ -25,6 +26,7 @@ public:
 
     PAMSpecie temperature;
     PAMSpecie humidity;
+    Global * globalVariables = nullptr;
 
     HIH61XX *_hih;
 

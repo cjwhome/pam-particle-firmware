@@ -14,17 +14,19 @@
 #include "../../PAMSensor/PAMSensor.h"
 #include "../../PAMSpecie/PAMSpecie.h"
 #include "../../PAMEEPROM/EEPROMAddresses.h"
+#include "../../global.h"
 
 class BME680: public PAMSensor {
 
 public:
-    BME680();
+    explicit BME680();
     ~BME680();
 
     PAMSpecie temperature;
     PAMSpecie humidity;
     PAMSpecie pressure;
-    //PAMSpecie voc;
+    Global * globalVariables = nullptr;
+
 
     Adafruit_BME680 _bme680;
 
