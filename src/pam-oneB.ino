@@ -903,6 +903,7 @@ void loop()
                 Serial.println("Connecting to cellular network");
                 writeLogFile("Connecting to cellular network");
             }
+            Serial.println("Turning on cellular");
             Cellular.on();
             if (debugging_enabled) 
             {
@@ -2273,6 +2274,10 @@ void serialMenu()
         case 'f':
             serBuf.printf("f %s", System.deviceID());
             break;
+        case 'g':
+            Serial.println("Turning on cellular (should already be on)");
+            EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+            break;
 
         case 'q':
             Serial.println("Serial debugging enabled.");
@@ -3404,6 +3409,7 @@ void outputSerialMenuOptions(void)
     Serial.println("d:  Adjust COB zero");
     Serial.println("e:  Get Device Id");
     Serial.println("f:  Get coreid");
+    Serial.println("g: Active Cellular (should be activated anyways)");
     Serial.println("q:  Enable serial debugging");
     Serial.println("r:  Disable serial debugging");
     Serial.println("s:  Activate sending offline data");
