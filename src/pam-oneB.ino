@@ -42,6 +42,13 @@ PAMSensorManager *manager = nullptr;
 PowerCheck powerCheck;
 FuelGauge fuel;
 
+// PAM Sensors
+T6713 t6713;
+TPHFusion tph_fusion(0x27, false);
+Plantower plantower(Serial4);
+PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
+PAM_108L pam_108L;
+
 time_t watch_time;
 int averaging_time = 0;
 PAMSerialMenu serial_menu;
@@ -55,7 +62,7 @@ EspReset espReset = EspReset();
 DateTimeSet datetimeSet = DateTimeSet();
 TimeZoneSet timezoneSet = TimeZoneSet();
 BuildVersion buildVersion = BuildVersion();
-ContinuousGps continuousGps = ContinuousGps();
+//ContinuousGps continuousGps = ContinuousGps();
 
 void enableContinuousGPS(void);
 void sendPacket(byte *packet, byte len);
@@ -132,7 +139,7 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 }
 
-void buildSerialMenu(PAMSerialMenu serial_menu)
+void buildSerialMenu()
 {
     PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
     PAMSerialEditEEPROMValue<int> * device_id = new PAMSerialEditEEPROMValue<int>(globalVariables->device_id, DEVICE_ID_MEM_ADDRESS, -1);
@@ -141,8 +148,6 @@ void buildSerialMenu(PAMSerialMenu serial_menu)
     PAMSerialEditEEPROMValue<bool> * sensible_iot_en = new PAMSerialEditEEPROMValue<bool>(globalVariables->sensible_iot_en, SENSIBLEIOT_ENABLE_MEM_ADDRESS, 0);
     PAMSerialEditEEPROMValue<bool> * temperature_units = new PAMSerialEditEEPROMValue<bool>(globalVariables->temperature_units, TEMPERATURE_UNITS_MEM_ADDRESS, 0);
     PAMSerialEditEEPROMValue<bool> * car_topper = new PAMSerialEditEEPROMValue<bool>(globalVariables->car_topper, CAR_TOPPER_POWER_MEM_ADDRESS, 0);
-
-
 
     serial_menu.addResponder(PAMSensorManager::GetInstance()->serial_menu_rd, "Sensor Settings");
     serial_menu.addResponder(averaging_measurement, "Set Averaging Time (seconds)");
@@ -159,7 +164,7 @@ void buildSerialMenu(PAMSerialMenu serial_menu)
     serial_menu.addResponder(&buildVersion, "Print Version and Build");
     serial_menu.addResponder(temperature_units, "Celcius or Farenheit? (false is Celcius)");
     serial_menu.addResponder(car_topper, "Enable / Disable car topper mode");
-    serial_menu.addResponder(&continuousGps, "Read the gps rapidly and continuously");
+    //serial_menu.addResponder(&continuousGps, "Read the gps rapidly and continuously");
 
 }
 
@@ -173,13 +178,6 @@ void setup()
     manager = PAMSensorManager::GetInstance();
     send_measurements = SendingData::GetInstance();
     PMIC pmic;
-
-    // PAM Sensors
-    T6713 t6713;
-    TPHFusion tph_fusion(0x27, false);
-    Plantower plantower(Serial4);
-    PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
-    PAM_108L pam_108L;
 
     globalVariables->status_word->status_int  = 0;
     globalVariables->status_word->status_int |= (APP_VERSION << 12) & 0xFF00;
@@ -257,7 +255,7 @@ void setup()
     Serial.println(BUILD_VERSION);
 
     enableContinuousGPS();
-    buildSerialMenu(serial_menu);
+    buildSerialMenu();
 
 
 
