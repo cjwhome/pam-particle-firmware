@@ -29,6 +29,8 @@
 #include "MenuFunctions/TimeZoneSet.h"
 #include "MenuFunctions/BuildVersion.h"
 #include "MenuFunctions/ContinuousGPS.h"
+#include "MenuFunctions/ABCLogic.h"
+#include "MenuFunctions/CalibrateCO2.h"
 
 //manually control connection to cellular network
 SYSTEM_MODE(MANUAL);
@@ -62,7 +64,9 @@ EspReset espReset = EspReset();
 DateTimeSet datetimeSet = DateTimeSet();
 TimeZoneSet timezoneSet = TimeZoneSet();
 BuildVersion buildVersion = BuildVersion();
-//ContinuousGps continuousGps = ContinuousGps();
+ContinuousGps continuousGps = ContinuousGps();
+CalibrateCO2 calibrateCO2 = CalibrateCO2();
+ABCLogic abcLogic = ABCLogic();
 
 void enableContinuousGPS(void);
 void sendPacket(byte *packet, byte len);
@@ -164,7 +168,9 @@ void buildSerialMenu()
     serial_menu.addResponder(&buildVersion, "Print Version and Build");
     serial_menu.addResponder(temperature_units, "Celcius or Farenheit? (false is Celcius)");
     serial_menu.addResponder(car_topper, "Enable / Disable car topper mode");
-    //serial_menu.addResponder(&continuousGps, "Read the gps rapidly and continuously");
+    serial_menu.addResponder(&continuousGps, "Read the gps rapidly and continuously");
+    serial_menu.addResponder(&calibrateCO2, "Calibrate CO2");
+    serial_menu.addResponder(&abcLogic, "Enable/ Disable ABCLogic");
 
 }
 
