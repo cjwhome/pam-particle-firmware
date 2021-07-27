@@ -52,21 +52,11 @@ PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
 PAM_108L pam_108L;
 
 time_t watch_time;
+PMIC pmic;
 int averaging_time = 0;
 PAMSerialMenu serial_menu;
 uint16_t serial_menu_rd;
 uint16_t rd = 0;
-
-EEPROMReset eepromReset = EEPROMReset();
-PrintHeader printHeader = PrintHeader();
-CellularInfo cellularInfo = CellularInfo();
-EspReset espReset = EspReset();
-DateTimeSet datetimeSet = DateTimeSet();
-TimeZoneSet timezoneSet = TimeZoneSet();
-BuildVersion buildVersion = BuildVersion();
-ContinuousGps continuousGps = ContinuousGps();
-CalibrateCO2 calibrateCO2 = CalibrateCO2();
-ABCLogic abcLogic = ABCLogic();
 
 void enableContinuousGPS(void);
 void sendPacket(byte *packet, byte len);
@@ -117,20 +107,12 @@ void testSerialBecomesResponder(uint16_t rd, bool child_returned)
 }
 
 class TestSerialConnector: public PAMSerialResponder {
-
-public:
-    TestSerialConnector(): PAMSerialResponder(BYTE) {};
-    ~TestSerialConnector() {};
-    void onData(uint16_t rd, uint8_t *data, uint8_t length) { testSerialOnData(rd, data, length); };
-    void becomesResponder(uint16_t rd, bool child_returned) { testSerialBecomesResponder(rd, child_returned); };
+    public:
+        TestSerialConnector(): PAMSerialResponder(BYTE) {};
+        ~TestSerialConnector() {};
+        void onData(uint16_t rd, uint8_t *data, uint8_t length) { testSerialOnData(rd, data, length); };
+        void becomesResponder(uint16_t rd, bool child_returned) { testSerialBecomesResponder(rd, child_returned); };
 };
-
-
-
-
-
-
-
 
 
 //test for setting up PMIC manually
@@ -145,6 +127,17 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 void buildSerialMenu()
 {
+    EEPROMReset eepromReset = EEPROMReset();
+    PrintHeader printHeader = PrintHeader();
+    CellularInfo cellularInfo = CellularInfo();
+    EspReset espReset = EspReset();
+    DateTimeSet datetimeSet = DateTimeSet();
+    TimeZoneSet timezoneSet = TimeZoneSet();
+    BuildVersion buildVersion = BuildVersion();
+    ContinuousGps continuousGps = ContinuousGps();
+    CalibrateCO2 calibrateCO2 = CalibrateCO2();
+    ABCLogic abcLogic = ABCLogic();
+
     PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
     PAMSerialEditEEPROMValue<int> * device_id = new PAMSerialEditEEPROMValue<int>(globalVariables->device_id, DEVICE_ID_MEM_ADDRESS, -1);
     PAMSerialEditEEPROMValue<bool> * debugging_enabled = new PAMSerialEditEEPROMValue<bool>(globalVariables->debugging_enabled, DEBUGGING_ENABLED_MEM_ADDRESS, 0);
@@ -152,6 +145,7 @@ void buildSerialMenu()
     PAMSerialEditEEPROMValue<bool> * sensible_iot_en = new PAMSerialEditEEPROMValue<bool>(globalVariables->sensible_iot_en, SENSIBLEIOT_ENABLE_MEM_ADDRESS, 0);
     PAMSerialEditEEPROMValue<bool> * temperature_units = new PAMSerialEditEEPROMValue<bool>(globalVariables->temperature_units, TEMPERATURE_UNITS_MEM_ADDRESS, 0);
     PAMSerialEditEEPROMValue<bool> * car_topper = new PAMSerialEditEEPROMValue<bool>(globalVariables->car_topper, CAR_TOPPER_POWER_MEM_ADDRESS, 0);
+    PAMSerialEditEEPROMValue<bool> * ozone_enabled = new PAMSerialEditEEPROMValue<bool>(globalVariables->ozone_enabled, OZONE_EN_MEM_ADDRESS, 0);
 
     serial_menu.addResponder(PAMSensorManager::GetInstance()->serial_menu_rd, "Sensor Settings");
     serial_menu.addResponder(averaging_measurement, "Set Averaging Time (seconds)");
@@ -171,7 +165,7 @@ void buildSerialMenu()
     serial_menu.addResponder(&continuousGps, "Read the gps rapidly and continuously");
     serial_menu.addResponder(&calibrateCO2, "Calibrate CO2");
     serial_menu.addResponder(&abcLogic, "Enable/ Disable ABCLogic");
-
+    serial_menu.addResponder(ozone_enabled, "Disable / Enable Ozone");
 }
 
 
@@ -183,14 +177,10 @@ void setup()
     globalVariables = Global::GetInstance();
     manager = PAMSensorManager::GetInstance();
     send_measurements = SendingData::GetInstance();
-    PMIC pmic;
 
     globalVariables->status_word->status_int  = 0;
     globalVariables->status_word->status_int |= (APP_VERSION << 12) & 0xFF00;
     globalVariables->status_word->status_int |= (BUILD_VERSION << 8) & 0xF00;
-    //status_word.status_int |= 0x6500;
-
-    String init_log; //intialization error log
 
     setADCSampleTime(ADC_SampleTime_480Cycles);
     //setup i/o
@@ -209,7 +199,6 @@ void setup()
     pmic.enableCharging();
     writeRegister(0, 0b00110100);
     writeRegister(1, 0b00011011);
-    //writeRegister(2, 0b01100000);
     //check power
     powerCheck.loop();
 
@@ -227,10 +216,7 @@ void setup()
 
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
-    //init serial4 to communicate with Plantower PMS5003
-    // Serial4.begin(9600);
     Serial5.begin(9600);        //gps is connected to this serial port
-
 
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
@@ -254,7 +240,6 @@ void setup()
     delay(1000);
 
     Serial.println("ESP reset!");
-
     Serial.print("FW Version: ");
     Serial.println(APP_VERSION);
     Serial.print("Build: ");
@@ -263,24 +248,17 @@ void setup()
     enableContinuousGPS();
     buildSerialMenu();
 
-
-
     manager->addSensor(&pamco);
     manager->addSensor(&t6713);
     manager->addSensor(&plantower);
     manager->addSensor(&tph_fusion);
     if (globalVariables->ozone_enabled == true)
     {
-            manager->addSensor(&pam_108L);
+        manager->addSensor(&pam_108L);
     }
-
     send_measurements->addSensors();
 
-
-    char *csv_header = manager->csvHeader();
-    Serial.println(csv_header);
-    free(csv_header);
-
+    Serial.println(manager->csvHeader());
     
     Log.info("System version: %s", (const char*)System.version());
 
@@ -334,6 +312,7 @@ void loop()
         Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
+
 }
 
 void startCarTopperTimer()

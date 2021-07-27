@@ -16,24 +16,24 @@ public:
 
 
 
-    int device_id;
-    bool ozone_enabled;
-    String fileName;
-    bool cellular_enabled;
-    bool sensible_iot_en;
+    int device_id = -1;
+    bool ozone_enabled = false;
+    String fileName =  "";
+    bool cellular_enabled = true;
+    bool sensible_iot_en = false;
     bool esp_wifi_connection_status = false;
-    bool debugging_enabled;
-    bool temperature_units;
-    bool car_topper;
-    int app_version;
-    int build_version;
+    bool debugging_enabled = false;
+    bool temperature_units = false;
+    bool car_topper = false;
+    int app_version = APP_VERSION;
+    int build_version = BUILD_VERSION;
     time_t car_topper_time = 0;
 
     SdFat sd;
     SdFile file;
     SdFile log_file;
     File file1;
-    String logFileName;
+    String logFileName = "";
     bool file_started = false;
     bool log_file_started = false;
 
