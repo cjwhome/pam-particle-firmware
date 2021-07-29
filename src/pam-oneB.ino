@@ -171,7 +171,7 @@ int esp_wroom_en = D7;
 int blower_en = D2;
 int sound_input = B5;  //ozone monitor's voltage output is connected to this input
 int co2_en = C5;        //enables the CO2 sensor power
-uint32_t buttonOffTime = 0;
+time_t buttonOffTime = NULL;
 
 
 
@@ -753,7 +753,7 @@ void setup()
 
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
-    //pmic.setChargeCurrent(0,1,1,0,0,0);
+
     //pmic.setInputCurrentLimit(1200);
     pmic.enableCharging();
     writeRegister(0, 0b00110100);
@@ -997,6 +997,13 @@ void setup()
 
     
     Log.info("System version: %s", (const char*)System.version());
+
+    log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
+            log_file.print("WE TURNED ON AT: ");
+            log_file.println(Time.now());
+            log_file.print("This is the battery at the moment: ");
+            log_file.println(fuel.getSoC());
+            log_file.close();
     
 
 }
@@ -1026,19 +1033,31 @@ void locationCallback(float lat, float lon, float accuracy) {
 
 void loop() {
 
-    if(car_topper_power_en && powerCheck.getHasPower() == 0){
-        if (buttonOffTime == 0)
+    if(car_topper_power_en && System.batteryState() == 4){
+        if (buttonOffTime == NULL)
         {
+            log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
+            log_file.print("We started turning off at: ");
+            log_file.println(Time.now());
+            log_file.print("This is the battery at the moment: ");
+            log_file.println(fuel.getSoC());
+            log_file.close();
             startCarTopperTimer();
         }
-        else if(millis() - buttonOffTime > 30*60000UL)
+        else if(Time.now() > buttonOffTime+1800) // The 1800 is the amount of seconds in 30 minutes.
         {
+            log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
+            log_file.print("We turned off at: ");
+            log_file.println(Time.now());
+            log_file.print("This is the battery at the moment: ");
+            log_file.println(fuel.getSoC());
+            log_file.close();
             goToSleepBattery();
         }
     }
-    else if (buttonOffTime > 0 && powerCheck.getHasPower() == 1)
+    else if (buttonOffTime != NULL && System.batteryState() == 2)
     {
-        buttonOffTime = 0;
+        buttonOffTime = NULL;
     }
     
 
@@ -1167,6 +1186,29 @@ void loop() {
 
     //check power
     powerCheck.loop();
+    // Serial.print("The indicator for if it is charging: ");
+    // Serial.println(System.batteryState());
+    // Serial.println(pmic.getChargeCurrent());
+    // Serial.println(pmic.getChargeVoltage());
+
+    // log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
+    // if(log_file_started == 0){
+    //       log_file.println("File Start timestamp: ");
+    //       log_file.println(Time.timeStr());
+    //       log_file_started = 1;
+    //   }
+    //   if (System.batteryState() == 4)
+    //   {
+    //       log_file.println("BATTERY DISCHARGING SHOULD START COUNTDOWN HERE");
+    //   }
+    //   log_file.print("Battery State: ");
+    //   log_file.println(System.batteryState());
+    //   log_file.print("Charge Current: ");
+    //   log_file.println(pmic.getChargeCurrent());
+    //   log_file.print("Charge Voltage: ");
+    //   log_file.println(pmic.getChargeVoltage());
+
+    //   log_file.close();
 
 	//Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
     if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
@@ -3736,7 +3778,7 @@ void serialGetUpperLimit(void){
 
 void startCarTopperTimer()
 {
-    buttonOffTime = millis();
+    buttonOffTime = Time.now();
 }
 
 void readAlpha1Constantly(void){

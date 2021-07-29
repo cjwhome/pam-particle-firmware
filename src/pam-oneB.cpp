@@ -91,6 +91,7 @@ void serialGetHumiditySlope(void);
 void serialGetHumidityZero(void);
 void serialGetLowerLimit(void);
 void serialGetUpperLimit(void);
+void startCarTopperTimer();
 void readAlpha1Constantly(void);
 #line 37 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 GoogleMapsDeviceLocator locator;
@@ -230,6 +231,7 @@ int esp_wroom_en = D7;
 int blower_en = D2;
 int sound_input = B5;  //ozone monitor's voltage output is connected to this input
 int co2_en = C5;        //enables the CO2 sensor power
+time_t buttonOffTime = NULL;
 
 
 
@@ -791,6 +793,8 @@ void setup()
 
     String init_log; //intialization error log
 
+    
+
 
     setADCSampleTime(ADC_SampleTime_480Cycles);
     //setup i/o
@@ -809,7 +813,7 @@ void setup()
 
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
-    //pmic.setChargeCurrent(0,1,1,0,0,0);
+
     //pmic.setInputCurrentLimit(1200);
     pmic.enableCharging();
     writeRegister(0, 0b00110100);
@@ -827,6 +831,7 @@ void setup()
     }
     //if user presses power button during operation, reset and it will go to low power mode
     attachInterrupt(D4, System.reset, RISING);
+
     if(digitalRead(D4)){
       goToSleep();
     }
@@ -1052,6 +1057,13 @@ void setup()
 
     
     Log.info("System version: %s", (const char*)System.version());
+
+    log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
+            log_file.print("WE TURNED ON AT: ");
+            log_file.println(Time.now());
+            log_file.print("This is the battery at the moment: ");
+            log_file.println(fuel.getSoC());
+            log_file.close();
     
 
 }
@@ -1081,12 +1093,32 @@ void locationCallback(float lat, float lon, float accuracy) {
 
 void loop() {
 
-    if(car_topper_power_en && powerCheck.getHasPower() == 0){
-        
-        goToSleepBattery();
+    if(car_topper_power_en && System.batteryState() == 4){
+        if (buttonOffTime == NULL)
+        {
+            log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
+            log_file.print("We started turning off at: ");
+            log_file.println(Time.now());
+            log_file.print("This is the battery at the moment: ");
+            log_file.println(fuel.getSoC());
+            log_file.close();
+            startCarTopperTimer();
+        }
+        else if(Time.now() > buttonOffTime+1800) // The 1800 is the amount of seconds in 30 minutes.
+        {
+            log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
+            log_file.print("We turned off at: ");
+            log_file.println(Time.now());
+            log_file.print("This is the battery at the moment: ");
+            log_file.println(fuel.getSoC());
+            log_file.close();
+            goToSleepBattery();
+        }
     }
-    //Serial.println("locator loop");
-   // locator.loop();
+    else if (buttonOffTime != NULL && System.batteryState() == 2)
+    {
+        buttonOffTime = NULL;
+    }
     
 
     if(output_only_particles == 1){
@@ -1214,6 +1246,29 @@ void loop() {
 
     //check power
     powerCheck.loop();
+    // Serial.print("The indicator for if it is charging: ");
+    // Serial.println(System.batteryState());
+    // Serial.println(pmic.getChargeCurrent());
+    // Serial.println(pmic.getChargeVoltage());
+
+    // log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
+    // if(log_file_started == 0){
+    //       log_file.println("File Start timestamp: ");
+    //       log_file.println(Time.timeStr());
+    //       log_file_started = 1;
+    //   }
+    //   if (System.batteryState() == 4)
+    //   {
+    //       log_file.println("BATTERY DISCHARGING SHOULD START COUNTDOWN HERE");
+    //   }
+    //   log_file.print("Battery State: ");
+    //   log_file.println(System.batteryState());
+    //   log_file.print("Charge Current: ");
+    //   log_file.println(pmic.getChargeCurrent());
+    //   log_file.print("Charge Voltage: ");
+    //   log_file.println(pmic.getChargeVoltage());
+
+    //   log_file.close();
 
 	//Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
     if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
@@ -3779,6 +3834,11 @@ void serialGetUpperLimit(void){
     }else{
         Serial.println("\n\rIncorrect password!");
     }
+}
+
+void startCarTopperTimer()
+{
+    buttonOffTime = Time.now();
 }
 
 void readAlpha1Constantly(void){
