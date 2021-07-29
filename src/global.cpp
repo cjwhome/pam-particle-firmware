@@ -9,12 +9,17 @@ Global::Global()
     build_version = BUILD_VERSION;
 }
 
-Global::~Global() {}
+Global::~Global()
+{ 
+    isInitialized = false; 
+}
 
 Global * Global::instance = nullptr;
+bool Global::isInitialized = false;
 Global* Global::GetInstance()
 {
-    if (instance == nullptr) {
+    if (isInitialized == false) {
+        isInitialized = true;
         instance = new Global();
     }
     return instance;

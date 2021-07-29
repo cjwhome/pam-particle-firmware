@@ -21,6 +21,7 @@ class PAMSensorManager {
 
 private:
     static PAMSensorManager *instance;
+    static bool isInitialized;
     PAMSensorManager();
     ~PAMSensorManager();
 
@@ -33,6 +34,7 @@ private:
 
 public:
     static PAMSensorManager* GetInstance();
+
 
     void addSensor(PAMSensor *sensor);
     char *csvHeader();

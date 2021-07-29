@@ -11,6 +11,7 @@
 
 #include "../PAMSerialResponder.h"
 #include "../PAMSerial.h"
+#include "../../global.h"
 
 class PAMSerialMenu: public PAMSerialResponder {
 

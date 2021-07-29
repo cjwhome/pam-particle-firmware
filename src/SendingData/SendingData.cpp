@@ -4,12 +4,17 @@ SendingData::SendingData()
 {
 }
 
-SendingData::~SendingData() {}
+SendingData::~SendingData() 
+{
+    isInitialized = false; 
+}
 
 SendingData * SendingData::instance = nullptr;
+bool SendingData::isInitialized = false;
 SendingData* SendingData::GetInstance()
 {
-    if (instance == nullptr) {
+    if (isInitialized == false) {
+        isInitialized = true;
         instance = new SendingData();
     }
     return instance;
@@ -45,6 +50,9 @@ void SendingData::addSensors()
         else if (sensor->name == "108L")
         {
             this->pam_108L = (PAM_108L*)(sensor);
+        }
+        else {
+            Serial.println("Didn't find a sensor matching that. Boo.");
         }
     }
 }
@@ -114,31 +122,31 @@ void SendingData::SendDataToESP()
         */
         if(i == 0){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = this->pamco->co.average;
+            floatBytes.myFloat = this->pamco->co.adj_value;
         }else if(i == 1){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = this->t6713->CO2.average;
+            floatBytes.myFloat = this->t6713->CO2.adj_value;
         }else if(i == 2){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
             floatBytes.myFloat = fuel.getSoC();
         }else if(i == 3){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-            floatBytes.myFloat = this->plantower->pm1.average;
+            floatBytes.myFloat = this->plantower->pm1.adj_value;
         }else if(i == 4){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-            floatBytes.myFloat = this->plantower->pm2_5.average;
+            floatBytes.myFloat = this->plantower->pm2_5.adj_value;
         }else if(i == 5){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-            floatBytes.myFloat = this->plantower->pm10.average;
+            floatBytes.myFloat = this->plantower->pm10.adj_value;
         }else if(i == 6){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
-            floatBytes.myFloat = this->tph_fusion->temperature->average;
+            floatBytes.myFloat = this->tph_fusion->temperature->adj_value;
         }else if(i == 7){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
-            floatBytes.myFloat = this->tph_fusion->pressure->average / 100.0;
+            floatBytes.myFloat = this->tph_fusion->pressure->adj_value / 100.0;
         }else if(i == 8){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
-            floatBytes.myFloat = this->tph_fusion->humidity->average;
+            floatBytes.myFloat = this->tph_fusion->humidity->adj_value;
         }
         else if(i == 10){
             if (this->globalVariables->ozone_enabled)
@@ -274,21 +282,21 @@ void SendingData::SendDataToSd()
 {
     String csv_output_string = "";
     csv_output_string += String(this->globalVariables->device_id) + ",";
-    csv_output_string += String(this->pamco->co.average, 3) + ",";
+    csv_output_string += String(this->pamco->co.adj_value, 3) + ",";
     if (this->pamco2 != NULL)
     {
-        csv_output_string += String(this->pamco2->co.average, 3) + ",";
+        csv_output_string += String(this->pamco2->co.adj_value, 3) + ",";
     }
 
-    csv_output_string += String(this->t6713->CO2.average, 0) + ",";
+    csv_output_string += String(this->t6713->CO2.adj_value, 0) + ",";
 
-    csv_output_string += String(this->plantower->pm1.average) + ",";
-    csv_output_string += String(this->plantower->pm2_5.average, 0) + ",";
-    csv_output_string += String(this->plantower->pm10.average) + ",";
-    csv_output_string += String(this->tph_fusion->temperature->average, 1) + ",";
-    csv_output_string += String(this->tph_fusion->pressure->average / 100.0, 1) + ",";
+    csv_output_string += String(this->plantower->pm1.adj_value) + ",";
+    csv_output_string += String(this->plantower->pm2_5.adj_value, 0) + ",";
+    csv_output_string += String(this->plantower->pm10.adj_value) + ",";
+    csv_output_string += String(this->tph_fusion->temperature->adj_value, 1) + ",";
+    csv_output_string += String(this->tph_fusion->pressure->adj_value / 100.0, 1) + ",";
 
-    csv_output_string += String(this->tph_fusion->humidity->average, 1) + ",";
+    csv_output_string += String(this->tph_fusion->humidity->adj_value, 1) + ",";
     if(this->globalVariables->ozone_enabled)
     {
         csv_output_string += String(this->pam_108L->ozone.adj_value, 1) + ",";
@@ -324,7 +332,11 @@ void SendingData::SendDataToSd()
     }
     csv_output_string += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
     
-    Serial.println(csv_output_string);
+    if (globalVariables->inMenu == false)
+    {
+        Serial.println(csv_output_string);
+    }
+
     SdFile file = this->globalVariables->file;
 
     //write data to file

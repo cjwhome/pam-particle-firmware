@@ -29,7 +29,10 @@ public:
     void SendDataToESP(); 
     void SendDataToSensible();
 
+
+
 private: 
+    static bool isInitialized;
     static SendingData *instance;
     SendingData();
     ~SendingData();

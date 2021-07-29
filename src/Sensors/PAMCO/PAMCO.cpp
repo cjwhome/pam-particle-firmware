@@ -102,8 +102,6 @@ bool PAMCO::measure()
         sensorCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
     }
 
-
-
     this->co.raw_value = (sensorCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
     float adj_value = (this->co.slope * this->co.raw_value) + this->co.zero;
     this->co.adj_value = adj_value;

@@ -25,6 +25,7 @@ public:
     bool debugging_enabled = false;
     bool temperature_units = false;
     bool car_topper = false;
+    bool inMenu = false;
     int app_version = APP_VERSION;
     int build_version = BUILD_VERSION;
     time_t car_topper_time = 0;
@@ -42,7 +43,10 @@ public:
         char byte[2];
     } * status_word;
 
+
+
     private: 
+        static bool isInitialized;
         static Global *instance;
         Global();
         ~Global();

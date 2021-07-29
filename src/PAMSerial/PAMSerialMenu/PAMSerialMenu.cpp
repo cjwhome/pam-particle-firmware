@@ -25,6 +25,7 @@ void PAMSerialMenu::becomesResponder(uint16_t rd, bool child_returned)
         PAMSerial.printf(rd, "%d\t%s\n\r", i, this->entries[i]->name);
     }
     PAMSerial.printf(rd, "PAM> ");
+    Global::GetInstance()->inMenu = true;
 }
 
 void PAMSerialMenu::onData(uint16_t rd, uint8_t *data, uint8_t length) 

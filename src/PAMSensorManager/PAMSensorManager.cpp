@@ -1,15 +1,20 @@
 #include "PAMSensorManager.h"
 
 PAMSensorManager *PAMSensorManager::instance = nullptr;
+bool PAMSensorManager::isInitialized = false;
 
 PAMSensorManager::PAMSensorManager() { 
     this-> serial_menu_rd = PAMSerial.registerResponder(&this->serial_menu);
 }
-PAMSensorManager::~PAMSensorManager() {}
+PAMSensorManager::~PAMSensorManager()
+{
+    isInitialized = false; 
+}
 
 PAMSensorManager* PAMSensorManager::GetInstance()
 {
-    if (instance == nullptr) {
+    if (isInitialized == false) {
+        isInitialized = true;
         instance = new PAMSensorManager();
     }
     return instance;

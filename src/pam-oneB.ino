@@ -44,6 +44,17 @@ PAMSensorManager *manager = nullptr;
 PowerCheck powerCheck;
 FuelGauge fuel;
 
+EEPROMReset eepromReset = EEPROMReset();
+PrintHeader printHeader = PrintHeader();
+CellularInfo cellularInfo = CellularInfo();
+EspReset espReset = EspReset();
+DateTimeSet datetimeSet = DateTimeSet();
+TimeZoneSet timezoneSet = TimeZoneSet();
+BuildVersion buildVersion = BuildVersion();
+ContinuousGps continuousGps = ContinuousGps();
+CalibrateCO2 calibrateCO2 = CalibrateCO2();
+ABCLogic abcLogic = ABCLogic();
+
 // PAM Sensors
 T6713 t6713;
 TPHFusion tph_fusion(0x27, false);
@@ -104,6 +115,7 @@ void testSerialOnData(uint16_t rd, uint8_t *data, uint8_t length)
 void testSerialBecomesResponder(uint16_t rd, bool child_returned)
 {
     PAMSerial.printf(rd, "Main became responder!\n\r");
+    globalVariables->inMenu = false;
 }
 
 class TestSerialConnector: public PAMSerialResponder {
@@ -112,6 +124,7 @@ class TestSerialConnector: public PAMSerialResponder {
         ~TestSerialConnector() {};
         void onData(uint16_t rd, uint8_t *data, uint8_t length) { testSerialOnData(rd, data, length); };
         void becomesResponder(uint16_t rd, bool child_returned) { testSerialBecomesResponder(rd, child_returned); };
+    
 };
 
 
@@ -127,17 +140,6 @@ void writeRegister(uint8_t reg, uint8_t value) {
 
 void buildSerialMenu()
 {
-    EEPROMReset eepromReset = EEPROMReset();
-    PrintHeader printHeader = PrintHeader();
-    CellularInfo cellularInfo = CellularInfo();
-    EspReset espReset = EspReset();
-    DateTimeSet datetimeSet = DateTimeSet();
-    TimeZoneSet timezoneSet = TimeZoneSet();
-    BuildVersion buildVersion = BuildVersion();
-    ContinuousGps continuousGps = ContinuousGps();
-    CalibrateCO2 calibrateCO2 = CalibrateCO2();
-    ABCLogic abcLogic = ABCLogic();
-
     PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
     PAMSerialEditEEPROMValue<int> * device_id = new PAMSerialEditEEPROMValue<int>(globalVariables->device_id, DEVICE_ID_MEM_ADDRESS, -1);
     PAMSerialEditEEPROMValue<bool> * debugging_enabled = new PAMSerialEditEEPROMValue<bool>(globalVariables->debugging_enabled, DEBUGGING_ENABLED_MEM_ADDRESS, 0);
@@ -167,7 +169,6 @@ void buildSerialMenu()
     serial_menu.addResponder(&abcLogic, "Enable/ Disable ABCLogic");
     serial_menu.addResponder(ozone_enabled, "Disable / Enable Ozone");
 }
-
 
 void setup()
 {
@@ -263,14 +264,13 @@ void setup()
     Log.info("System version: %s", (const char*)System.version());
 
     watch_time = Time.now();
-
 }
 
 void loop() 
 {
     if (Time.now() > watch_time+averaging_time)
     {
-        Serial.println("Starting averaging now: ");
+        Serial.println("Pushing averages to cloud");
         manager->runAllAverages();
         if (globalVariables->cellular_enabled)
         {
@@ -281,8 +281,6 @@ void loop()
                 send_measurements->SendDataToSensible();
             }
         }
-        send_measurements->SendDataToESP();
-        send_measurements->SendDataToSd();
         
         watch_time = Time.now();
     }
@@ -290,11 +288,13 @@ void loop()
 
     PAMSensorManager::GetInstance()->loop();
     PAMSerial.loop();
-    //check power
+    // check power
     powerCheck.loop();
+    send_measurements->SendDataToESP();
+    send_measurements->SendDataToSd();
 
-    if(globalVariables->car_topper && powerCheck.getHasPower() == 0){
-        if ( globalVariables->car_topper_time == 0)
+    if(globalVariables->car_topper && System.batteryState() == 4){
+        if ( globalVariables->car_topper_time == NULL)
         {
             startCarTopperTimer();
         }
@@ -303,12 +303,12 @@ void loop()
             goToSleepBattery();
         }
     }
-    else if (globalVariables->car_topper_time > 0 && powerCheck.getHasPower() == 1)
+    else if (globalVariables->car_topper_time != NULL && System.batteryState() == 4)
     {
-        globalVariables->car_topper_time = 0;
+        globalVariables->car_topper_time = NULL;
     }
 
-    if((fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
+    if((fuel.getSoC() < BATTERY_THRESHOLD) && System.batteryState() != 4){
         Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
@@ -356,7 +356,7 @@ void printPacket(byte *packet, byte len)
     char temp[3];
     for (byte i = 0; i < len; i++)
     {
-        sprintf(temp, "%.2X", packet[i]);
+        snprintf(temp, 3, "%.2X", packet[i]);
         Serial.print(temp);
 
         if (i != len - 1)
