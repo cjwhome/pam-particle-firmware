@@ -7,7 +7,7 @@ PAMSensorFeed::PAMSensorFeed(PAMSensor *_sensor): PAMSerialResponder(BYTE) {
 PAMSensorFeed::~PAMSensorFeed() {}
 
 void PAMSensorFeed::becomesResponder(uint16_t rd, bool child_returned) {
-    PAMSerial.printf(rd, "Constantly printing data for the %s sensor. Press any key to exit.\r\n", this->sensor->name);
+    PAMSerial.printf(rd, " \r\n Constantly printing data for the %s sensor. Press any key to exit.\r\n", this->sensor->name);
     
     char *csv_header = this->sensor->csvHeader();
     PAMSerial.printf(rd, "%s\r\n", csv_header);
