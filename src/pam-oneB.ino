@@ -36,6 +36,9 @@
 // THIS IS SO WE GET A LARGER SERIAL BUFFER
 #include "SerialBufferRK.h"
 
+PRODUCT_ID(15083);
+PRODUCT_VERSION(1);
+
 bool haveOfflineData = false;
 String diagnosticData = "";
 
@@ -710,7 +713,6 @@ void setup()
     digitalWrite(fiveVolt_en, HIGH);
 
     // register the cloud function
-    Particle.function("geteepromdata", remoteReadStoredVars);
     Particle.function("rebootaqsync", rebootAQSync);
     Particle.function("diagnostics", sendDiagnostics);
     //Particle.variable("CO_zeroA", CO_zeroA);
@@ -883,9 +885,14 @@ void loop()
         {
             serialMenu();
         }
-        else 
+        else if (incomingByte == 'Y' || incomingByte == 'Q')
         {
             getEspAQSyncData(incomingByte);
+        }
+        else 
+        {
+            Serial.print("Got a weird byte doing nothing: ");
+            Serial.println(incomingByte);
         }
 
     }
@@ -2063,9 +2070,30 @@ void sendWifiInfo(void)
 void getEspAQSyncData(char incomingByte)
 {
     String receivedData = "";
-
-    receivedData = serBuf.readString();
-    
+    char marker;
+    int tracking = 0;
+    while (tracking == 0)
+    {
+        marker = serBuf.read();
+        if (marker == '{')
+        {
+            tracking++;
+            receivedData += marker;
+        }
+    }
+    while(tracking != 0)
+    {
+        marker = serBuf.read();
+        if (marker == '{')
+        {
+            tracking++;
+        }
+        if (marker == '}')
+        {
+            tracking--;
+        }
+        receivedData += marker;
+    }
     char buffer[receivedData.length()];
     receivedData.toCharArray(buffer, receivedData.length());
     
@@ -2080,6 +2108,7 @@ void getEspAQSyncData(char incomingByte)
     if (incomingByte == 'Y')
     {
         sendToDataFile(receivedData);
+        Serial.println(receivedData);
         if(Particle.connected())
         {
             Particle.publish("AQSync", receivedData, PRIVATE);
@@ -2124,11 +2153,39 @@ void getEspAQSyncData(char incomingByte)
             diagnosticData.concat('&');
         }
     }
+    char next;
+    bool done = false;
+    Serial.println("Starting the while loop");
+    while (next != 'Y' && next != 'Q' && done == false)
+    {
+        Serial.println("going through the while loop");
+        if (!serBuf.available())
+        {
+            Serial.println("no serial available should then just go back to normal");
+            done = true;
+        }
+        else 
+        {
+            next = serBuf.read();
+            Serial.print("This is the char stuff: ");
+            Serial.println(next);
+        }
+    }
+    if (done == true)
+    {
+        Serial.println("returning to normal operation");
+        return ;
+    }
+    else if (next == 'Y' || next == 'Q')
+    {
+        Serial.println("going back around");
+        getEspAQSyncData(next);
+    }
 }
 
 int rebootAQSync(String nothing)
 {
-    serBuf.write('R');
+    serBuf.write('f R');
     return 1;
 }
 
@@ -3292,7 +3349,7 @@ String readSerBufUntilDone()
 
 void sendToDataFile(String receivedData)
 {
-    Serial.println("Writing the data line to the SD Card: ");
+    //Serial.println("Writing the data line to the SD Card: ");
     file.open(String(DEVICE_id) + "_AQSyncData_" + String(Time.year())+ '_' + String(Time.month()) + '_' + String(Time.day()), O_CREAT | O_APPEND | O_WRITE);
     file.println(receivedData);
     file.close();
