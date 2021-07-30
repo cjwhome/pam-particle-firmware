@@ -902,6 +902,8 @@ void setup()
       //look for a calibration file
       check_cal_file();*/
 
+
+
       Serial.print("Created new file to log to uSD card: ");
       Serial.println(fileName);
     }else { //uSD is not functioning
@@ -1033,6 +1035,17 @@ void setup()
         file_started = 1;
     }*/
     resetESP();
+
+    Serial.print("Is car topper turned on?: ");
+    Serial.println(car_topper_power_en);
+    if (CO_socket == 1)
+    {
+        Serial.println("Now reading CO from U20-Alpha2");
+    }
+    else 
+    {
+        Serial.println("Now reading CO from U19-Alpha1");
+    }
 
     Serial.println("ESP reset!");
 
@@ -1180,6 +1193,7 @@ void loop() {
         status_word.status_int |= 0x01;
         //Serial.println("Cellular is enabled.");
       if (Particle.connected() == false && tried_cellular_connect == false) {
+                  Serial.println("Cellular on");
         tried_cellular_connect = true;
           if(debugging_enabled){
             Serial.println("Connecting to cellular network");
@@ -3814,24 +3828,16 @@ void outputSerialMenuOptions(void){
     Serial.println("w:  Get wifi credentials");
     Serial.println("y:  Enable cellular");
     Serial.println("z:  Disable cellular");
-    //Serial.println("1:  Adjust gas lower limit");
-    //Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");
     Serial.println("4:  Enable Ozone");
     Serial.println("5:  Disable Ozone");
-    //Serial.println("6:  Enable VOC's");
-    //Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
-    //Serial.println("9:  Increase the charge current by 64 mA");
-    //Serial.println("0:  Increase the current input limit by 100 mA");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celcius");
     Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
     Serial.println("F:  Change temperature units to Farenheit");
-    //Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
-    //Serial.println("H:  Read ozone");
     Serial.println("I:  Adjust frequency for uploading through cellular");
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");
@@ -3846,10 +3852,8 @@ void outputSerialMenuOptions(void){
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Switch socket where CO is read from");
     
-    //Serial.println("W:  Enable/Disable google location services");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
-    //Serial.println("!:  Continuous serial output of VOC's");
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
     Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
     Serial.println("?:  Output this menu");

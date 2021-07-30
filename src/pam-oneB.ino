@@ -843,6 +843,8 @@ void setup()
       //look for a calibration file
       check_cal_file();*/
 
+
+
       Serial.print("Created new file to log to uSD card: ");
       Serial.println(fileName);
     }else { //uSD is not functioning
@@ -974,6 +976,17 @@ void setup()
         file_started = 1;
     }*/
     resetESP();
+
+    Serial.print("Is car topper turned on?: ");
+    Serial.println(car_topper_power_en);
+    if (CO_socket == 1)
+    {
+        Serial.println("Now reading CO from U20-Alpha2");
+    }
+    else 
+    {
+        Serial.println("Now reading CO from U19-Alpha1");
+    }
 
     Serial.println("ESP reset!");
 
