@@ -19,7 +19,7 @@ void PAMSerialMenu::addResponder(uint16_t responder, char *name) {
 
 void PAMSerialMenu::becomesResponder(uint16_t rd, bool child_returned)
 {
-    PAMSerial.printf(rd, "PAMSerialMenu\n\r");
+    PAMSerial.printf(rd, "\n\rPAMSerialMenu\n\r");
     for (size_t i = 0; i < this->entries.size(); i++)
     {
         PAMSerial.printf(rd, "%d\t%s\n\r", i, this->entries[i]->name);

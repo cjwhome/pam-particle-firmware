@@ -2,7 +2,7 @@
 
 T6713::T6713() : CO2(CO2_SLOPE_MEM_ADDRESS, CO2_ZERO_MEM_ADDRESS)
 {
-    this->name = "T6713";
+    this->name = "CO2 Sensor";
 
     this->CO2.name = "CO2";
     this->CO2.units = "PPM";

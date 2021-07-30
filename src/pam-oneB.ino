@@ -308,7 +308,7 @@ void loop()
         globalVariables->car_topper_time = NULL;
     }
 
-    if((fuel.getSoC() < BATTERY_THRESHOLD) && System.batteryState() != 4){
+    if((fuel.getSoC() < BATTERY_THRESHOLD) && powerCheck.getHasPower() == 0){
         Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
