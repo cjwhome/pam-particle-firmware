@@ -18,6 +18,7 @@ public:
 
     int device_id = -1;
     bool ozone_enabled = false;
+    bool no2_enabled = false;
     String fileName =  "";
     bool cellular_enabled = true;
     bool sensible_iot_en = false;

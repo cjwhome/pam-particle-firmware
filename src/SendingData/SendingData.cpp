@@ -27,7 +27,7 @@ void SendingData::addSensors()
     for (int i = 0; i < sensors.size(); i++)
     {
         sensor = sensors[i];
-        if (sensor->name == "T6713")
+        if (sensor->name == "CO2 Sensor")
         {
             this->t6713 = (T6713*)(sensor);
         }
@@ -43,16 +43,17 @@ void SendingData::addSensors()
         {
             this->pamco = (PAMCO*)(sensor);
         }
-        else if (sensor->name == "CO Sensor 2")
+        else if (sensor->name == "NO2 Sensor")
         {
-            this->pamco2 = (PAMCO*)(sensor);
+            this->pamno2 = (PAMNO2*)(sensor);
         }
         else if (sensor->name == "108L")
         {
             this->pam_108L = (PAM_108L*)(sensor);
         }
         else {
-            Serial.println("Didn't find a sensor matching that. Boo.");
+            Serial.println("Didn't find a sensor matching: ");
+            Serial.println(sensor->name);
         }
     }
 }
@@ -148,6 +149,14 @@ void SendingData::SendDataToESP()
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
             floatBytes.myFloat = this->tph_fusion->humidity->adj_value;
         }
+        else if (i ==9)
+        {
+            if (this->globalVariables->no2_enabled == true)
+            {
+                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = NO2_PACKET_CONSTANT;
+                floatBytes.myFloat = this->pamno2->no2.adj_value;
+            }
+        }
         else if(i == 10){
             if (this->globalVariables->ozone_enabled)
             {
@@ -217,12 +226,6 @@ void SendingData::SendDataToParticle()
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(this->globalVariables->device_id);   //device id
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(this->pamco->co.average, 3);
-
-    if (this->pamco2 != NULL)
-    {
-        cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(this->pamco2->co.average, 3);
-    }
-
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(this->t6713->CO2.average, 0);
 
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(this->plantower->pm1.average);
@@ -232,8 +235,12 @@ void SendingData::SendDataToParticle()
 
     cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(this->tph_fusion->pressure->average / 100.0, 1);
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(this->tph_fusion->humidity->average, 1);
+    if (this->globalVariables->no2_enabled)
+    {
+        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(this->pamno2->no2.average, 1);
+    }
     if(this->globalVariables->ozone_enabled){
-        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(this->pam_108L->ozone.adj_value, 1);
+        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(this->pam_108L->ozone.average, 1);
     }
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     //cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
@@ -283,13 +290,7 @@ void SendingData::SendDataToSd()
     String csv_output_string = "";
     csv_output_string += String(this->globalVariables->device_id) + ",";
     csv_output_string += String(this->pamco->co.adj_value, 3) + ",";
-    if (this->pamco2 != NULL)
-    {
-        csv_output_string += String(this->pamco2->co.adj_value, 3) + ",";
-    }
-
     csv_output_string += String(this->t6713->CO2.adj_value, 0) + ",";
-
     csv_output_string += String(this->plantower->pm1.adj_value) + ",";
     csv_output_string += String(this->plantower->pm2_5.adj_value, 0) + ",";
     csv_output_string += String(this->plantower->pm10.adj_value) + ",";
@@ -297,6 +298,10 @@ void SendingData::SendDataToSd()
     csv_output_string += String(this->tph_fusion->pressure->adj_value / 100.0, 1) + ",";
 
     csv_output_string += String(this->tph_fusion->humidity->adj_value, 1) + ",";
+    if (this->globalVariables->no2_enabled)
+    {
+        csv_output_string += String(this->pamno2->no2.average, 1) + ",";
+    }
     if(this->globalVariables->ozone_enabled)
     {
         csv_output_string += String(this->pam_108L->ozone.adj_value, 1) + ",";
@@ -375,6 +380,15 @@ void SendingData::SendDataToSensible()
     writer.name("Temp").value(String(this->tph_fusion->temperature->average, 1));
     writer.name("Press").value(String(this->tph_fusion->pressure->average / 100.0, 1));
     writer.name("Hmdty").value(String(this->tph_fusion->humidity->average, 1));
+    writer.name("Battery").value(String(fuel.getSoC(), 2));
+    if (this->globalVariables->no2_enabled)
+    {
+        writer.name("NO2").value(String(this->pamno2->no2.average, 1));
+    }
+    if (this->globalVariables->ozone_enabled)
+    {
+        writer.name("ozone").value(String(this->pam_108L->ozone.average, 1));
+    }
     //add gps coordinates to json:
     if(gps.get_latitude() != 0){
         if(gps.get_nsIndicator() == 0){

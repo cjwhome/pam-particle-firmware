@@ -17,7 +17,7 @@ public:
 
     void becomesResponder(uint16_t rd, bool child_returned)
     {
-        PAMSerial.printf(rd, "Resetting the EEPROM values. The PAM will reset now.\r\n");
+        PAMSerial.printf(rd, " \r\n Resetting the EEPROM values. The PAM will reset now.\r\n");
         EEPROM.clear();
         System.reset();
     }

@@ -17,9 +17,9 @@ public:
 
     void becomesResponder(uint16_t rd, bool child_returned)
     {
-        PAMSerial.printf(rd, "Resetting ESP...");
+        PAMSerial.printf(rd, "Resetting ESP... \r\n");
         resetESP();
-        PAMSerial.printf(rd, "Finished resetting ESP");
+        PAMSerial.printf(rd, "Finished resetting ESP \r\n");
     }
 
     void onData(uint16_t rd, uint8_t *data, uint8_t length)

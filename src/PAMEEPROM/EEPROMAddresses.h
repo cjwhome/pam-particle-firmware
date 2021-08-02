@@ -36,8 +36,10 @@
 #define HIH8120_ENABLE_MEM_ADDRESS              (128)
 #define CO_SOCKET_MEM_ADDRESS                   (132)
 
-
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS          (140)
 #define CAR_TOPPER_POWER_MEM_ADDRESS            (144)
+#define NO2_SLOPE_MEM_ADDRESS                   (148)
+#define NO2_ZERO_MEM_ADDRESS                    (152)
+#define NO2_EN_MEM_ADDRESS                      (156)
 
 #endif // __EEPROM_ADDRESS_H__

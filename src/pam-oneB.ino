@@ -18,6 +18,7 @@
 #include "Sensors/Plantower/Plantower.h"
 #include "Sensors/PAMCO/PAMCO.h"
 #include "Sensors/108L/108L.h"
+#include "Sensors/PAMNO2/PAMNO2.h"
 
 #include "SendingData/SendingData.h"
 #include "Global.h"
@@ -60,6 +61,8 @@ T6713 t6713;
 TPHFusion tph_fusion(0x27, false);
 Plantower plantower(Serial4);
 PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
+PAMNO2 pamno2(ADS1115_2_ADDR, LMP91000_2_EN);
+
 PAM_108L pam_108L;
 
 time_t watch_time;
@@ -148,6 +151,7 @@ void buildSerialMenu()
     PAMSerialEditEEPROMValue<bool> * temperature_units = new PAMSerialEditEEPROMValue<bool>(globalVariables->temperature_units, TEMPERATURE_UNITS_MEM_ADDRESS, 0);
     PAMSerialEditEEPROMValue<bool> * car_topper = new PAMSerialEditEEPROMValue<bool>(globalVariables->car_topper, CAR_TOPPER_POWER_MEM_ADDRESS, 0);
     PAMSerialEditEEPROMValue<bool> * ozone_enabled = new PAMSerialEditEEPROMValue<bool>(globalVariables->ozone_enabled, OZONE_EN_MEM_ADDRESS, 0);
+    PAMSerialEditEEPROMValue<bool> * no2_enabled = new PAMSerialEditEEPROMValue<bool>(globalVariables->no2_enabled, NO2_EN_MEM_ADDRESS, 0);
 
     serial_menu.addResponder(PAMSensorManager::GetInstance()->serial_menu_rd, "Sensor Settings");
     serial_menu.addResponder(averaging_measurement, "Set Averaging Time (seconds)");
@@ -168,6 +172,7 @@ void buildSerialMenu()
     serial_menu.addResponder(&calibrateCO2, "Calibrate CO2");
     serial_menu.addResponder(&abcLogic, "Enable/ Disable ABCLogic");
     serial_menu.addResponder(ozone_enabled, "Disable / Enable Ozone");
+    serial_menu.addResponder(no2_enabled, "Enable/ Disable NO2");
 }
 
 void setup()
@@ -253,6 +258,11 @@ void setup()
     manager->addSensor(&t6713);
     manager->addSensor(&plantower);
     manager->addSensor(&tph_fusion);
+    if (globalVariables->no2_enabled == true)
+    {
+        manager->addSensor(&pamno2);
+    }
+
     if (globalVariables->ozone_enabled == true)
     {
         manager->addSensor(&pam_108L);

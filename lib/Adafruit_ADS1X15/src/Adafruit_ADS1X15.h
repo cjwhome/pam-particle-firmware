@@ -1,3 +1,6 @@
+#ifndef __ADAFRUIT_ADS1X15_H__
+#define __ADAFRUIT_ADS1X15_H__
+
 /**************************************************************************/
 /*!
     @file     Adafruit_ADS1015.h
@@ -152,3 +155,5 @@ class Adafruit_ADS1115 : public Adafruit_ADS1015
 
  private:
 };
+
+#endif // __SENDING_DATA_H__

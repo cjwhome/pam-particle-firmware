@@ -9,6 +9,7 @@
 #include "../Sensors/PAMCO/PAMCO.h"
 #include "../Sensors/Plantower/Plantower.h"
 #include "../Sensors/T6713/T6713.h"
+#include "../Sensors/PAMNO2/PAMNO2.h"
 #include "../PAMSensorManager/PAMSensorManager.h"
 #include "../PAMSensor/PAMSensor.h"
 #include "BLEconstants.h"
@@ -41,8 +42,9 @@ private:
     TPHFusion * tph_fusion = NULL;
     Plantower * plantower = NULL;
     PAMCO * pamco = NULL;
-    PAMCO * pamco2 = NULL;
+    PAMNO2 * pamno2 = NULL;
     PAM_108L * pam_108L = NULL;
+
     int sample_counter = 0;
     GPS gps;
     FuelGauge fuel;

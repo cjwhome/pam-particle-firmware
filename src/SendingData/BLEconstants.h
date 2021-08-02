@@ -24,6 +24,7 @@
 #define PARTICLE_TIME_PACKET_CONSTANT 'Y'   //result of now()
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
+#define NO2_PACKET_CONSTANT 'n'
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
 #define CS A2               //Chip select for SPI/uSD card
 
