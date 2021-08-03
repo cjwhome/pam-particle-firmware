@@ -16,6 +16,7 @@
 #include "HIH61XX.h"
 #include "google-maps-device-locator.h"
 #include "CellularHelper.h"
+#include "vector"
 
 // THIS IS SO WE GET A LARGER SERIAL BUFFER
 #include "SerialBufferRK.h"
@@ -166,7 +167,8 @@ int blower_en = D2;
 int sound_input = B5;       //ozone monitor's voltage output is connected to this input
 int co2_en = C5;            //enables the CO2 sensor power
 
-String diagnostics = "";
+std::allocator<String> alloc;
+std::vector<String> diagnostics;
 
 SerialBuffer<4096> serBuf(Serial4); // This is how we setup getting a bigger buffer for Serial4
 
@@ -862,6 +864,21 @@ void loop()
 
     if (serBuf.available() > 0)
     {
+        // String receivedData = serBuf.readStringUntil('\n');
+        // char checking_message;
+        // int checksum = 0;
+        // int marker = 0;
+        // while (checking_message != '*')
+        // {
+        //     checking_message = recievedData[marker];
+        //     checksum ^=  checking_message;
+        //     marker++;
+        // }
+        // if (checksum == receivedData.substring(receivedData.indexOf('*'), receivedData.length()-1).toInt())
+        // {
+
+        // }
+
         incomingByte = serBuf.read();
         Serial.println("We have recieved something from the touch screen. This is the incomingByte: ");
         Serial.println(incomingByte);
@@ -2116,58 +2133,50 @@ void getEspAQSyncData(char incomingByte)
     {
         int s = receivedData.indexOf(':');
         String deviceName = receivedData.substring(2, s-1);
+        Serial.print("The device name for diangostics: ");
+        Serial.println(deviceName);
 
-        int checkDevice = diagnosticData.indexOf(deviceName);
-
-        if (checkDevice > 0)
+        bool foundMatch = false;
+        for(int i = 0; i < diagnostics.size(); i++)
         {
-            String deviceForward = diagnosticData.substring(checkDevice-2, diagnosticData.length());
-            String oldData = diagnosticData.substring(checkDevice-2, deviceForward.indexOf('&'));
-            diagnosticData.replace(oldData, receivedData);
+            int checkDevice = diagnostics[i].indexOf(deviceName);
+            if (checkDevice > 0)
+            {
+                diagnostics[i] = receivedData;
+                foundMatch = true;
+            }
         }
-        else if (diagnosticData == "")
+        if (foundMatch == false)
         {
-
-            diagnosticData.concat(receivedData);
-            diagnosticData.concat('&');
+            diagnostics.push_back(receivedData);
         }
-        else 
-        {
-            diagnosticData.concat(receivedData);
-            diagnosticData.concat('&');
-        }
+        Serial.print("How many entries into Diagnostics: ");
+        Serial.println(diagnostics.size());
     }
     char next;
     bool done = false;
-    Serial.println("Starting the while loop");
     while (next != 'Y' && next != 'Q' && done == false)
     {
-        Serial.println("going through the while loop");
         if (!serBuf.available())
         {
-            Serial.println("no serial available should then just go back to normal");
             done = true;
         }
         else 
         {
             next = serBuf.read();
-            Serial.print("This is the char stuff: ");
-            Serial.println(next);
         }
     }
     if (done == true)
     {
-        Serial.println("returning to normal operation");
         return ;
     }
     else if (next == 'Y' || next == 'Q')
     {
-        Serial.println("going back around");
         getEspAQSyncData(next);
     }
 }
 
-int rebootAQSync(String deviceName)
+int rebootDevice(String deviceName)
 {
     String command = "R PowerRelay|R " + deviceName; 
     serBuf.write('f R');
@@ -2767,7 +2776,6 @@ void outputCOtoPI(void)
     String CO_string = "";
     Serial.println("Outputting CO to PI.");
 
-    CO_string += String(measurement_number, 0) + ",";
     CO_string += String(CO_float_A, 3) + ",";
     CO_string += String(CO_float_B, 3) + ",";
     if (gps.get_latitude() != 0)
@@ -2789,29 +2797,23 @@ void outputCOtoPI(void)
         {
             CO_string += "-";
         }
-        CO_string += String(gps.get_longitude()) + ",";
+        CO_string += String(gps.get_longitude());
     }
     else
     {
-        CO_string += String(geolocation_longitude) + ",";
+        CO_string += String(geolocation_longitude);
     }
 
-    if (gps.get_longitude() != 0)
+    int checksum = 0;
+    for (int i = 0; i < CO_string.length(); i++)
     {
-        CO_string += String(gps.get_horizontalDilution() / 10.0) + ",";
+        checksum ^= CO_string[i];
     }
-    else
-    {
-        CO_string += String(geolocation_accuracy) + ",";
-    }
+    CO_string += '*';
+    CO_string += checksum;
+    CO_string += '\n';
 
-    CO_string += String(Time.format(systemTime, "%d/%m/%y,%H:%M:%S"));
-    //get a current time string
-
-    CO_string += "\n\r&";
     serBuf.print(CO_string);
-    //send ending delimeter
-    //Serial1.print("&");
 }
 
 void serialTestRemoteFunction(void)
