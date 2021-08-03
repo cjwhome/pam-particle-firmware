@@ -43,19 +43,21 @@ char *PAMSensorManager::csvHeader()
     bool first = true;
     char *header = (char *) malloc(128);
     memset(header, 0, 128);
-
+    sprintf(header, "%s", "Device_Id");
     for (size_t i = 0; i < this->sensors.size(); i++) {
         PAMSensor *sensor = this->sensors[i];
+
         char *sensor_header = sensor->csvHeader();
-        if (first) {
-            first = false;
-            sprintf(header, "%s", sensor_header);
-        } else {
-            sprintf(header, "%s,%s", header, sensor_header);
-        }
+        // if (first) {
+        //     first = false;
+        //     sprintf(header, "%s", sensor_header);
+        // } else {
+        //     sprintf(header, "%s,%s", header, sensor_header);
+        // }
+        sprintf(header, "%s,%s", header, sensor_header);
         free(sensor_header);
     }
-    
+    sprintf(header, "%s,%s", header, "Battery,Latitude,Longitude,Date,Time");
     return header;
 }
 

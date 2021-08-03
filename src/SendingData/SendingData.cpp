@@ -300,10 +300,11 @@ void SendingData::SendDataToSd()
     csv_output_string += String(this->tph_fusion->humidity->adj_value, 1) + ",";
     if (this->globalVariables->no2_enabled)
     {
-        csv_output_string += String(this->pamno2->no2.average, 1) + ",";
+        csv_output_string += String(this->pamno2->no2.adj_value, 1) + ",";
     }
     if(this->globalVariables->ozone_enabled)
     {
+        Serial.println("getting ozone");
         csv_output_string += String(this->pam_108L->ozone.adj_value, 1) + ",";
     }
 
