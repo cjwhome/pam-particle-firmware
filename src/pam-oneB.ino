@@ -60,8 +60,8 @@ ABCLogic abcLogic = ABCLogic();
 T6713 t6713;
 TPHFusion tph_fusion(0x27, false);
 Plantower plantower(Serial4);
-PAMCO pamco(ADS1115_1_ADDR, LMP91000_1_EN);
-PAMNO2 pamno2(ADS1115_2_ADDR, LMP91000_2_EN);
+PAMCO pamco(ADS1115_2_ADDR, LMP91000_2_EN);
+PAMNO2 pamno2(ADS1115_1_ADDR, LMP91000_1_EN);
 
 PAM_108L pam_108L;
 
