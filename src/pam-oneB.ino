@@ -867,9 +867,10 @@ void loop()
 
     if (serBuf.available() > 0)
     {
-        Serial.println("readSerBufUntil");
+        Serial.println("recieved Data");
         String receivedData = serBuf.readStringUntil('\n');
-        Serial.println("check string is valisd");
+        Serial.print("this is the data first: ");
+        Serial.println(receivedData);
         bool isValid = checkStringIsValid(receivedData);
         Serial.println(isValid);
         if (isValid)
@@ -878,9 +879,7 @@ void loop()
             processAqsyncMessage(receivedData);
         }
     }
-    Serial.println("Print co to pi");
     outputCOtoPI();
-    Serial.println("done");
     if (serial_cellular_enabled) 
     {
         status_word.status_int |= 0x01;
@@ -3222,21 +3221,28 @@ void serialGetCoSlopeA(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO slope\n\r");
 
-    float tempfloat = readSerBufUntilDone().toFloat();
+    while (serBuf.available() == 0);
+    String receivedData = serBuf.readStringUntil('\n');
+    bool isValid = checkStringIsValid(receivedData);
 
-    if (tempfloat >= 0.1 && tempfloat < 5.0)
+    if (isValid)
     {
-        CO_slopeA = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew COA slope: ");
-        Serial.println(String(CO_slopeA, 2));
+        receivedData = receivedData.substring(0, receivedData.indexOf('*')-1);
+        float tempfloat = receivedData.toFloat();
+        if (tempfloat >= 0.1 && tempfloat < 5.0)
+        {
+            CO_slopeA = tempfloat;
+            tempfloat *= 100;
+            tempValue = tempfloat;
+            Serial.print("\n\rNew COA slope: ");
+            Serial.println(String(CO_slopeA, 2));
 
-        EEPROM.put(CO_SLOPE_A_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
+            EEPROM.put(CO_SLOPE_A_MEM_ADDRESS, tempValue);
+        }
+        else
+        {
+            Serial.println("\n\rInvalid value!");
+        }
     }
 }
 
@@ -3248,18 +3254,28 @@ void serialGetCoZeroA(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO Zero\n\r");
 
-    float tempValue = readSerBufUntilDone().toFloat();
+    while (serBuf.available() == 0);
+    String receivedData = serBuf.readStringUntil('\n');
+    bool isValid = checkStringIsValid(receivedData);
 
-    if (tempValue >= -5000 && tempValue < 5000)
+    if (isValid)
     {
-        Serial.print("\n\rNew CO zero: ");
-        Serial.println(tempValue);
-        CO_zeroA = tempValue;
-        EEPROM.put(CO_ZERO_A_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
+        receivedData = receivedData.substring(0, receivedData.indexOf('*')-1);
+        float tempfloat = receivedData.toFloat();
+        if (tempfloat >= 0.1 && tempfloat < 5.0)
+        {
+            CO_slopeA = tempfloat;
+            tempfloat *= 100;
+            tempValue = tempfloat;
+            Serial.print("\n\rNew COA zero: ");
+            Serial.println(String(CO_zeroA, 2));
+
+            EEPROM.put(CO_ZERO_A_MEM_ADDRESS, tempValue);
+        }
+        else
+        {
+            Serial.println("\n\rInvalid value!");
+        }
     }
 }
 
@@ -3271,21 +3287,28 @@ void serialGetCoSlopeB(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO slope\n\r");
 
-    float tempfloat = readSerBufUntilDone().toFloat();
+    while (serBuf.available() == 0);
+    String receivedData = serBuf.readStringUntil('\n');
+    bool isValid = checkStringIsValid(receivedData);
 
-    if (tempfloat >= 0.1 && tempfloat < 5.0)
+    if (isValid)
     {
-        CO_slopeB = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
-        Serial.print("\n\rNew COB slope: ");
-        Serial.println(String(CO_slopeB, 2));
+        receivedData = receivedData.substring(0, receivedData.indexOf('*')-1);
+        float tempfloat = receivedData.toFloat();
+        if (tempfloat >= 0.1 && tempfloat < 5.0)
+        {
+            CO_slopeA = tempfloat;
+            tempfloat *= 100;
+            tempValue = tempfloat;
+            Serial.print("\n\rNew COB slope: ");
+            Serial.println(String(CO_slopeB, 2));
 
-        EEPROM.put(CO_SLOPE_B_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
+            EEPROM.put(CO_SLOPE_B_MEM_ADDRESS, tempValue);
+        }
+        else
+        {
+            Serial.println("\n\rInvalid value!");
+        }
     }
 }
 
@@ -3297,18 +3320,28 @@ void serialGetCoZeroB(void)
     Serial.println(" ppm");
     Serial.print("Enter new CO Zero\n\r");
 
-    float tempValue = readSerBufUntilDone().toFloat();
+    while (serBuf.available() == 0);
+    String receivedData = serBuf.readStringUntil('\n');
+    bool isValid = checkStringIsValid(receivedData);
 
-    if (tempValue >= -5000 && tempValue < 5000)
+    if (isValid)
     {
-        Serial.print("\n\rNew COB zero: ");
-        Serial.println(tempValue);
-        CO_zeroB = tempValue;
-        EEPROM.put(CO_ZERO_B_MEM_ADDRESS, tempValue);
-    }
-    else
-    {
-        Serial.println("\n\rInvalid value!");
+        receivedData = receivedData.substring(0, receivedData.indexOf('*')-1);
+        float tempfloat = receivedData.toFloat();
+        if (tempfloat >= 0.1 && tempfloat < 5.0)
+        {
+            CO_slopeA = tempfloat;
+            tempfloat *= 100;
+            tempValue = tempfloat;
+            Serial.print("\n\rNew CO_B zero: ");
+            Serial.println(String(CO_zeroB, 2));
+
+            EEPROM.put(CO_ZERO_B_MEM_ADDRESS, tempValue);
+        }
+        else
+        {
+            Serial.println("\n\rInvalid value!");
+        }
     }
 }
 
@@ -3504,6 +3537,8 @@ void outputSerialMenuOptions(void)
 
 void processAqsyncMessage(String data)
 {
+    Serial.print("getting to process message. here is the message: ");
+    Serial.println(data);
     switch (data[0])
     {
         case 'm':
