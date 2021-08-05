@@ -13,6 +13,7 @@ class Global {
 public:
     static Global* GetInstance();
     void writeLogFile(String data);
+    static void dateTime(uint16_t* date, uint16_t* time);
 
 
 

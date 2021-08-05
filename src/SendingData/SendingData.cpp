@@ -347,6 +347,7 @@ void SendingData::SendDataToSd()
 
     //write data to file
     if (this->globalVariables->sd.begin(CS)){
+        SdFile::dateTimeCallback(this->globalVariables->dateTime);
         file.open(this->globalVariables->fileName, O_CREAT | O_APPEND | O_WRITE);
         if(this->globalVariables->file_started == false){
             file.println("File Start timestamp: ");

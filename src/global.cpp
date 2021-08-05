@@ -28,6 +28,7 @@ Global* Global::GetInstance()
 void Global::writeLogFile(String data){
   if (sd.begin(CS)){
       Serial.println("Writing data to log file.");
+      SdFile::dateTimeCallback(this->dateTime);
       log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
       if(log_file_started == 0){
           log_file.println("File Start timestamp: ");
@@ -40,4 +41,13 @@ void Global::writeLogFile(String data){
   }else{
     Serial.println("Unable to write to log file");
   }
+}
+
+void Global::dateTime(uint16_t* date, uint16_t* time) {
+
+  // return date using FAT_DATE macro to format fields
+  *date = FAT_DATE(Time.year(), Time.month(), Time.day());
+
+  // return time using FAT_TIME macro to format fields
+  *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
 }
