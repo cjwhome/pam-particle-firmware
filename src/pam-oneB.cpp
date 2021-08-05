@@ -230,6 +230,8 @@ int esp_wroom_en = D7;
 int blower_en = D2;
 int sound_input = B5;  //ozone monitor's voltage output is connected to this input
 int co2_en = C5;        //enables the CO2 sensor power
+int calibrateCounter = 0;
+bool hasBeenClicked = false;
 
 
 
@@ -422,6 +424,9 @@ void serialTestRemoteFunction(void);
 void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
 void dateTime(uint16_t* date, uint16_t* time);
+void calibrateCO2orSleep();
+void blinkForCalibrate();
+void increaseCounter();
 
 
 void outputSerialMenuOptions(void);
@@ -785,6 +790,60 @@ void check_wifi_file(void){
 
 }
 
+void blinkForCalibrate()
+{
+    int timeout = 600; //600 seconds is 10 minutes
+    time_t timer = Time.now();
+    while (Time.now() < timer+timeout)
+    {
+        digitalWrite(power_led_en, HIGH);   // Sets the LED on
+        delay(250);                   // waits for a second
+        digitalWrite(power_led_en, LOW);    // Sets the LED off
+        delay(250);
+    }
+    return ;
+}
+
+void increaseCounter()
+{
+    Serial.println("upping counter");
+    calibrateCounter += 1;
+}
+
+void calibrateCO2orSleep()
+{
+    Serial.print("in this function: ");
+    Serial.println(hasBeenClicked);
+    if (hasBeenClicked)
+    {
+        Serial.println("Upping the counter");
+        calibrateCounter++;
+        return ;
+    }
+    else
+    {
+        hasBeenClicked = true;
+        int timeOut = 6000; // 6 seconds
+        time_t timer = millis();
+        Serial.println("Starting timer");
+        while (millis() <= timer+timeOut)
+        //Serial.print("going around: ");
+        //Serial.println(calibrateCounter);
+        if (calibrateCounter >= 12)
+        {
+            Serial.println("Inside this function");
+            t6713.calibrate(1);
+            calibrateCounter = 0;
+            hasBeenClicked = false;
+            blinkForCalibrate();
+            return ;
+        }
+        //}
+        System.reset();
+        }
+
+}
+
 void dateTime(uint16_t* date, uint16_t* time) {
 
   // return date using FAT_DATE macro to format fields
@@ -838,7 +897,7 @@ void setup()
         goToSleepBattery();
     }
     //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D4, System.reset, RISING);
+    attachInterrupt(D4, System.reset, FALLING);
     if(digitalRead(D4)){
       goToSleep();
     }
@@ -1085,7 +1144,7 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-
+    Serial.println(calibrateCounter);
     if(car_topper_power_en && powerCheck.getHasPower() == 0){
         
         goToSleepBattery();
@@ -2664,7 +2723,7 @@ int transmitPM10(char *thebuf)  {
 }
 
 void goToSleep(void){
-    //Serial.println("Going to sleep:)");
+    Serial.println("Going to sleep:)");
     digitalWrite(power_led_en, LOW);
     digitalWrite(plantower_en, LOW);
     digitalWrite(esp_wroom_en, LOW);
