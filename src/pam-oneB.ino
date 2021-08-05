@@ -362,6 +362,8 @@ void serialResetSettings(void);
 void serialTestRemoteFunction(void);
 void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
+void dateTime(uint16_t* date, uint16_t* time);
+
 
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
@@ -666,6 +668,7 @@ size_t readField(File* file, char* str, size_t size, const char* delim) {
 }
 
 void check_wifi_file(void){
+    SdFile::dateTimeCallback(dateTime);
     file1 = sd.open("wifi.txt", O_READ);
     size_t n;      // Length of returned field with delimiter.
     char str[50];  // Must hold longest field with delimiter and zero byte.
@@ -721,6 +724,15 @@ void check_wifi_file(void){
     }
     file1.close();
 
+}
+
+void dateTime(uint16_t* date, uint16_t* time) {
+
+  // return date using FAT_DATE macro to format fields
+  *date = FAT_DATE(Time.year(), Time.month(), Time.day());
+
+  // return time using FAT_TIME macro to format fields
+  *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
 }
 
 void setup()
@@ -830,26 +842,6 @@ void setup()
      Serial.println("Checking for sd card");
      logFileName = "log_" + fileName;
 
-    if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
-      /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
-      file.remove();
-      file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
-      init_log += "MCP,";
-      file.print(init_log);
-      file.close();
-
-      //look for a wifi file
-      check_wifi_file();
-      //look for a calibration file
-      check_cal_file();*/
-
-
-
-      Serial.print("Created new file to log to uSD card: ");
-      Serial.println(fileName);
-    }else { //uSD is not functioning
-        Serial.println("No uSD card detected.");
-    }
     #endif
 
 
@@ -1901,6 +1893,7 @@ void readOzone(void){
 void writeLogFile(String data){
   if (sd.begin(CS)){
       Serial.println("Writing data to log file.");
+      SdFile::dateTimeCallback(dateTime);
       log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
       if(log_file_started == 0){
           log_file.println("File Start timestamp: ");
@@ -2106,6 +2099,7 @@ void outputDataToESP(void){
     if (sd.begin(CS)){
         if(debugging_enabled)
             Serial.println("Writing row to file.");
+        SdFile::dateTimeCallback(dateTime);
         file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
         if(file_started == 0){
             file.println("File Start timestamp: ");
