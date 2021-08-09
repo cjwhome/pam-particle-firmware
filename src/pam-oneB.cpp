@@ -65,6 +65,7 @@ void printFileToSerial();
 void deleteFiles();
 String showAndChooseFiles();
 void processAqsyncMessage(String data);
+int getChecksum(String data);
 bool checkStringIsValid(String data);
 #line 24 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15083);
@@ -913,15 +914,14 @@ void loop()
 
     if (serBuf.available() > 0)
     {
-        Serial.println("recieved Data");
+        Serial.println("recieved Data: ");
         String receivedData = serBuf.readStringUntil('\n');
-        Serial.print("this is the data first: ");
         Serial.println(receivedData);
         bool isValid = checkStringIsValid(receivedData);
         Serial.println(isValid);
         if (isValid)
         {
-            receivedData = receivedData.substring(0, receivedData.indexOf('*')-1);
+            receivedData = receivedData.substring(0, receivedData.indexOf('*'));
             processAqsyncMessage(receivedData);
         }
     }
@@ -2806,7 +2806,7 @@ void serialMenu()
 
 void outputCOtoPI(void)
 {
-    String CO_string = "";
+    String CO_string = "M";
     Serial.println("Outputting CO to PI.");
 
     CO_string += String(CO_float_A, 3) + ",";
@@ -3583,52 +3583,46 @@ void outputSerialMenuOptions(void)
 
 void processAqsyncMessage(String data)
 {
-    Serial.print("getting to process message. here is the message: ");
-    Serial.println(data);
     switch (data[0])
     {
         case 'm':
+            Serial.println("going to menu");
             serialMenu();
             break ;
         case 'Y':
-            sendAqsyncData(data.substring(1, data.length()-1));
+            Serial.println("going to send data");
+            sendAqsyncData(data.substring(1, data.length()));
             break ;
         case 'Q':
-            saveDiagnosticData(data.substring(1, data.length()-1));
+            Serial.println("going to save diagnostics");
+            saveDiagnosticData(data.substring(1, data.length()));
             break ;
     }
 
 }
 
+int getChecksum(String data)
+{
+    int checksum = 0;
+    for (int i = 0; i < data.length(); i++)
+    {
+        checksum ^= data[i];
+    }
+    return checksum;
+}
+
 
 bool checkStringIsValid(String data)
 {
-    if (data.length() < 3)
-    {
-        return false;
-    }
+    int checksum = getChecksum(data.substring(0, data.indexOf('*')));
 
-    char checking_message = '\0';
-    int checksum = 0;
-    int marker = 0;
-    while (checking_message != '*' && marker < data.length())
+    if (checksum == data.substring(data.indexOf('*')+1, data.length()).toInt())
     {
-        Serial.print("Stuck in here: ");
-        Serial.print(marker);
-        Serial.print(" < ");
-        Serial.println(data.length());
-        checking_message = data[marker];
-        checksum ^=  checking_message;
-        marker++;
-    }
-    Serial.println("After while loop. Looking at: ");
-    Serial.println(data.substring(data.indexOf('*'), data.length()-1).toInt());
-    if (checksum == data.substring(data.indexOf('*'), data.length()-1).toInt())
-    {
-        String ack = "_"+data.substring(0, data.indexOf("*")-1);
-        ack += ack + checksumMaker(ack);
+        String ack = "_"+data.substring(0, data.indexOf("*"));
+        ack = ack + checksumMaker(ack);
         serBuf.print(ack);
-        Serial.println("true");
+        Serial.println("The full ack im sending: ");
+        Serial.println(ack);
         return true;
     }
     Serial.println("false");
@@ -3651,28 +3645,32 @@ String checksumMaker(String data)
 
 void sendAqsyncData(String data)
 {
-    int s = data.indexOf(':');
-    String deviceName = data.substring(2, s-1);
+    int s = data.indexOf("\"N\":\"")+5;
+    String restOfString = data.substring(s, data.length());
+    String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
+    //String deviceName = data.substring(s, data.indexOf(data.substring(s, data.length()).indexOf('"')));
+    Serial.print("The deviceName: ");
+    Serial.println(deviceName);
+    //String deviceName = data.substring(2, s-1);
     data.replace("\\", "");
     //This removes the newline characted at the end of the string so it is properly formatted.
-    if (data[data.length()-1] == '\r')
-    {
-        data = data.substring(0, data.length()-2);
-    }
-
+    // if (data[data.length()-1] == '\r')
+    // {
+    //     data = data.substring(0, data.length()-2);
+    // }
     sendToDataFile(data);
     if(Particle.connected())
     {
         Particle.publish("AQSync", data, PRIVATE);
         Particle.process(); //attempt at ensuring the publish is complete before sleeping
         String sendBack = "U "+deviceName+" 1";
-        sendBack += sendBack+ checksumMaker(sendBack);
+        sendBack = sendBack+ checksumMaker(sendBack);
         serBuf.print(sendBack);
     }
     else 
     {
-        String sendBack = "U "+deviceName+" 1";
-        sendBack += sendBack+ checksumMaker(sendBack);
+        String sendBack = "U "+deviceName+" 0";
+        sendBack = sendBack+ checksumMaker(sendBack);
         serBuf.print(sendBack);
     }
 }
@@ -3680,8 +3678,9 @@ void sendAqsyncData(String data)
 
 void saveDiagnosticData(String data)
 {
-    int s = data.indexOf(':');
-    String deviceName = data.substring(2, s-1);
+    int s = data.indexOf("\"N\":\"")+5;
+    String restOfString = data.substring(s, data.length());
+    String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
     bool foundMatch = false;
     for(int i = 0; i < diagnostics.size(); i++)
     {
@@ -3698,4 +3697,8 @@ void saveDiagnosticData(String data)
     }
     Serial.print("How many entries into Diagnostics: ");
     Serial.println(diagnostics.size());
+    for (int i = 0; i < diagnostics.size(); i++)
+    {
+        Serial.println(diagnostics[i]);
+    }
 }
