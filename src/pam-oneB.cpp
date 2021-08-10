@@ -44,7 +44,6 @@ float readAlpha2(void);
 void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
-void getEspAQSyncData(char incomingByte);
 int rebootDevice(String deviceName);
 int sendDiagnostics(String nothing);
 void goToSleep(void);
@@ -2094,119 +2093,31 @@ void sendWifiInfo(void)
     Serial.println("Success!");
 }
 
-
-void getEspAQSyncData(char incomingByte)
-{
-    String receivedData = "";
-    char marker;
-    int tracking = 0;
-    while (tracking == 0)
-    {
-        marker = serBuf.read();
-        if (marker == '{')
-        {
-            tracking++;
-            receivedData += marker;
-        }
-    }
-    while(tracking != 0)
-    {
-        marker = serBuf.read();
-        if (marker == '{')
-        {
-            tracking++;
-        }
-        if (marker == '}')
-        {
-            tracking--;
-        }
-        receivedData += marker;
-    }
-    char buffer[receivedData.length()];
-    receivedData.toCharArray(buffer, receivedData.length());
-    
-    receivedData.replace("\\", "");
-
-    //This removes the newline characted at the end of the string so it is properly formatted.
-    if (receivedData[receivedData.length()-1] == '\r')
-    {
-        receivedData = receivedData.substring(0, receivedData.length()-2);
-    }
-
-    if (incomingByte == 'Y')
-    {
-        sendToDataFile(receivedData);
-        Serial.println(receivedData);
-        if(Particle.connected())
-        {
-            Particle.publish("AQSync", receivedData, PRIVATE);
-            Particle.process(); //attempt at ensuring the publish is complete before sleeping
-            // if (sending_offline == true)
-            // {
-            //     if (haveOfflineData) 
-            //     {
-            //         uploadOfflineData();
-            //         haveOfflineData = false;
-            //     }
-            //     else 
-            //     {
-            //         sendToUploadLater(receivedData);
-            //         haveOfflineData = true;
-            //     }
-            // }
-        }  
-    }
-    if (incomingByte == 'Q')
-    {
-        int s = receivedData.indexOf(':');
-        String deviceName = receivedData.substring(2, s-1);
-        Serial.print("The device name for diangostics: ");
-        Serial.println(deviceName);
-
-        bool foundMatch = false;
-        for(int i = 0; i < diagnostics.size(); i++)
-        {
-            int checkDevice = diagnostics[i].indexOf(deviceName);
-            if (checkDevice > 0)
-            {
-                diagnostics[i] = receivedData;
-                foundMatch = true;
-            }
-        }
-        if (foundMatch == false)
-        {
-            diagnostics.push_back(receivedData);
-        }
-        Serial.print("How many entries into Diagnostics: ");
-        Serial.println(diagnostics.size());
-    }
-    char next;
-    bool done = false;
-    while (next != 'Y' && next != 'Q' && done == false)
-    {
-        if (!serBuf.available())
-        {
-            done = true;
-        }
-        else 
-        {
-            next = serBuf.read();
-        }
-    }
-    if (done == true)
-    {
-        return ;
-    }
-    else if (next == 'Y' || next == 'Q')
-    {
-        getEspAQSyncData(next);
-    }
-}
-
 int rebootDevice(String deviceName)
 {
-    String command = "R PowerRelay|R " + deviceName; 
-    serBuf.write('f R');
+    int whereComma = deviceName.indexOf(',');
+    String action = deviceName.substring(0, whereComma);
+    String device = deviceName.substring(whereComma+1, deviceName.length());
+    String command;
+    if (action == "on")
+    {
+        command = "R,"+device+",N";
+    }
+    else if (action == "off")
+    {
+        command = "R,"+device+",F";
+    }
+    else if (action == "reboot")
+    {
+        command = "R,"+device+",R";
+    }
+    else
+    {
+        Serial.println("Didnt meet any of the actions");
+        return 0;
+    }
+    command += checksumMaker(command)+'\n';
+    serBuf.print(command);
     return 1;
 }
 
