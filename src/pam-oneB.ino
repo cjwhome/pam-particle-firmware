@@ -146,7 +146,7 @@ void buildSerialMenu()
     PAMSerialEditEEPROMValue<int> * averaging_measurement = new PAMSerialEditEEPROMValue<int>(averaging_time, MEASUREMENTS_TO_AVG_MEM_ADDRESS, 300);
     PAMSerialEditEEPROMValue<int> * device_id = new PAMSerialEditEEPROMValue<int>(globalVariables->device_id, DEVICE_ID_MEM_ADDRESS, -1);
     PAMSerialEditEEPROMValue<bool> * debugging_enabled = new PAMSerialEditEEPROMValue<bool>(globalVariables->debugging_enabled, DEBUGGING_ENABLED_MEM_ADDRESS, 0);
-    PAMSerialEditEEPROMValue<bool> * cellular_enabled = new PAMSerialEditEEPROMValue<bool>(globalVariables->cellular_enabled, CELLULAR_EN_MEM_ADDRESS, 0);
+    PAMSerialEditEEPROMValue<bool> * cellular_enabled = new PAMSerialEditEEPROMValue<bool>(globalVariables->cellular_enabled, CELLULAR_EN_MEM_ADDRESS, 1);
     PAMSerialEditEEPROMValue<bool> * sensible_iot_en = new PAMSerialEditEEPROMValue<bool>(globalVariables->sensible_iot_en, SENSIBLEIOT_ENABLE_MEM_ADDRESS, 0);
     PAMSerialEditEEPROMValue<bool> * temperature_units = new PAMSerialEditEEPROMValue<bool>(globalVariables->temperature_units, TEMPERATURE_UNITS_MEM_ADDRESS, 0);
     PAMSerialEditEEPROMValue<bool> * car_topper = new PAMSerialEditEEPROMValue<bool>(globalVariables->car_topper, CAR_TOPPER_POWER_MEM_ADDRESS, 0);
