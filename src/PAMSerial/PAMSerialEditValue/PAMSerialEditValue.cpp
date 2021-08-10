@@ -95,7 +95,7 @@ void PAMSerialEditValue<bool>::onData(uint16_t rd, uint8_t *data, uint8_t length
         *(this->ptr) = false;
         PAMSerial.popResponder();
     } else {
-        PAMSerial.println(rd, "Could not read setting. Try again, or press 'x' to exit.");
+        Serial.println("Could not read setting. Try again, or press 'x' to exit.");
     }
 }
 

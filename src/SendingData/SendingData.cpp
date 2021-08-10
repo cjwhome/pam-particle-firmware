@@ -228,9 +228,9 @@ void SendingData::SendDataToParticle()
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(this->pamco->co.average, 3);
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(this->t6713->CO2.average, 0);
 
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(this->plantower->pm1.average);
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(this->plantower->pm2_5.average, 0);
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(this->plantower->pm10.average);
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(this->plantower->pm1.average, 1);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(this->plantower->pm2_5.average, 1);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(this->plantower->pm10.average, 1);
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(this->tph_fusion->temperature->average, 1);
 
     cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(this->tph_fusion->pressure->average / 100.0, 1);
@@ -291,9 +291,9 @@ void SendingData::SendDataToSd()
     csv_output_string += String(this->globalVariables->device_id) + ",";
     csv_output_string += String(this->pamco->co.adj_value, 3) + ",";
     csv_output_string += String(this->t6713->CO2.adj_value, 0) + ",";
-    csv_output_string += String(this->plantower->pm1.adj_value) + ",";
-    csv_output_string += String(this->plantower->pm2_5.adj_value, 0) + ",";
-    csv_output_string += String(this->plantower->pm10.adj_value) + ",";
+    csv_output_string += String(this->plantower->pm1.adj_value, 1) + ",";
+    csv_output_string += String(this->plantower->pm2_5.adj_value, 1) + ",";
+    csv_output_string += String(this->plantower->pm10.adj_value, 1) + ",";
     csv_output_string += String(this->tph_fusion->temperature->adj_value, 1) + ",";
     csv_output_string += String(this->tph_fusion->pressure->adj_value / 100.0, 1) + ",";
 
@@ -377,8 +377,9 @@ void SendingData::SendDataToSensible()
     writer.name("datetime").value(String(Time.format(Time.now(), "%Y-%m-%dT%H:%M:%SZ")));
     writer.name("CO2").value(String(this->t6713->CO2.average, 0));
     writer.name("CO").value(String(this->pamco->co.average, 3));
-    writer.name("PM1_0").value(String(this->plantower->pm1.average));
-    writer.name("PM2_5").value(String(this->plantower->pm10.average, 0)); 
+    writer.name("PM1").value(String(this->plantower->pm1.average, 1));
+    writer.name("PM2_5").value(String(this->plantower->pm2_5.average, 1));
+    writer.name("PM1_0").value(String(this->plantower->pm10.average, 1));
     writer.name("Temp").value(String(this->tph_fusion->temperature->average, 1));
     writer.name("Press").value(String(this->tph_fusion->pressure->average / 100.0, 1));
     writer.name("Hmdty").value(String(this->tph_fusion->humidity->average, 1));
