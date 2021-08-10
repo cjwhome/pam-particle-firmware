@@ -2165,22 +2165,11 @@ int rebootDevice(String deviceName)
 
 int sendDiagnostics(String nothing)
 {
-    bool Done = false;
-
-    while (Done == false)
+    for (int i = 0; i < diagnostics.size(); i++)
     {
-        String sendUpData = diagnosticData.substring(0, diagnosticData.indexOf('&')-1);
-        Particle.publish("UploadAQSyncDiagnostic", sendUpData, PRIVATE);
-        Particle.process(); //attempt at ensuring the publish is complete before sleeping
-        diagnosticData = diagnosticData.substring(diagnosticData.indexOf('&')+1, diagnosticData.length());
-        if (diagnosticData.length() <= 2)
-        {
-            Done = true;
-        }
+        Particle.publish("UploadAQSyncDiagnostic", diagnostics[i], PRIVATE);
     }
-    // This is in case the AQSync sent data while it was uploading the diagnostic data.
-    // Any data lost here is negligable because we are pushing so quickly. When we start going the speed we want, this will almost never happen.
-    serBuf.flush();
+    diagnostics.clear();
     return 1;
 }
 
@@ -3604,9 +3593,11 @@ String checksumMaker(String data)
 
 void sendAqsyncData(String data)
 {
-    int s = data.indexOf("\"N\":\"")+5;
-    String restOfString = data.substring(s, data.length());
-    String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
+    // int s = data.indexOf("\"N\":\"")+5;
+    // String restOfString = data.substring(s, data.length());
+    // String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
+    int s = data.indexOf(':');
+    String deviceName = data.substring(2, s-1);
     data.replace("\\", "");
     sendToDataFile(data);
     if(Particle.connected())
@@ -3628,10 +3619,14 @@ void sendAqsyncData(String data)
 
 void saveDiagnosticData(String data)
 {
-    int s = data.indexOf("\"N\":\"")+5;
-    String restOfString = data.substring(s, data.length());
-    String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
+    // int s = data.indexOf("\"N\":\"")+5;
+    // String restOfString = data.substring(s, data.length());
+    // String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
+    int s = data.indexOf(':');
+    String deviceName = data.substring(2, s-1);
     bool foundMatch = false;
+    Serial.println("The name of the device: ");
+    Serial.println(deviceName);
     for(int i = 0; i < diagnostics.size(); i++)
     {
         int checkDevice = diagnostics[i].indexOf(deviceName);

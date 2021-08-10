@@ -2212,22 +2212,11 @@ int rebootDevice(String deviceName)
 
 int sendDiagnostics(String nothing)
 {
-    bool Done = false;
-
-    while (Done == false)
+    for (int i = 0; i < diagnostics.size(); i++)
     {
-        String sendUpData = diagnosticData.substring(0, diagnosticData.indexOf('&')-1);
-        Particle.publish("UploadAQSyncDiagnostic", sendUpData, PRIVATE);
-        Particle.process(); //attempt at ensuring the publish is complete before sleeping
-        diagnosticData = diagnosticData.substring(diagnosticData.indexOf('&')+1, diagnosticData.length());
-        if (diagnosticData.length() <= 2)
-        {
-            Done = true;
-        }
+        Particle.publish("UploadAQSyncDiagnostic", diagnostics[i], PRIVATE);
     }
-    // This is in case the AQSync sent data while it was uploading the diagnostic data.
-    // Any data lost here is negligable because we are pushing so quickly. When we start going the speed we want, this will almost never happen.
-    serBuf.flush();
+    diagnostics.clear();
     return 1;
 }
 
@@ -3586,15 +3575,24 @@ void processAqsyncMessage(String data)
     switch (data[0])
     {
         case 'm':
-            Serial.println("going to menu");
+            if (debugging_enabled)
+            {
+                Serial.println("Going to serial menu");
+            }
             serialMenu();
             break ;
         case 'Y':
-            Serial.println("going to send data");
+            if (debugging_enabled)
+            {
+                Serial.println("Going to send data");
+            }
             sendAqsyncData(data.substring(1, data.length()));
             break ;
         case 'Q':
-            Serial.println("going to save diagnostics");
+            if (debugging_enabled)
+            {
+                Serial.println("Going to save diagnostics");
+            }
             saveDiagnosticData(data.substring(1, data.length()));
             break ;
     }
@@ -3621,11 +3619,8 @@ bool checkStringIsValid(String data)
         String ack = "_"+data.substring(0, data.indexOf("*"));
         ack = ack + checksumMaker(ack);
         serBuf.print(ack);
-        Serial.println("The full ack im sending: ");
-        Serial.println(ack);
         return true;
     }
-    Serial.println("false");
     return false;
 }
 
@@ -3645,19 +3640,12 @@ String checksumMaker(String data)
 
 void sendAqsyncData(String data)
 {
-    int s = data.indexOf("\"N\":\"")+5;
-    String restOfString = data.substring(s, data.length());
-    String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
-    //String deviceName = data.substring(s, data.indexOf(data.substring(s, data.length()).indexOf('"')));
-    Serial.print("The deviceName: ");
-    Serial.println(deviceName);
-    //String deviceName = data.substring(2, s-1);
+    // int s = data.indexOf("\"N\":\"")+5;
+    // String restOfString = data.substring(s, data.length());
+    // String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
+    int s = data.indexOf(':');
+    String deviceName = data.substring(2, s-1);
     data.replace("\\", "");
-    //This removes the newline characted at the end of the string so it is properly formatted.
-    // if (data[data.length()-1] == '\r')
-    // {
-    //     data = data.substring(0, data.length()-2);
-    // }
     sendToDataFile(data);
     if(Particle.connected())
     {
@@ -3678,10 +3666,14 @@ void sendAqsyncData(String data)
 
 void saveDiagnosticData(String data)
 {
-    int s = data.indexOf("\"N\":\"")+5;
-    String restOfString = data.substring(s, data.length());
-    String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
+    // int s = data.indexOf("\"N\":\"")+5;
+    // String restOfString = data.substring(s, data.length());
+    // String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
+    int s = data.indexOf(':');
+    String deviceName = data.substring(2, s-1);
     bool foundMatch = false;
+    Serial.println("The name of the device: ");
+    Serial.println(deviceName);
     for(int i = 0; i < diagnostics.size(); i++)
     {
         int checkDevice = diagnostics[i].indexOf(deviceName);
