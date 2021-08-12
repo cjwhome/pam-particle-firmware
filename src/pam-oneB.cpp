@@ -45,7 +45,7 @@ void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
 int rebootDevice(String deviceName);
-int sendDiagnostics(String nothing);
+int sendDiagnostics(String deviceName);
 void goToSleep(void);
 void goToSleepBattery(void);
 void resetESP(void);
@@ -2121,23 +2121,44 @@ int rebootDevice(String deviceName)
     return 1;
 }
 
-int sendDiagnostics(String nothing)
+int sendDiagnostics(String deviceName)
 {
     std::string changeType = static_cast<std::string>(diagnostics[0]);
     size_t theHash = std::hash<std::string>{}(changeType);
     String finalHash = static_cast<String>(theHash);
-
-    for (int i = 0; i < diagnostics.size(); i++)
+    if (deviceName != "1")
     {
-        int s = diagnostics[i].indexOf("\"Hash\":\"")+8;
-        String restOfString = diagnostics[i].substring(s, diagnostics[i].length());
-        String hashCode = restOfString.substring(0, restOfString.indexOf('"'));
-        diagnostics[i].replace(hashCode, finalHash);
-        Particle.publish("UploadAQSyncDiagnostic", diagnostics[i], PRIVATE);
-        delay(400);
+        for (int i = 0; i < diagnostics.size(); i++)
+        {
+            int s = diagnostics[i].indexOf(':');
+            String diagnosticsDeviceName = diagnostics[i].substring(2, s-1);
+            if (diagnosticsDeviceName == deviceName)
+            {
+                s = diagnostics[i].indexOf("\"Hash\":\"")+8;
+                String restOfString = diagnostics[i].substring(s, diagnostics[i].length());
+                String hashCode = restOfString.substring(0, restOfString.indexOf('"'));
+                diagnostics[i].replace(hashCode, finalHash);
+                Particle.publish("UploadAQSyncDiagnostic", diagnostics[i], PRIVATE);
+                return 1;
+            }
+        }
     }
-    diagnostics.clear();
-    return 1;
+    else
+    {
+        for (int i = 0; i < diagnostics.size(); i++)
+        {
+            int s = diagnostics[i].indexOf("\"Hash\":\"")+8;
+            String restOfString = diagnostics[i].substring(s, diagnostics[i].length());
+            String hashCode = restOfString.substring(0, restOfString.indexOf('"'));
+            diagnostics[i].replace(hashCode, finalHash);
+            Particle.publish("UploadAQSyncDiagnostic", diagnostics[i], PRIVATE);
+            delay(400);
+        }
+        diagnostics.clear();
+        return 1;
+    }
+    return 0;
+
 }
 
 void readHIH8120(void)
