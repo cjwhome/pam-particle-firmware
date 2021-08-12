@@ -2123,9 +2123,18 @@ int rebootDevice(String deviceName)
 
 int sendDiagnostics(String nothing)
 {
+    std::string changeType = static_cast<std::string>(diagnostics[0]);
+    size_t theHash = std::hash<std::string>{}(changeType);
+    String finalHash = static_cast<String>(theHash);
+
     for (int i = 0; i < diagnostics.size(); i++)
     {
+        int s = diagnostics[i].indexOf("\"Hash\":\"")+8;
+        String restOfString = diagnostics[i].substring(s, diagnostics[i].length());
+        String hashCode = restOfString.substring(0, restOfString.indexOf('"'));
+        diagnostics[i].replace(hashCode, finalHash);
         Particle.publish("UploadAQSyncDiagnostic", diagnostics[i], PRIVATE);
+        delay(400);
     }
     diagnostics.clear();
     return 1;
@@ -3577,9 +3586,6 @@ void sendAqsyncData(String data)
 
 void saveDiagnosticData(String data)
 {
-    // int s = data.indexOf("\"N\":\"")+5;
-    // String restOfString = data.substring(s, data.length());
-    // String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
     int s = data.indexOf(':');
     String deviceName = data.substring(2, s-1);
     bool foundMatch = false;
@@ -3587,8 +3593,10 @@ void saveDiagnosticData(String data)
     Serial.println(deviceName);
     for(int i = 0; i < diagnostics.size(); i++)
     {
-        int checkDevice = diagnostics[i].indexOf(deviceName);
-        if (checkDevice > 0)
+        int b = diagnostics[i].indexOf(':');
+        String diagnosticsDeviceName = diagnostics[i].substring(2, b-1);
+
+        if (diagnosticsDeviceName == deviceName)
         {
             diagnostics[i] = data;
             foundMatch = true;
@@ -3600,8 +3608,8 @@ void saveDiagnosticData(String data)
     }
     Serial.print("How many entries into Diagnostics: ");
     Serial.println(diagnostics.size());
-    for (int i = 0; i < diagnostics.size(); i++)
-    {
-        Serial.println(diagnostics[i]);
-    }
+    // for (int i = 0; i < diagnostics.size(); i++)
+    // {
+    //     Serial.println(diagnostics[i]);
+    // }
 }
