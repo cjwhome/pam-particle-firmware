@@ -85,11 +85,11 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define RH_SLOPE_MEM_ADDRESS 64
 #define SERIAL_CELLULAR_EN_MEM_ADDRESS 68
 #define DEBUGGING_ENABLED_MEM_ADDRESS  72
-#define GAS_LOWER_LIMIT_MEM_ADDRESS 76
-#define GAS_UPPER_LIMIT_MEM_ADDRESS 80
+#define NO2_SLOPE_MEM_ADDRESS 76
+#define NO2_ZERO_MEM_ADDRESS 80
 #define TIME_ZONE_MEM_ADDRESS 84
 #define OZONE_EN_MEM_ADDRESS 88
-#define VOC_EN_MEM_ADDRESS 92
+#define NO2_EN_MEM_ADDRESS 92
 #define TEMPERATURE_UNITS_MEM_ADDRESS 96
 #define OUTPUT_PARTICLES_MEM_ADDRESS 100
 #define TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS 104
@@ -226,7 +226,8 @@ int esp_wifi_connection_status = 0;
 int serial_cellular_enabled = 0;
 int debugging_enabled = 0;
 int ozone_enabled = 0;
-int voc_enabled = 0;
+int NO2_enabled = 0;
+float NO2_float = 0;
 int temperature_units = 0;
 int output_only_particles = 0;
 int new_temperature_sensor_enabled = 0;
@@ -239,6 +240,8 @@ int CO_socket = 0;
 int google_location_en = 0;
 int sensible_iot_en = 0;
 int car_topper_power_en = 0;
+float NO2_slope = 0;
+float NO2_zero = 0;
 
 
 char geolocation_latitude[12] = "999.9999999";
@@ -544,6 +547,8 @@ void readStoredVars(void){
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
+    EEPROM.get(NO2_SLOPE_MEM_ADDRESS, NO2_slope);
+    EEPROM.get(NO2_ZERO_MEM_ADDRESS, NO2_zero);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
     EEPROM.get(PM_10_ZERO_MEM_ADDRESS, PM_10_zero);
@@ -554,9 +559,7 @@ void readStoredVars(void){
     EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
     EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
     EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
-    EEPROM.get(VOC_EN_MEM_ADDRESS, voc_enabled);
-    EEPROM.get(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
-    EEPROM.get(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
+    EEPROM.get(NO2_EN_MEM_ADDRESS, NO2_enabled);
     EEPROM.get(TIME_ZONE_MEM_ADDRESS, tempValue);
     Time.zone(tempValue);
     EEPROM.get(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
@@ -629,9 +632,7 @@ void writeDefaultSettings(void){
     EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, 0);
     EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, 0);
     EEPROM.put(OZONE_EN_MEM_ADDRESS, 0);
-    EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
-    EEPROM.put(GAS_LOWER_LIMIT_MEM_ADDRESS, 1000);
-    EEPROM.put(GAS_UPPER_LIMIT_MEM_ADDRESS, 10000);
+    EEPROM.put(NO2_EN_MEM_ADDRESS, NO2_enabled);
     EEPROM.put(TIME_ZONE_MEM_ADDRESS, -7);
     Time.zone(tempValue);
     EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, 0);
@@ -1086,6 +1087,10 @@ void loop() {
 
     //read CO values and apply calibration factors
     CO_float = readCO();
+    if (NO2_enabled)
+    {
+        NO2_float = readNO2();
+    }
 
 
     CO2_float = readCO2();
@@ -1657,11 +1662,8 @@ double readSound(void){
 float readCO(void){
     float float_offset;
 
-    if(CO_socket == 0){
-        CO_float = readAlpha1();
-    }else{
-        CO_float = readAlpha2();
-    }
+
+    CO_float = readAlpha2();
 
     float_offset = CO_zero;
     float_offset /= 1000;
@@ -1670,6 +1672,20 @@ float readCO(void){
     CO_float += float_offset;
 
     return CO_float;
+}
+
+float readNO2(void){
+    float float_offset;
+
+    NO2_float = readAlpha1();
+
+    float_offset = NO2_zero;
+    float_offset /= 1000;
+
+    NO2_float *= NO2_slope;
+    NO2_float += float_offset;
+
+    return NO2_float;
 }
 
 float readCO2(void){
@@ -1785,14 +1801,14 @@ float readAlpha1(void){
         else{
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
-        alpha1_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        alpha1_ppmraw = (correctedCurrent / -0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha1_ppmRounded = String(alpha1_ppmraw, 2);
       }
 
       digitalWrite(lmp91000_1_en, HIGH);  //disable
 
       if(debugging_enabled){
-          Serial.print("CO measurements:  \n\r");
+          Serial.print("NO2 measurements:  \n\r");
           Serial.printf("A0_gas: %d\n\r", A0_gas);
           Serial.printf("A1_aux: %d\n\r", A1_aux);
           Serial.printf("A2_temp: %d\n\r", A2_temperature);
@@ -2020,6 +2036,10 @@ void outputDataToESP(void){
     writer.name("datetime").value(String(Time.format(time, "%Y-%m-%dT%H:%M:%SZ")));
     writer.name("CO2").value(String(CO2_float, 0));
     writer.name("CO").value(String(CO_float, 3));
+    if (NO2_enabled)
+    {
+        writer.name("NO2").value(String(NO2_float, 3));
+    }
     writer.name("PM1_0").value(String(PM01Value));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
     writer.name("Temp").value(String(readTemperature(), 1));
@@ -2053,17 +2073,13 @@ void outputDataToESP(void){
 
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
     csv_output_string += String(CO_float, 3) + ",";
-    #if AFE2_en
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_2, 3);
-    csv_output_string += String(CO_float_2, 3) + ",";
-    #endif
+    if (NO2_enabled)
+    {
+        cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(NO2_float, 3);
+        csv_output_string += String(NO2_float, 3) + ",";
+    }
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
-
-    if(voc_enabled){
-        cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
-        csv_output_string += String(air_quality_score, 1) + ",";
-    }
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
     csv_output_string += String(PM01Value) + ",";
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
@@ -2947,9 +2963,9 @@ void serialMenu(){
         t6713.resetSensor();
 
     }else if(incomingByte == '1'){
-        serialGetLowerLimit();
+        serialGetNO2Slope();
     }else if(incomingByte == '2'){
-        serialGetUpperLimit();
+        serialGetNO2Zero();
     }else if(incomingByte == '3'){
         Serial.print("APP Version: ");
         Serial.println(APP_VERSION);
@@ -2972,21 +2988,21 @@ void serialMenu(){
         ozone_enabled = 0;
         EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     }else if(incomingByte == '6'){
-        if(voc_enabled == 0){
-            Serial.println("Enabling VOC's");
+        if(NO2_enabled == 0){
+            Serial.println("Enabling NO2");
         }else{
-            Serial.println("VOC's already enabled");
+            Serial.println("NO2 already enabled");
         }
-        voc_enabled = 1;
-        EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+        NO2_enabled = 1;
+        EEPROM.put(NO2_EN_MEM_ADDRESS, NO2_enabled);
     }else if(incomingByte == '7'){
-        if(voc_enabled == 1){
-            Serial.println("Disabling VOC's");
+        if(NO2_enabled == 1){
+            Serial.println("Disabling NO2");
         }else{
-            Serial.println("VOC's already disabled");
+            Serial.println("NO2 already disabled");
         }
-        voc_enabled = 0;
-        EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+        NO2_enabled = 0;
+        EEPROM.put(NO2_EN_MEM_ADDRESS, NO2_enabled);
     }else if(incomingByte == '8'){
         Serial.print("Fault: ");
         byte fault = pmic.getFault();
@@ -3437,6 +3453,53 @@ void serialGetCoZero(void){
     }
 }
 
+void serialGetNO2Slope(void){
+
+    Serial.println();
+    Serial.print("Current NO2 slope:");
+    Serial.print(String(NO2_slope, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new NO2 slope\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.1 && tempfloat < 2.0){
+        NO2_slope = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("\n\rNew NO2 slope: ");
+        Serial.println(String(NO2_slope,2));
+
+        EEPROM.put(NO2_SLOPE_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
+void serialGetNO2Zero(void){
+    Serial.println();
+    Serial.print("Current NO2 zero:");
+    Serial.print(NO2_zero);
+    Serial.println(" ppb");
+    Serial.print("Enter new NO2 Zero\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -5000 && tempValue < 5000){
+        Serial.print("\n\rNew NO2 zero: ");
+        Serial.println(tempValue);
+        NO2_zero = tempValue;
+        EEPROM.put(NO2_ZERO_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
+
+
 void serialGetPm1Slope(void){
     Serial.println();
     Serial.print("Current PM1 slope:");
@@ -3721,61 +3784,6 @@ void serialGetOzoneOffset(void){
     }
 }
 
-void serialGetLowerLimit(void){
-    Serial.println();
-    Serial.print("Current lower limit:");
-    Serial.println(gas_lower_limit);
-    Serial.println("Please enter password in order to change the lower limit");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-
-
-    if(tempString == "bould"){
-        Serial.println("Password correct!");
-        Serial.println("Enter new lower limit:\n\r");
-        String tempString = Serial.readStringUntil('\r');
-        int tempValue = tempString.toInt();
-        Serial.println("");
-        if(tempValue > 0 && tempValue < 20000){
-            Serial.print("\n\rNew lower limit:");
-            Serial.println(tempValue);
-            gas_lower_limit = tempValue;
-            EEPROM.put(GAS_LOWER_LIMIT_MEM_ADDRESS, gas_lower_limit);
-        }else{
-            Serial.println("\n\rInvalid value!");
-        }
-    }else{
-        Serial.println("\n\rIncorrect password!");
-    }
-}
-void serialGetUpperLimit(void){
-    Serial.println();
-    Serial.print("Current upper limit:");
-    Serial.println(gas_upper_limit);
-    Serial.println("Please enter password in order to change the upper limit");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-
-
-    if(tempString == "bould"){
-        Serial.println("Password correct!");
-        Serial.println("Enter new upper limit:\n\r");
-        String tempString = Serial.readStringUntil('\r');
-        int tempValue = tempString.toInt();
-        Serial.println("");
-        if(tempValue > 0 && tempValue < 50000){
-            Serial.print("\n\rNew upper limit:");
-            Serial.println(tempValue);
-            gas_upper_limit = tempValue;
-            EEPROM.put(GAS_UPPER_LIMIT_MEM_ADDRESS, gas_upper_limit);
-        }else{
-            Serial.println("\n\rInvalid value!");
-        }
-    }else{
-        Serial.println("\n\rIncorrect password!");
-    }
-}
-
 void startCarTopperTimer()
 {
     buttonOffTime = Time.now();
@@ -3814,12 +3822,13 @@ void outputSerialMenuOptions(void){
     Serial.println("w:  Get wifi credentials");
     Serial.println("y:  Enable cellular");
     Serial.println("z:  Disable cellular");
-    //Serial.println("1:  Adjust gas lower limit");
-    //Serial.println("2:  Adjust gas upper limit");
+    Serial.println("1:  Adjust NO2 Slope");
+    Serial.println("2:  Adjust NO2 Zero");
     Serial.println("3:  Get build version");
     Serial.println("4:  Enable Ozone");
     Serial.println("5:  Disable Ozone");
-    //Serial.println("6:  Enable VOC's");
+    Serial.println("6:  Enable NO2");
+    Serial.println("7:  Disable NO2");
     //Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
     //Serial.println("9:  Increase the charge current by 64 mA");
