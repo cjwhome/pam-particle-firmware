@@ -379,6 +379,7 @@ int remoteWriteStoredVars(String addressAndValue);
 int remoteReadStoredVars(String mem_address);
 void writeDefaultSettings(void);
 void readHIH8120(void);
+void dateTime(uint16_t* date, uint16_t* time);
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -470,6 +471,14 @@ void outputToCloud(String data, String sensible_data){
     }
 }
 
+void dateTime(uint16_t* date, uint16_t* time) {
+
+  // return date using FAT_DATE macro to format fields
+  *date = FAT_DATE(Time.year(), Time.month(), Time.day());
+
+  // return time using FAT_TIME macro to format fields
+  *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
+}
 
 //send memory address and value separated by a comma
 int remoteWriteStoredVars(String addressAndValue){
@@ -668,6 +677,7 @@ size_t readField(File* file, char* str, size_t size, const char* delim) {
 }
 
 void check_wifi_file(void){
+    SdFile::dateTimeCallback(dateTime);
     file1 = sd.open("wifi.txt", O_READ);
     size_t n;      // Length of returned field with delimiter.
     char str[50];  // Must hold longest field with delimiter and zero byte.
@@ -836,6 +846,7 @@ void setup()
      logFileName = "log_" + fileName;
 
     if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
+        SdFile::dateTimeCallback(dateTime);
       /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
       file.remove();
       file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
@@ -998,13 +1009,6 @@ void setup()
 
     
     Log.info("System version: %s", (const char*)System.version());
-
-    log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
-            log_file.print("WE TURNED ON AT: ");
-            log_file.println(Time.now());
-            log_file.print("This is the battery at the moment: ");
-            log_file.println(fuel.getSoC());
-            log_file.close();
     
 
 }
@@ -1037,22 +1041,10 @@ void loop() {
     if(car_topper_power_en && System.batteryState() == 4){
         if (buttonOffTime == NULL)
         {
-            log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
-            log_file.print("We started turning off at: ");
-            log_file.println(Time.now());
-            log_file.print("This is the battery at the moment: ");
-            log_file.println(fuel.getSoC());
-            log_file.close();
             startCarTopperTimer();
         }
         else if(Time.now() > buttonOffTime+1800) // The 1800 is the amount of seconds in 30 minutes.
         {
-            log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
-            log_file.print("We turned off at: ");
-            log_file.println(Time.now());
-            log_file.print("This is the battery at the moment: ");
-            log_file.println(fuel.getSoC());
-            log_file.close();
             goToSleepBattery();
         }
     }
@@ -1956,7 +1948,7 @@ void readOzone(void){
 
 void writeLogFile(String data){
   if (sd.begin(CS)){
-      Serial.println("Writing data to log file.");
+      SdFile::dateTimeCallback(dateTime);
       log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
       if(log_file_started == 0){
           log_file.println("File Start timestamp: ");
@@ -2160,6 +2152,7 @@ void outputDataToESP(void){
 
     //write data to file
     if (sd.begin(CS)){
+        SdFile::dateTimeCallback(dateTime);
         if(debugging_enabled)
             Serial.println("Writing row to file.");
         file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
