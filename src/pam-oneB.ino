@@ -37,7 +37,7 @@
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
-#define BUILD_VERSION 15
+#define BUILD_VERSION 17
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -154,7 +154,6 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define BME_MOSI 11
 #define BME_CS 10
 #define CS A2               //Chip select for SPI/uSD card
-#define SLEEP_EN D3
 
 //constants for parsing ozone string from ozone monitor Model 106
 #define NUMBER_OF_FEILDS 7
@@ -171,6 +170,7 @@ int esp_wroom_en = D7;
 int blower_en = D2;
 int sound_input = B5;  //ozone monitor's voltage output is connected to this input
 int co2_en = C5;        //enables the CO2 sensor power
+int plantower_select = D3;
 time_t buttonOffTime = NULL;
 
 
@@ -747,6 +747,7 @@ void setup()
     pinMode(blower_en, OUTPUT);
     pinMode(D4, INPUT);
     pinMode(co2_en, OUTPUT);
+    pinMode(plantower_select, OUTPUT);
 
     //read all stored variables (calibration parameters)
     readStoredVars();
@@ -784,7 +785,7 @@ void setup()
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
     digitalWrite(fiveVolt_en, HIGH);
-
+    digitalWrite(plantower_select, LOW);
 
 
     // register the cloud function
