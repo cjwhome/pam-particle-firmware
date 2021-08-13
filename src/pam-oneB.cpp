@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -92,8 +92,9 @@ void serialGetHumidityZero(void);
 void serialGetLowerLimit(void);
 void serialGetUpperLimit(void);
 void startCarTopperTimer();
+int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
-#line 37 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 37 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 7
@@ -423,6 +424,8 @@ void serialResetSettings(void);
 void serialTestRemoteFunction(void);
 void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
+void dateTime(uint16_t* date, uint16_t* time);
+int calibrateCO2(String nothing);
 
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
@@ -457,6 +460,15 @@ void writeRegister(uint8_t reg, uint8_t value) {
     Wire3.write(value);
     Wire3.endTransmission(true);
 
+}
+
+void dateTime(uint16_t* date, uint16_t* time) {
+
+  // return date using FAT_DATE macro to format fields
+  *date = FAT_DATE(Time.year(), Time.month(), Time.day());
+
+  // return time using FAT_TIME macro to format fields
+  *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
 }
 
 /*void testsensible(){
@@ -727,6 +739,7 @@ size_t readField(File* file, char* str, size_t size, const char* delim) {
 }
 
 void check_wifi_file(void){
+    SdFile::dateTimeCallback(dateTime);
     file1 = sd.open("wifi.txt", O_READ);
     size_t n;      // Length of returned field with delimiter.
     char str[50];  // Must hold longest field with delimiter and zero byte.
@@ -850,6 +863,8 @@ void setup()
 
     // register the cloud function
     Particle.function("geteepromdata", remoteReadStoredVars);
+    Particle.function("setUploadSpeed", setUploadSpeed);
+    Particle.function("calibrate CO2", calibrateCO2);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -1058,13 +1073,6 @@ void setup()
 
     
     Log.info("System version: %s", (const char*)System.version());
-
-    log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
-            log_file.print("WE TURNED ON AT: ");
-            log_file.println(Time.now());
-            log_file.print("This is the battery at the moment: ");
-            log_file.println(fuel.getSoC());
-            log_file.close();
     
 
 }
@@ -1097,22 +1105,10 @@ void loop() {
     if(car_topper_power_en && System.batteryState() == 4){
         if (buttonOffTime == NULL)
         {
-            log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
-            log_file.print("We started turning off at: ");
-            log_file.println(Time.now());
-            log_file.print("This is the battery at the moment: ");
-            log_file.println(fuel.getSoC());
-            log_file.close();
             startCarTopperTimer();
         }
         else if(Time.now() > buttonOffTime+1800) // The 1800 is the amount of seconds in 30 minutes.
         {
-            log_file.open("Car_Topper_Info", O_CREAT | O_APPEND | O_WRITE);
-            log_file.print("We turned off at: ");
-            log_file.println(Time.now());
-            log_file.print("This is the battery at the moment: ");
-            log_file.println(fuel.getSoC());
-            log_file.close();
             goToSleepBattery();
         }
     }
@@ -1172,10 +1168,6 @@ void loop() {
         readOzone();
     }
 
-
-    //sound_average = 0;
-    //calculateAQI();
-    //sound_average = readSound();
     //read PM values and apply calibration factors
     readPlantower();
 
@@ -1247,29 +1239,6 @@ void loop() {
 
     //check power
     powerCheck.loop();
-    // Serial.print("The indicator for if it is charging: ");
-    // Serial.println(System.batteryState());
-    // Serial.println(pmic.getChargeCurrent());
-    // Serial.println(pmic.getChargeVoltage());
-
-    // log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
-    // if(log_file_started == 0){
-    //       log_file.println("File Start timestamp: ");
-    //       log_file.println(Time.timeStr());
-    //       log_file_started = 1;
-    //   }
-    //   if (System.batteryState() == 4)
-    //   {
-    //       log_file.println("BATTERY DISCHARGING SHOULD START COUNTDOWN HERE");
-    //   }
-    //   log_file.print("Battery State: ");
-    //   log_file.println(System.batteryState());
-    //   log_file.print("Charge Current: ");
-    //   log_file.println(pmic.getChargeCurrent());
-    //   log_file.print("Charge Voltage: ");
-    //   log_file.println(pmic.getChargeVoltage());
-
-    //   log_file.close();
 
 	//Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
     if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
@@ -2001,6 +1970,7 @@ void readOzone(void){
 
 void writeLogFile(String data){
   if (sd.begin(CS)){
+      SdFile::dateTimeCallback(dateTime);
       Serial.println("Writing data to log file.");
       log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
       if(log_file_started == 0){
@@ -2207,6 +2177,7 @@ void outputDataToESP(void){
     if (sd.begin(CS)){
         if(debugging_enabled)
             Serial.println("Writing row to file.");
+        SdFile::dateTimeCallback(dateTime);
         file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
         if(file_started == 0){
             file.println("File Start timestamp: ");
@@ -3842,12 +3813,46 @@ void startCarTopperTimer()
     buttonOffTime = Time.now();
 }
 
+int setUploadSpeed(String uploadSpeed)
+{
+    int newAverage = uploadSpeed.toInt();
+    if (newAverage == 0)
+    {
+        Serial.println("Invalid number. Did not change upload speed");
+        return 0;
+    }
+    Serial.print("Setting new upload speed to: ");
+    Serial.println(newAverage);
+
+    measurements_to_average = newAverage;
+    measurement_count == 0;
+    EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
+    return 1;
+}
+
+int calibrateCO2(String nothing)
+{
+    t6713.calibrate(1);
+    int timeout = 600; //600 seconds is 10 minutes
+    time_t timer = Time.now();
+    while (Time.now() < timer+timeout)
+    {
+        digitalWrite(power_led_en, HIGH);   // Sets the LED on
+        delay(250);                   // waits for a second
+        digitalWrite(power_led_en, LOW);    // Sets the LED off
+        delay(250);
+    }
+    return 1;
+
+}
+
 void readAlpha1Constantly(void){
     while(!Serial.available()){
         CO_float = readCO();
         Serial.printf("CO: %1.3f ppm\n\r", CO_float);
     }
 }
+
 void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");
@@ -3905,7 +3910,6 @@ void outputSerialMenuOptions(void){
     Serial.println("R:  Disable ABC logic for CO2 sensor");
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
-    Serial.println("U:  Switch socket where CO is read from");
     
     //Serial.println("W:  Enable/Disable google location services");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
