@@ -282,6 +282,8 @@ int gas_upper_limit = 50000;  // Good air quality limit
 float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according to Zheng et. al 2018
 int measurements_to_average = 0;
 int co2_calibration_timer = 0;
+int times_pushed = 0;
+time_t pushed_time = NULL;
 
 
 int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
@@ -382,6 +384,7 @@ int remoteReadStoredVars(String mem_address);
 void writeDefaultSettings(void);
 void readHIH8120(void);
 void dateTime(uint16_t* date, uint16_t* time);
+void checkButtonPush();
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -737,6 +740,11 @@ void check_wifi_file(void){
 
 }
 
+void counter_incr()
+{
+    times_pushed++;
+}
+
 void setup()
 {
     status_word.status_int  = 0;
@@ -784,7 +792,8 @@ void setup()
         goToSleepBattery();
     }
     //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D4, System.reset, RISING);
+    attachInterrupt(D4, counter_incr, RISING);
+    //attachInterrupt(D4, System.reset, RISING);
 
     if(digitalRead(D4)){
       goToSleep();
@@ -1042,6 +1051,7 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
+    checkButtonPush();
 
     if(car_topper_power_en && System.batteryState() == 4){
         if (buttonOffTime == NULL)
@@ -1057,7 +1067,6 @@ void loop() {
     {
         buttonOffTime = NULL;
     }
-    
 
     if(output_only_particles == 1){
         outputParticles();
@@ -3799,6 +3808,32 @@ void readAlpha1Constantly(void){
         CO_float = readCO();
         Serial.printf("CO: %1.3f ppm\n\r", CO_float);
     }
+}
+
+void checkButtonPush()
+{
+    if (times_pushed != 0)
+    {   
+        if (pushed_time == NULL)
+        {
+            pushed_time = Time.now();
+        }
+        if (pushed_time+15 < Time.now()) // This gives you 15 seconds to press the button three times
+        {
+            times_pushed = 0;
+            pushed_time = NULL;
+            System.reset();
+        }
+        else if (times_pushed >= 11)
+        {
+            calibrateCO2("1");
+            times_pushed = 0;
+            pushed_time = NULL;
+    }
+    }
+
+
+
 }
 
 void outputSerialMenuOptions(void){
