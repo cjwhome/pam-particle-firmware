@@ -19,7 +19,6 @@
 #include "PowerCheck.h"
 #include "SdFat.h"
 #include "HIH61XX.h"
-#include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 #include "vector"
 
@@ -46,6 +45,7 @@ void getEspWifiStatus(void);
 void sendWifiInfo(void);
 int rebootDevice(String deviceName);
 int sendDiagnostics(String deviceName);
+int setSetting(String information);
 void goToSleep(void);
 void goToSleepBattery(void);
 void resetESP(void);
@@ -66,7 +66,7 @@ String showAndChooseFiles();
 void processAqsyncMessage(String data);
 int getChecksum(String data);
 bool checkStringIsValid(String data);
-#line 24 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15083);
 PRODUCT_VERSION(1);
 
@@ -74,8 +74,6 @@ bool haveOfflineData = false;
 String diagnosticData = "";
 
 #define SERIAL_PASSWORD "bould"
-
-GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 70
 #define BUILD_VERSION 13
@@ -750,6 +748,7 @@ void setup()
     // register the cloud function
     Particle.function("RebootADevice", rebootDevice);
     Particle.function("diagnostics", sendDiagnostics);
+    Particle.function("setSetting", setSetting);
     //Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -2159,6 +2158,24 @@ int sendDiagnostics(String deviceName)
     }
     return 0;
 
+}
+
+int setSetting(String information)
+{
+    String deviceName = information.substring(0, information.indexOf(','));
+    information = information.substring(information.indexOf(',')+1, information.length());
+    String settingMarker = information.substring(0, information.indexOf(','));
+    information = information.substring(information.indexOf(',')+1, information.length());
+    String value = information.substring(0, information.indexOf(','));
+    if (deviceName == "" || settingMarker == "" || value == "")
+    {
+        Serial.println("The right information was not sent over cellular. Try again");
+        return 0;
+    }
+    String command = "S,"+deviceName+","+settingMarker+","+value;
+    command += checksumMaker(command)+'\n';
+    serBuf.print(command);
+    return 1;
 }
 
 void readHIH8120(void)

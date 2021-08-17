@@ -14,7 +14,6 @@
 #include "PowerCheck.h"
 #include "SdFat.h"
 #include "HIH61XX.h"
-#include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 #include "vector"
 
@@ -28,8 +27,6 @@ bool haveOfflineData = false;
 String diagnosticData = "";
 
 #define SERIAL_PASSWORD "bould"
-
-GoogleMapsDeviceLocator locator;
 
 #define APP_VERSION 70
 #define BUILD_VERSION 13
