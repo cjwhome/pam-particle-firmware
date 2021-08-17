@@ -34,7 +34,7 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(1);
+PRODUCT_VERSION(2);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 17
@@ -137,6 +137,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define PARTICLE_TIME_PACKET_CONSTANT 'Y'   //result of now()
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
+#define NO2_PACKET_CONSTANT 'n'
 
 #define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),Batt(%),Latitude,Longitude,Date/Time"
 #define HEADER_STRING_OZONE "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,Date/Time"
@@ -2024,6 +2025,7 @@ void outputDataToESP(void){
     writer.name("Temp").value(String(readTemperature(), 1));
     writer.name("Press").value(String(bme.pressure / 100.0, 1));
     writer.name("Hmdty").value(String(readHumidity(), 1));
+    writer.name("Battery").value(String(fuel.getSoC()));
     //add gps coordinates to json:
     if(gps.get_latitude() != 0){
         if(gps.get_nsIndicator() == 0){
@@ -2054,7 +2056,7 @@ void outputDataToESP(void){
     csv_output_string += String(CO_float, 3) + ",";
     if (NO2_enabled)
     {
-        cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(NO2_float, 3);
+        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
