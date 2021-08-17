@@ -31,10 +31,10 @@
 //#include "Serial1/Serial1.h"
 #include "SdFat.h"
 #include "HIH61XX.h"
-#include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 
-GoogleMapsDeviceLocator locator;
+PRODUCT_ID(2735);
+PRODUCT_VERSION(1);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 17
