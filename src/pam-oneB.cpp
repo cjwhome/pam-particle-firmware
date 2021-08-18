@@ -44,7 +44,6 @@ void check_wifi_file(void);
 void counter_incr();
 void setup();
 void loop();
-void calculateAQI(void);
 void readGpsStream(void);
 void readGpsStreamDate(void);
 void changeFrequency();
@@ -93,8 +92,10 @@ void serialGetPressureZero(void);
 void serialGetHumiditySlope(void);
 void serialGetHumidityZero(void);
 void startCarTopperTimer();
+void carTopperCheck();
 int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
+int setEEPROMAddress(String data);
 #line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(2);
@@ -114,9 +115,6 @@ PRODUCT_VERSION(2);
 #define FARENHEIT 0
 #define TMP36_OFFSET 0.5
 #define TMP36_VPDC 0.01 //10mV per degree C
-
-//google maps API key:
-#define GOOGLE_API_KEY "AIzaSyAfgY0VX3KSMkVoIVvWAr9oVlT-AoQ68e0"
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
 #define ALPHA_ADC_READ_AMOUNT 10
@@ -163,7 +161,6 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define ABC_ENABLE_MEM_ADDRESS 124
 #define HIH8120_ENABLE_MEM_ADDRESS 128
 #define CO_SOCKET_MEM_ADDRESS 132
-#define GOOGLE_LOCATION_MEM_ADDRESS 136
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
 #define MAX_MEM_ADDRESS 144
@@ -285,7 +282,6 @@ int DEVICE_id = 555;       //default value
 int sample_counter = 0;
 float tempfloat = 0;
 int tempValue;
-float air_quality_score = 0;
 int esp_wifi_connection_status = 0;
 int serial_cellular_enabled = 0;
 int debugging_enabled = 0;
@@ -296,16 +292,15 @@ int temperature_units = 0;
 int output_only_particles = 0;
 int new_temperature_sensor_enabled = 0;
 int hih8120_enabled = 0;
-int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
 int battery_threshold_enable;
 int CO_socket = 0;
-int google_location_en = 0;
 int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 float NO2_slope = 0;
 float NO2_zero = 0;
+int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 
 
 char geolocation_latitude[12] = "999.9999999";
@@ -480,16 +475,6 @@ void dateTime(uint16_t* date, uint16_t* time) {
   // return time using FAT_TIME macro to format fields
   *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
 }
-
-/*void testsensible(){
-    float lat = 39.73915360;
-    float lng = -104.98470340;
-
-    char data[256];
-    snprintf(data, sizeof(data), "{\"lat\":%f, \"lng\":%f}", lat, lng);
-
-    Particle.publish("testJson", data, PRIVATE);
-}*/
 //todo: average everything except ozone
 void outputToCloud(String data, String sensible_data){
     String webhook_data = " ";
@@ -650,7 +635,6 @@ void readStoredVars(void){
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
-    EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
 
@@ -723,7 +707,6 @@ void writeDefaultSettings(void){
     EEPROM.put(ABC_ENABLE_MEM_ADDRESS, 0);
     EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, 1);
     EEPROM.put(CO_SOCKET_MEM_ADDRESS, 0);
-    EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, 0);
     EEPROM.put(SENSIBLEIOT_ENABLE_MEM_ADDRESS, 0);
     EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, 0);
 }
@@ -878,6 +861,7 @@ void setup()
     Particle.function("geteepromdata", remoteReadStoredVars);
     Particle.function("setUploadSpeed", setUploadSpeed);
     Particle.function("calibrate CO2", calibrateCO2);
+    Particle.function("setEEPROM (value,address)", setEEPROMAddress);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -1080,11 +1064,6 @@ void setup()
 
     enableContinuousGPS();
 
-    /*if(google_location_en){
-        Serial.println("Setting up google maps geolocation.");
-        locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
-    }*/
-
     
     Log.info("System version: %s", (const char*)System.version());
     
@@ -1117,19 +1096,9 @@ void locationCallback(float lat, float lon, float accuracy) {
 void loop() {
     checkButtonPush();
 
-    if(car_topper_power_en && System.batteryState() == 4){
-        if (buttonOffTime == NULL)
-        {
-            startCarTopperTimer();
-        }
-        else if(Time.now() > buttonOffTime+1800) // The 1800 is the amount of seconds in 30 minutes.
-        {
-            goToSleepBattery();
-        }
-    }
-    else if (buttonOffTime != NULL && System.batteryState() == 2)
+    if (car_topper_power_en)
     {
-        buttonOffTime = NULL;
+        carTopperCheck();
     }
 
     if(output_only_particles == 1){
@@ -1162,9 +1131,7 @@ void loop() {
         NO2_float = readNO2();
     }
 
-
     CO2_float = readCO2();
-
 
     //correct for altitude
     float pressure_correction = bme.pressure/100;
@@ -1180,7 +1147,6 @@ void loop() {
         Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
 
     }
-
 
     if(ozone_enabled){
         readOzone();
@@ -1273,43 +1239,6 @@ void loop() {
 
 }
 
-void calculateAQI(void){
-    //Calculate humidity contribution to IAQ index
-        gas_reference = bme.gas_resistance/100;
-      float current_humidity = readHumidity();
-      if(debugging_enabled){
-          Serial.printf("gas resistance: %1.0f, humidity: %1.2f\n\r", gas_reference, current_humidity);
-
-      }
-      if (current_humidity >= 38 && current_humidity <= 42)
-        hum_score = 0.25*100; // Humidity +/-5% around optimum
-      else
-      { //sub-optimal
-        if (current_humidity < 38)
-          hum_score = 0.25/hum_reference*current_humidity*100;
-        else
-        {
-          hum_score = ((-0.25/(100-hum_reference)*current_humidity)+0.416666)*100;
-        }
-      }
-
-      //Calculate gas contribution to IAQ index
-
-      if (gas_reference > gas_upper_limit) gas_reference = gas_upper_limit;
-      if (gas_reference < gas_lower_limit) gas_reference = gas_lower_limit;
-      gas_score = (0.75/(gas_upper_limit-gas_lower_limit)*gas_reference -(gas_lower_limit*(0.75/(gas_upper_limit-gas_lower_limit))))*100;
-      if(debugging_enabled){
-        Serial.print("Gas score: ");
-        Serial.println(gas_score);
-        Serial.print("Humidity score: ");
-        Serial.println(hum_score);
-    }
-
-      //Combine results for the final IAQ index value (0-100% where 100% is good quality air)
-      air_quality_score = hum_score + gas_score;
-
-
-}
 
 void echoGps(){
     char gps_byte = 0;
@@ -1997,6 +1926,7 @@ void readOzone(void){
     }
 }
 
+
 void writeLogFile(String data){
   if (sd.begin(CS)){
       SdFile::dateTimeCallback(dateTime);
@@ -2297,13 +2227,18 @@ void outputDataToESP(void){
         }else if(i == 9){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
             floatBytes.myFloat = sound_average;
-        }else if(i == 10){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-            floatBytes.myFloat = air_quality_score;
-        }/*else if(i == 11){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
-            floatBytes.myFloat = O3_float;
-        }*/
+        }
+        // else if(i == 10){
+        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+        //     floatBytes.myFloat = air_quality_score;
+        // }
+        else if(i == 11){
+            if (ozone_enabled)
+            {
+                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
+                floatBytes.myFloat = O3_float;
+            }
+        }
 
         //bytes 5,6,7,8 - Measurement Value
         ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
@@ -2902,7 +2837,8 @@ void serialMenu(){
         }
         EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled );
 
-    }else if(incomingByte == 'G'){      //enable analog reading of ozone and disable esp reading of ozone
+    }
+    else if(incomingByte == 'G'){      //enable analog reading of ozone and disable esp reading of ozone
         if(ozone_analog_enabled == 1){
             Serial.println("Analog reading of ozone already enabled");
         }else{
@@ -2920,7 +2856,8 @@ void serialMenu(){
         }
         EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
 
-    }else if(incomingByte == 'I'){      //disable analog reading of ozone and read from esp
+    }
+    else if(incomingByte == 'I'){      //disable analog reading of ozone and read from esp
         serialGetAverageTime();
     }else if(incomingByte == 'J'){
         resetESP();
@@ -3073,18 +3010,8 @@ void serialMenu(){
         }
         EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
 
-    }else if(incomingByte == '!'){
-
-        Serial.println("Outputting VOCs continuously!  Press any button to exit...");
-        while(!Serial.available()){
-            if (! bme.performReading()) {
-              Serial.println("Failed to read BME680");
-              return;
-            }else{
-                Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
-            }
-        }
-    }else if(incomingByte == '@'){
+    }
+    else if(incomingByte == '@'){
         if(sensible_iot_en == 1){
             Serial.println("Disabling sensible iot data push.");
             sensible_iot_en = 0;
@@ -3104,18 +3031,8 @@ void serialMenu(){
             EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
         }
     
-    }else if(incomingByte == 'W'){
-        if(google_location_en == 1){
-            Serial.println("Disabling google location services.");
-            google_location_en = 0;
-            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
-        }else{
-            Serial.println("Enabling google location services.");
-            google_location_en = 1;
-            EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
-        }
-        
-    }else if(incomingByte == 'X'){
+    }
+    else if(incomingByte == 'X'){
         //calibrate CO2 sensor
         //if(debugging_enabled){
             t6713.calibrate(1);
@@ -3810,29 +3727,27 @@ void serialGetHumidityZero(void){
     }
 }
 
-void serialGetOzoneOffset(void){
-    Serial.println();
-    Serial.print("Current O3 analog offset:");
-    Serial.print(ozone_offset);
-    Serial.println(" ppb");
-    Serial.print("Enter new ozone offset\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
-
-    if(tempValue >= -50 && tempValue < 50){
-        Serial.print("\n\rNew ozone offset: ");
-        Serial.println(tempValue);
-        ozone_offset = tempValue;
-        EEPROM.put(OZONE_OFFSET_MEM_ADDRESS, ozone_offset);
-    }else{
-        Serial.println("\n\rInvalid value!");
-    }
-}
-
 void startCarTopperTimer()
 {
     buttonOffTime = Time.now();
+}
+
+void carTopperCheck()
+{
+    if(System.batteryState() == 4){ // battery is discharging
+        if (buttonOffTime == NULL)
+        {
+            startCarTopperTimer();
+        }
+        else if(Time.now() > buttonOffTime+1800) // The 1800 is the amount of seconds in 30 minutes.
+        {
+            goToSleepBattery();
+        }
+    }
+    else if (buttonOffTime != NULL && System.batteryState() == 2)
+    {
+        buttonOffTime = NULL;
+    }
 }
 
 int setUploadSpeed(String uploadSpeed)
@@ -3852,10 +3767,11 @@ int setUploadSpeed(String uploadSpeed)
     return 1;
 }
 
-int calibrateCO2(String nothing)
+int calibrateCO2(String nothing) // this has a nothing string so we can call this as a function using the particle.io stuff.
 {
+    Serial.println("Calibrating CO2");
     t6713.calibrate(1);
-    int timeout = 600; //600 seconds is 10 minutes
+    int timeout = 900; //600 seconds is 15 minutes
     time_t timer = Time.now();
     while (Time.now() < timer+timeout)
     {
@@ -3864,6 +3780,7 @@ int calibrateCO2(String nothing)
         digitalWrite(power_led_en, LOW);    // Sets the LED off
         delay(250);
     }
+    System.reset();
     return 1;
 
 }
@@ -3875,6 +3792,15 @@ void readAlpha1Constantly(void){
     }
 }
 
+int setEEPROMAddress(String data)
+{
+    int placeholder = data.indexOf(',');
+    int eepromValue = data.substring(0, placeholder).toInt();
+    int memAddress = data.substring(placeholder+1, data.length()).toInt();
+    EEPROM.put(memAddress, eepromValue);
+    System.reset();
+}
+
 void checkButtonPush()
 {
     if (times_pushed != 0)
@@ -3883,22 +3809,15 @@ void checkButtonPush()
         {
             pushed_time = Time.now();
         }
-        if (pushed_time+15 < Time.now()) // This gives you 15 seconds to press the button three times
+        if (pushed_time+3 < Time.now()) // This gives you 3 seconds to press the button three times
         {
-            times_pushed = 0;
-            pushed_time = NULL;
             System.reset();
         }
         else if (times_pushed >= 11)
         {
             calibrateCO2("1");
-            times_pushed = 0;
-            pushed_time = NULL;
+        }
     }
-    }
-
-
-
 }
 
 void outputSerialMenuOptions(void){
@@ -3937,16 +3856,15 @@ void outputSerialMenuOptions(void){
     Serial.println("7:  Disable NO2");
     //Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
-    //Serial.println("9:  Increase the charge current by 64 mA");
-    //Serial.println("0:  Increase the current input limit by 100 mA");
+
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celcius");
     Serial.println("D:  Disable TMP36 temperature sensor and use BME680 temperature");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
     Serial.println("F:  Change temperature units to Farenheit");
-    //Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
-    //Serial.println("H:  Read ozone");
+    Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
+    Serial.println("H:  Read ozone");
     Serial.println("I:  Adjust frequency for uploading through cellular");
     Serial.println("J:  Reset ESP, CO2, Plantower");
     Serial.println("K:  Continuous serial output of GPS");
@@ -3960,10 +3878,9 @@ void outputSerialMenuOptions(void){
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     
-    //Serial.println("W:  Enable/Disable google location services");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
-    //Serial.println("!:  Continuous serial output of VOC's");
+
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
     Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
     Serial.println("?:  Output this menu");
