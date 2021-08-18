@@ -34,7 +34,7 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(2);
+PRODUCT_VERSION(3);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 17
@@ -134,6 +134,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 #define NO2_PACKET_CONSTANT 'n'
+#define UPLOAD_PACKET_CONSTANT 'u'
 
 #define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),Batt(%),Latitude,Longitude,Date/Time"
 #define HEADER_STRING_OZONE "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,Date/Time"
@@ -305,6 +306,7 @@ float gas_weighting = 0.75; // so gas effect is 75% of the total air quality sco
 float hum_score, gas_score;
 float gas_reference = 250000;
 float hum_reference = 40;
+String accumulated_data = "";
 
 
 union{
@@ -434,21 +436,37 @@ void outputToCloud(String data, String sensible_data){
 
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
-            Particle.publish("pamup", data, PRIVATE);
-            Particle.process(); //attempt at ensuring the publish is complete before sleeping
+            Serial.println("This is accumulated data: ");
+            Serial.println(accumulated_data);
+            if (accumulated_data.length()+data.length() >= 500)
+            {
+                Particle.publish("uploadCellular", accumulated_data, PRIVATE);
+                Particle.process();
+                accumulated_data = data;
+            }
+            else
+            {
+                if (accumulated_data == "")
+                {
+                    accumulated_data = data;
+                }
+                accumulated_data += "," + data;
+            }
+            //Particle.publish("pamup", data, PRIVATE);
+            //Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
               Serial.println("Published pamup data!");
               writeLogFile("Published pamup data!");
             }
-            if(sensible_iot_en){
-                Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
-                //testsensible();
-                Particle.process();
-                if(debugging_enabled){
-                    Serial.println("Published sensible data!");
-                    writeLogFile("Published sensible data!");
-                }
-            }
+            // if(sensible_iot_en){
+            //     Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
+            //     //testsensible();
+            //     Particle.process();
+            //     if(debugging_enabled){
+            //         Serial.println("Published sensible data!");
+            //         writeLogFile("Published sensible data!");
+            //     }
+            // }
         }else{
             if(serial_cellular_enabled == 0){
                 if(debugging_enabled){
@@ -1130,6 +1148,7 @@ void loop() {
             Serial.println("Connecting to cellular network");
             writeLogFile("Connecting to cellular network");
           }
+          Serial.println("Trying to connect to cellular.");
           Cellular.on();
           if(debugging_enabled){
             Serial.println("after cellularOn");
@@ -1985,6 +2004,7 @@ void outputDataToESP(void){
     csv_output_string += String(CO_float, 3) + ",";
     if (NO2_enabled)
     {
+        Serial.println("adding no2");
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
