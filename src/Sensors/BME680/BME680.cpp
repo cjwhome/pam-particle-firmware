@@ -85,12 +85,5 @@ bool BME680::measure()
     this->humidity.accumulated_value += adj_value;
     this->humidity.number_of_measures++;
 
-    // this->voc.raw_value = this->_bme680.gas_resistance;
-    // adj_value = (this->voc.slope * this->voc.raw_value) * this->voc.zero;
-    // this->voc.adj_value = adj_value;
-
-    // this->voc.accumulated_value += adj_value;
-    // this->voc.number_of_measures++;
-
     return true;
 }

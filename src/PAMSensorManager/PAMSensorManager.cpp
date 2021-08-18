@@ -117,7 +117,16 @@ void PAMSensorManager::runAllAverages()
         PAMSensor *sensor = this->sensors[i];
         for (size_t j = 0; j < sensor->getSpecies()->size(); j++) {
             PAMSpecie *specie = sensor->getSpecies()->at(j);
-            specie->averaged_value();
+            // specie->averaged_value();
+            // Serial.print(specie->name);
+            // Serial.print(": ");
+            // Serial.print(specie->number_of_measures);
+            // Serial.print(", ");
+            // Serial.print(specie->accumulated_value);
+            // Serial.print(", ");
+            // Serial.print(specie->average);
+            // Serial.print(", ");
+            // Serial.println(specie->adj_value);
         }
     }
 }

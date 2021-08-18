@@ -179,10 +179,29 @@ void setup()
 {
     Wire.begin();
     Serial.begin(9600);
+    //initialize serial1 for communication with BLE nano from redbear labs
+    Serial1.begin(9600);
+    Serial5.begin(9600);        //gps is connected to this serial port
 
+    //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
+    delay(10000);
+
+    Serial.println("Starting get instance");
     globalVariables = Global::GetInstance();
+    if (globalVariables == NULL)
+    {
+        Serial.println("global null");
+    }
     manager = PAMSensorManager::GetInstance();
+        if (manager == NULL)
+    {
+        Serial.println("manager null");
+    }
     send_measurements = SendingData::GetInstance();
+        if (send_measurements == NULL)
+    {
+        Serial.println("measurements null");
+    }
 
     globalVariables->status_word->status_int  = 0;
     globalVariables->status_word->status_int |= (APP_VERSION << 12) & 0xFF00;
@@ -220,12 +239,6 @@ void setup()
     digitalWrite(POWER_LED_EN, HIGH);
     digitalWrite(FIVE_VOLT_EN, HIGH);
 
-    //initialize serial1 for communication with BLE nano from redbear labs
-    Serial1.begin(9600);
-    Serial5.begin(9600);        //gps is connected to this serial port
-
-    //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
-    delay(10000);
     //initialize main serial port for debug outpu
 
     rd = PAMSerial.registerResponder(new TestSerialConnector());
