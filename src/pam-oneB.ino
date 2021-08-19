@@ -2004,7 +2004,6 @@ void outputDataToESP(void){
     csv_output_string += String(CO_float, 3) + ",";
     if (NO2_enabled)
     {
-        Serial.println("adding no2");
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
@@ -3751,7 +3750,7 @@ void readAlpha1Constantly(void){
 int setEEPROMAddress(String data)
 {
     int placeholder = data.indexOf(',');
-    int eepromValue = data.substring(0, placeholder).toInt();
+    float eepromValue = data.substring(0, placeholder).toInt();
     int memAddress = data.substring(placeholder+1, data.length()).toInt();
     EEPROM.put(memAddress, eepromValue);
     System.reset();
