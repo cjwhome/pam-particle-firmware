@@ -1238,7 +1238,7 @@ void loop() {
             Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
 
         }
-        CO2_float = pressure_correction;
+        CO2_float *= pressure_correction;
     }else{
         Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
         Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
@@ -1719,6 +1719,7 @@ float readCO(void){
 
     CO_float = readAlpha2();
 
+
     CO_float *= CO_slope;
     CO_float += CO_zero;
 
@@ -1981,6 +1982,8 @@ float readAlpha2(void){
       Serial.print("Volt1 Aux:");
       Serial.print(volt1_aux);
       Serial.println("Volts");*/
+    Serial.println("alpha2_ppmraw: ");
+    Serial.println(alpha2_ppmraw);
       return alpha2_ppmraw;
 }
 
