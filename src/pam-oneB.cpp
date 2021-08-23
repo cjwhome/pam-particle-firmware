@@ -52,7 +52,6 @@ void enableLowPowerGPS();
 void printPacket(byte *packet, byte len);
 float readTemperature(void);
 float readHumidity(void);
-double readSound(void);
 float readNO2(void);
 float readCO2(void);
 float readAlpha1(void);
@@ -163,7 +162,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CO_SOCKET_MEM_ADDRESS 132
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
-#define MAX_MEM_ADDRESS 144
+#define UPDATE_MEM_ADDRESS 148
+#define MAX_MEM_ADDRESS 148
 
 
 //max and min values
@@ -276,12 +276,12 @@ float CO_float = 0;
 float CO_float_2 = 0;
 float CO2_float = 0;
 float CO2_float_previous = 0;
-int CO2_value = 0;
+float CO2_value = 0;
 float O3_float = 0;
 int DEVICE_id = 555;       //default value
 int sample_counter = 0;
 float tempfloat = 0;
-int tempValue;
+float tempValue;
 int esp_wifi_connection_status = 0;
 int serial_cellular_enabled = 0;
 int debugging_enabled = 0;
@@ -315,29 +315,26 @@ float O3_sum = 0;
 float PM25_sum = 0;
 float PM10_sum = 0;
 int measurement_count = 0;
-double sound_average;
 
 
 //calibration parameters
 float CO2_slope;
-int CO2_zero;
+float CO2_zero;
 float CO_slope;
-int CO_zero;
+float CO_zero;
 float PM_1_slope;
 float PM_25_slope;
 float PM_10_slope;
-int PM_1_zero;
-int PM_25_zero;
-int PM_10_zero;
-int ozone_offset;
+float PM_1_zero;
+float PM_25_zero;
+float PM_10_zero;
+float ozone_offset;
 float temp_slope;
-int temp_zero;
+float temp_zero;
 float pressure_slope;
-int pressure_zero;
+float pressure_zero;
 float rh_slope;
-int rh_zero;
-int gas_lower_limit = 1200;   // Bad air quality limit
-int gas_upper_limit = 50000;  // Good air quality limit
+float rh_zero;
 float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according to Zheng et. al 2018
 int measurements_to_average = 0;
 int co2_calibration_timer = 0;
@@ -413,6 +410,7 @@ Bits 1-0: Mask 0b11
 
 //function declarations
 void readStoredVars(void);
+void fixStoredVars();
 void checkCalFile(void);
 size_t readField(File* file, char* str, size_t size, const char* delim);
 void checkWifiFile(void);
@@ -548,7 +546,7 @@ int remoteWriteStoredVars(String addressAndValue){
     Serial.printf("Value substring: %s\n\r", valueString);
 
     int numerical_mem_address = addressString.toInt();
-    int numerical_value = valueString.toInt();
+    int numerical_value = valueString.toFloat();
 
     if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
         EEPROM.put(numerical_mem_address, numerical_value);
@@ -569,9 +567,108 @@ int remoteReadStoredVars(String mem_address){
         return -1;
     }
 }
+
+// We changed all int storing to float storing so we cna dynamically change them.
+void fixStoredVars()
+{
+    int tempSlopeValue;
+    String tempValue;
+    float fixedValue;
+
+    EEPROM.get(CO2_SLOPE_MEM_ADDRESS, tempValue);
+    Serial.print("The value before I get my hands on it: ");
+    Serial.println(tempValue.toInt());
+    Serial.println(tempValue.toFloat());
+    CO2_slope = tempValue.toInt();
+    CO2_slope /= 100;
+    Serial.println("CO2_slope: ");
+    Serial.println(CO2_slope);
+    EEPROM.put(CO2_SLOPE_MEM_ADDRESS, CO2_slope);
+
+    // EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempSlopeValue);
+    // CO_slope = tempSlopeValue;
+    // CO_slope /= 100;
+    // EEPROM.put(CO_SLOPE_MEM_ADDRESS, CO_slope);
+
+    // EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, tempSlopeValue);
+    // PM_1_slope = tempSlopeValue;
+    // PM_1_slope /= 100;
+    // EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, PM_1_slope);
+
+    // EEPROM.get(PM_25_SLOPE_MEM_ADDRESS, tempSlopeValue);
+    // PM_25_slope = tempSlopeValue;
+    // PM_25_slope /= 100;
+    // EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, PM_25_slope);
+
+    // EEPROM.get(PM_10_SLOPE_MEM_ADDRESS, tempSlopeValue);
+    // PM_10_slope = tempSlopeValue;
+    // PM_10_slope /= 100;
+    // EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, PM_10_slope);
+
+    // EEPROM.get(TEMP_SLOPE_MEM_ADDRESS, tempSlopeValue);  //temperature
+    // temp_slope = tempSlopeValue;
+    // temp_slope /= 100;
+    // EEPROM.put(TEMP_SLOPE_MEM_ADDRESS, temp_slope);
+
+    // EEPROM.get(PRESSURE_SLOPE_MEM_ADDRESS, tempSlopeValue);
+    // pressure_slope = tempSlopeValue;
+    // pressure_slope /= 100;
+    // EEPROM.put(PRESSURE_SLOPE_MEM_ADDRESS, pressure_slope);
+
+    // EEPROM.get(RH_SLOPE_MEM_ADDRESS, tempSlopeValue);
+    // rh_slope = tempSlopeValue;
+    // rh_slope /= 100;
+    // EEPROM.put(RH_SLOPE_MEM_ADDRESS, rh_slope);
+
+    // EEPROM.get(NO2_SLOPE_MEM_ADDRESS, tempSlopeValue);
+    // NO2_slope = tempSlopeValue;
+    // NO2_slope /= 100;
+    // EEPROM.put(NO2_SLOPE_MEM_ADDRESS, NO2_slope);
+
+    // EEPROM.get(CO2_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(CO2_ZERO_MEM_ADDRESS, fixedValue);
+
+    // EEPROM.get(CO_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(CO_ZERO_MEM_ADDRESS, fixedValue);
+
+    // EEPROM.get(NO2_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(NO2_ZERO_MEM_ADDRESS, fixedValue);
+
+    // EEPROM.get(PM_1_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(PM_1_ZERO_MEM_ADDRESS, fixedValue);
+
+    // EEPROM.get(PM_25_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(PM_25_ZERO_MEM_ADDRESS, fixedValue);
+
+    // EEPROM.get(PM_10_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, fixedValue);
+
+    // EEPROM.get(TEMP_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(TEMP_ZERO_MEM_ADDRESS, temp_zero);
+
+    // EEPROM.get(PRESSURE_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(PRESSURE_ZERO_MEM_ADDRESS, fixedValue);
+
+    // EEPROM.get(RH_ZERO_MEM_ADDRESS, tempValue);
+    // fixedValue = tempValue.toFloat();
+    // EEPROM.put(RH_ZERO_MEM_ADDRESS, fixedValue);
+
+    Serial.println("Doing the update: ");
+    EEPROM.put(UPDATE_MEM_ADDRESS, 101);
+    Serial.println("Finsihed the update");
+}
+
 //read all eeprom stored variables
 void readStoredVars(void){
-    int tempValue;
+    float tempValue;
     //just changing the rh calibration for temporary!! -- remove me!!
     //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
 
@@ -583,34 +680,18 @@ void readStoredVars(void){
         writeDefaultSettings();
     }
 
-    EEPROM.get(CO2_SLOPE_MEM_ADDRESS, tempValue);
-    CO2_slope = tempValue;
-    CO2_slope /= 100;
-    EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempValue);
-    CO_slope = tempValue;
-    CO_slope /= 100;
-    EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, tempValue);
-    PM_1_slope = tempValue;
-    PM_1_slope /= 100;
-    EEPROM.get(PM_25_SLOPE_MEM_ADDRESS, tempValue);
-    PM_25_slope = tempValue;
-    PM_25_slope /= 100;
-    EEPROM.get(PM_10_SLOPE_MEM_ADDRESS, tempValue);
-    PM_10_slope = tempValue;
-    PM_10_slope /= 100;
-    EEPROM.get(TEMP_SLOPE_MEM_ADDRESS, tempValue);  //temperature
-    temp_slope = tempValue;
-    temp_slope /= 100;
-    EEPROM.get(PRESSURE_SLOPE_MEM_ADDRESS, tempValue);
-    pressure_slope = tempValue;
-    pressure_slope /= 100;
-    EEPROM.get(RH_SLOPE_MEM_ADDRESS, tempValue);
-    rh_slope = tempValue;
-    rh_slope /= 100;
+    EEPROM.get(CO2_SLOPE_MEM_ADDRESS, CO2_slope);
+    EEPROM.get(CO_SLOPE_MEM_ADDRESS, CO_slope);
+    EEPROM.get(NO2_SLOPE_MEM_ADDRESS, NO2_slope);
+    EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, PM_1_slope);
+    EEPROM.get(PM_25_SLOPE_MEM_ADDRESS, PM_25_slope);
+    EEPROM.get(PM_10_SLOPE_MEM_ADDRESS, PM_10_slope);
+    EEPROM.get(TEMP_SLOPE_MEM_ADDRESS, temp_slope);  //temperature
+    EEPROM.get(PRESSURE_SLOPE_MEM_ADDRESS, pressure_slope);
+    EEPROM.get(RH_SLOPE_MEM_ADDRESS, rh_slope);
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
-    EEPROM.get(NO2_SLOPE_MEM_ADDRESS, NO2_slope);
     EEPROM.get(NO2_ZERO_MEM_ADDRESS, NO2_zero);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
@@ -789,6 +870,7 @@ void check_wifi_file(void){
 
 void counter_incr()
 {
+    Serial.println("pushed button");
     times_pushed++;
 }
 
@@ -894,11 +976,26 @@ void setup()
     // REG07 Misc Operation Control Register Format
     writeRegister(7, 0b01001011);   //0x4B*/
 
+        //initialize main serial port for debug output
+    Serial.begin(9600);
+
 
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
-    //initialize main serial port for debug output
-    Serial.begin(9600);
+
+    // String checkUpdate = "";
+    // EEPROM.get(UPDATE_MEM_ADDRESS, checkUpdate);
+    // Serial.println(EEPROM.length());
+    // Serial.println("This is the update Byte: ");
+    // Serial.println(checkUpdate);
+    // if (checkUpdate != "updated")
+    // {
+    //     Serial.println("Need to fix the stored vars");
+    //     fixStoredVars();
+    //     System.reset();
+    // }
+
+
 
 
 
@@ -1141,7 +1238,7 @@ void loop() {
             Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
 
         }
-        CO2_float *= pressure_correction;
+        CO2_float = pressure_correction;
     }else{
         Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
         Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
@@ -1614,22 +1711,7 @@ float readHumidity(void){
     return humidity;
     //temperature = temperature +
 }
-//read sound from
-double readSound(void){
-    int val;
-    double sum = 0;
-    float average = 0;
-    for(int i=0; i< 10;i++){
-        val = analogRead(sound_input);
-        sum += val;
-        //Serial.print("Sound level: ");
-        //Serial.println(val);
-    }
-    sum = sum/10;
-    sum /= 4095;
-    sum *= 100;
-    return sum;
-}
+
 //read Carbon monoxide alphasense sensor
 float readCO(void){
     float float_offset;
@@ -1637,11 +1719,8 @@ float readCO(void){
 
     CO_float = readAlpha2();
 
-    float_offset = CO_zero;
-    float_offset /= 1000;
-
     CO_float *= CO_slope;
-    CO_float += float_offset;
+    CO_float += CO_zero;
 
     return CO_float;
 }
@@ -1651,11 +1730,8 @@ float readNO2(void){
 
     NO2_float = readAlpha1();
 
-    float_offset = NO2_zero;
-    float_offset /= 1000;
-
     NO2_float *= NO2_slope;
-    NO2_float += float_offset;
+    NO2_float += NO2_zero;
 
     return NO2_float;
 }
@@ -2224,10 +2300,8 @@ void outputDataToESP(void){
         }else if(i == 8){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
             floatBytes.myFloat = readHumidity();
-        }else if(i == 9){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = SOUND_PACKET_CONSTANT;
-            floatBytes.myFloat = sound_average;
         }
+        
         // else if(i == 10){
         //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
         //     floatBytes.myFloat = air_quality_score;
@@ -2464,8 +2538,9 @@ void outputParticles(){
         readGpsStream();
         CO2_float = t6713.readPPM();
 
-        CO2_float += CO2_zero;
         CO2_float *= CO2_slope;
+        CO2_float += CO2_zero;
+
         //correct for altitude
         float pressure_correction = bme.pressure/100;
         if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
@@ -3338,14 +3413,12 @@ void serialGetCo2Slope(void){
     float tempfloat = tempString.toFloat();
     int tempValue;
 
-    if(tempfloat >= 0.5 && tempfloat < 10.0){
+    if(tempfloat >= -1000 && tempfloat < 1000){
         CO2_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew CO2 slope: ");
         Serial.println(String(CO2_slope,2));
 
-        EEPROM.put(CO2_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(CO2_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3359,7 +3432,7 @@ void serialGetCo2Zero(void){
     Serial.print("Enter new CO2 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -1000 && tempValue < 1000){
         Serial.print("\n\rNew CO2 zero: ");
@@ -3385,12 +3458,10 @@ void serialGetCoSlope(void){
 
     if(tempfloat >= 0.1 && tempfloat < 2.0){
         CO_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew CO slope: ");
         Serial.println(String(CO_slope,2));
 
-        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3404,7 +3475,7 @@ void serialGetCoZero(void){
     Serial.print("Enter new CO Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -5000 && tempValue < 5000){
         Serial.print("\n\rNew CO zero: ");
@@ -3430,12 +3501,10 @@ void serialGetNO2Slope(void){
 
     if(tempfloat >= 0.1 && tempfloat < 2.0){
         NO2_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew NO2 slope: ");
         Serial.println(String(NO2_slope,2));
 
-        EEPROM.put(NO2_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(NO2_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3449,7 +3518,7 @@ void serialGetNO2Zero(void){
     Serial.print("Enter new NO2 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -5000 && tempValue < 5000){
         Serial.print("\n\rNew NO2 zero: ");
@@ -3472,16 +3541,13 @@ void serialGetPm1Slope(void){
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
-    int tempValue;
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
         PM_1_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew PM1 slope: ");
         Serial.println(String(PM_1_slope, 2));
 
-        EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3495,7 +3561,7 @@ void serialGetPm1Zero(void){
     Serial.print("Enter new PM1 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -1000 && tempValue < 1000){
         Serial.print("\n\rNew PM1 zero: ");
@@ -3520,12 +3586,10 @@ void serialGetPm25Slope(void){
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
         PM_25_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew PM2.5 slope: ");
         Serial.println(String(PM_25_slope,2));
 
-        EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3539,7 +3603,7 @@ void serialGetPm25Zero(void){
     Serial.print("Enter new PM2.5 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -1000 && tempValue < 1000){
         Serial.print("\n\rNew PM2.5 zero: ");
@@ -3564,12 +3628,10 @@ void serialGetPm10Slope(void){
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
         PM_10_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew PM10 slope: ");
         Serial.println(String(PM_10_slope,2));
 
-        EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3583,7 +3645,7 @@ void serialGetPm10Zero(void){
     Serial.print("Enter new PM10 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -1000 && tempValue < 1000){
         Serial.print("\n\rNew PM10 zero: ");
@@ -3608,12 +3670,10 @@ void serialGetTemperatureSlope(void){
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
         temp_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew Temperature slope: ");
         Serial.println(String(temp_slope,2));
 
-        EEPROM.put(TEMP_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(TEMP_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3627,7 +3687,7 @@ void serialGetTemperatureZero(void){
     Serial.print("Enter new Temperature Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -30 && tempValue < 30){
         Serial.print("\n\rNew Temperature zero: ");
@@ -3652,12 +3712,10 @@ void serialGetPressureSlope(void){
 
     if(tempfloat >= 0.5 && tempfloat < 1.5){
         pressure_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew Pressure slope: ");
         Serial.println(String(pressure_slope,2));
 
-        EEPROM.put(PRESSURE_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(PRESSURE_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3671,7 +3729,7 @@ void serialGetPressureZero(void){
     Serial.print("Enter new Pressure Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -1000 && tempValue < 1000){
         Serial.print("\n\rNew Pressure zero: ");
@@ -3696,12 +3754,10 @@ void serialGetHumiditySlope(void){
 
     if(tempfloat >= 0.5 && tempfloat < 10){
         rh_slope = tempfloat;
-        tempfloat *= 100;
-        tempValue = tempfloat;
         Serial.print("\n\rNew RH slope: ");
         Serial.println(String(rh_slope,2));
 
-        EEPROM.put(RH_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(RH_SLOPE_MEM_ADDRESS, tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3715,7 +3771,7 @@ void serialGetHumidityZero(void){
     Serial.print("Enter new RH Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -50 && tempValue < 50){
         Serial.print("\n\rNew RH zero: ");
