@@ -276,7 +276,6 @@ float CO_float = 0;
 float CO_float_2 = 0;
 float CO2_float = 0;
 float CO2_float_previous = 0;
-float CO2_value = 0;
 float O3_float = 0;
 int DEVICE_id = 555;       //default value
 int sample_counter = 0;
@@ -571,24 +570,16 @@ int remoteReadStoredVars(String mem_address){
 // We changed all int storing to float storing so we cna dynamically change them.
 void fixStoredVars()
 {
-    int tempSlopeValue;
-    String tempValue;
-    float fixedValue;
-
-    EEPROM.get(CO2_SLOPE_MEM_ADDRESS, tempValue);
-    Serial.print("The value before I get my hands on it: ");
-    Serial.println(tempValue.toInt());
-    Serial.println(tempValue.toFloat());
-    CO2_slope = tempValue.toInt();
-    CO2_slope /= 100;
-    Serial.println("CO2_slope: ");
-    Serial.println(CO2_slope);
-    EEPROM.put(CO2_SLOPE_MEM_ADDRESS, CO2_slope);
-
-    // EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempSlopeValue);
-    // CO_slope = tempSlopeValue;
-    // CO_slope /= 100;
-    // EEPROM.put(CO_SLOPE_MEM_ADDRESS, CO_slope);
+    int tempValue;
+    EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempValue);
+    Serial.print("The temp value: ");
+    Serial.println(tempValue);
+    CO_slope = tempValue/100;
+    Serial.print("The co_slope: ");
+    Serial.println(CO_slope);
+    EEPROM.put(CO_SLOPE_MEM_ADDRESS, CO_slope);
+    Serial.print("New CO_Slope: ");
+    Serial.println(CO_slope);
 
     // EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, tempSlopeValue);
     // PM_1_slope = tempSlopeValue;
@@ -682,6 +673,8 @@ void readStoredVars(void){
 
     EEPROM.get(CO2_SLOPE_MEM_ADDRESS, CO2_slope);
     EEPROM.get(CO_SLOPE_MEM_ADDRESS, CO_slope);
+    Serial.println("This is the CO_Slope: ");
+    Serial.println(CO_slope);
     EEPROM.get(NO2_SLOPE_MEM_ADDRESS, NO2_slope);
     EEPROM.get(PM_1_SLOPE_MEM_ADDRESS, PM_1_slope);
     EEPROM.get(PM_25_SLOPE_MEM_ADDRESS, PM_25_slope);
@@ -983,16 +976,27 @@ void setup()
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
 
-    // String checkUpdate = "";
-    // EEPROM.get(UPDATE_MEM_ADDRESS, checkUpdate);
-    // Serial.println(EEPROM.length());
-    // Serial.println("This is the update Byte: ");
-    // Serial.println(checkUpdate);
+    int checkUpdate;
+    EEPROM.get(UPDATE_MEM_ADDRESS, checkUpdate);
+    Serial.println("This is the update Byte: ");
+    Serial.println(checkUpdate);
+
+       int tempValue;
+    EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempValue);
+    Serial.print("The temp value: ");
+    Serial.println(tempValue);
+    CO_slope = tempValue/100;
+    Serial.print("The co_slope: ");
+    Serial.println(CO_slope);
+    EEPROM.put(CO_SLOPE_MEM_ADDRESS, CO_slope);
+    Serial.print("New CO_Slope: ");
+    Serial.println(CO_slope);
+
     // if (checkUpdate != "updated")
     // {
-    //     Serial.println("Need to fix the stored vars");
-    //     fixStoredVars();
-    //     System.reset();
+        // Serial.println("Need to fix the stored vars");
+        // fixStoredVars();
+        // System.reset();
     // }
 
 
@@ -1982,8 +1986,6 @@ float readAlpha2(void){
       Serial.print("Volt1 Aux:");
       Serial.print(volt1_aux);
       Serial.println("Volts");*/
-    Serial.println("alpha2_ppmraw: ");
-    Serial.println(alpha2_ppmraw);
       return alpha2_ppmraw;
 }
 
@@ -3457,14 +3459,14 @@ void serialGetCoSlope(void){
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
-    int tempValue;
 
-    if(tempfloat >= 0.1 && tempfloat < 2.0){
+    if(tempfloat >= 0.1 && tempfloat < 1000){
         CO_slope = tempfloat;
-        Serial.print("\n\rNew CO slope: ");
-        Serial.println(String(CO_slope,2));
 
         EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempfloat);
+        EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempfloat);
+        Serial.print("\n\rNew CO Slope: ");
+        Serial.println(tempfloat);
     }else{
         Serial.println("\n\rInvalid value!");
     }
