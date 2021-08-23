@@ -98,7 +98,7 @@ void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 #line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
-PRODUCT_VERSION(2);
+PRODUCT_VERSION(3);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 17
@@ -3794,10 +3794,25 @@ void readAlpha1Constantly(void){
 
 int setEEPROMAddress(String data)
 {
+    Serial.print("This is the funciton input: ");
+    Serial.println(data);
     int placeholder = data.indexOf(',');
-    int eepromValue = data.substring(0, placeholder).toInt();
+    float eepromValue = data.substring(0, placeholder).toFloat();
     int memAddress = data.substring(placeholder+1, data.length()).toInt();
+    Serial.print("This is the eeprom value: ");
+    Serial.println(eepromValue);
+    Serial.print("This is the mem address: ");
+    Serial.println(memAddress);
+    Serial.print("This is the EEPROM VALUE before: ");
+    float tempNumber = 0;
+    EEPROM.get(memAddress, tempNumber);
+    Serial.println(tempNumber);
     EEPROM.put(memAddress, eepromValue);
+
+    Serial.print("This is the EEPROM VALUE after: ");
+    EEPROM.get(memAddress, tempNumber);
+    Serial.println(tempNumber);
+        delay(400);
     System.reset();
 }
 
