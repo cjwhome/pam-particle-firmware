@@ -571,7 +571,7 @@ int remoteReadStoredVars(String mem_address){
 }
 //read all eeprom stored variables
 void readStoredVars(void){
-    int tempValue;
+    float tempValue;
     //just changing the rh calibration for temporary!! -- remove me!!
     //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
 
@@ -3715,7 +3715,7 @@ void serialGetHumidityZero(void){
     Serial.print("Enter new RH Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
-    int tempValue = tempString.toInt();
+    float tempValue = tempString.toFloat();
 
     if(tempValue >= -50 && tempValue < 50){
         Serial.print("\n\rNew RH zero: ");
@@ -3797,22 +3797,14 @@ int setEEPROMAddress(String data)
     Serial.print("This is the funciton input: ");
     Serial.println(data);
     int placeholder = data.indexOf(',');
-    float eepromValue = data.substring(0, placeholder).toFloat();
+    int eepromValue = data.substring(0, placeholder).toInt();
     int memAddress = data.substring(placeholder+1, data.length()).toInt();
     Serial.print("This is the eeprom value: ");
     Serial.println(eepromValue);
     Serial.print("This is the mem address: ");
     Serial.println(memAddress);
-    Serial.print("This is the EEPROM VALUE before: ");
-    float tempNumber = 0;
-    EEPROM.get(memAddress, tempNumber);
-    Serial.println(tempNumber);
     EEPROM.put(memAddress, eepromValue);
-
-    Serial.print("This is the EEPROM VALUE after: ");
-    EEPROM.get(memAddress, tempNumber);
-    Serial.println(tempNumber);
-        delay(400);
+    delay(400);
     System.reset();
 }
 

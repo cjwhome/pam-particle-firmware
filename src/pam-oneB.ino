@@ -235,7 +235,7 @@ int CO_socket = 0;
 int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 float NO2_slope = 0;
-float NO2_zero = 0;
+int NO2_zero = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 
 
@@ -507,7 +507,7 @@ int remoteReadStoredVars(String mem_address){
 }
 //read all eeprom stored variables
 void readStoredVars(void){
-    float tempValue;
+    int tempValue;
     //just changing the rh calibration for temporary!! -- remove me!!
     //these values were determined by John Birks from 2019 cdphe study at la casa in denver February 2019
 
@@ -543,10 +543,12 @@ void readStoredVars(void){
     EEPROM.get(RH_SLOPE_MEM_ADDRESS, tempValue);
     rh_slope = tempValue;
     rh_slope /= 100;
+    EEPROM.get(NO2_SLOPE_MEM_ADDRESS, tempValue);
+    NO2_slope = tempValue;
+    NO2_slope /= 100;
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
-    EEPROM.get(NO2_SLOPE_MEM_ADDRESS, NO2_slope);
     EEPROM.get(NO2_ZERO_MEM_ADDRESS, NO2_zero);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
@@ -554,7 +556,6 @@ void readStoredVars(void){
     EEPROM.get(TEMP_ZERO_MEM_ADDRESS, temp_zero);
     EEPROM.get(PRESSURE_ZERO_MEM_ADDRESS, pressure_zero);
     EEPROM.get(RH_ZERO_MEM_ADDRESS, rh_zero);
-
     EEPROM.get(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
     EEPROM.get(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
     EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
@@ -617,9 +618,11 @@ void writeDefaultSettings(void){
     EEPROM.put(TEMP_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PRESSURE_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(RH_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(NO2_SLOPE_MEM_ADDRESS, 100);
 
     EEPROM.put(CO2_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(CO_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(NO2_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_1_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_25_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_10_ZERO_MEM_ADDRESS, 0);
@@ -630,7 +633,7 @@ void writeDefaultSettings(void){
     EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, 0);
     EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, 0);
     EEPROM.put(OZONE_EN_MEM_ADDRESS, 0);
-    EEPROM.put(NO2_EN_MEM_ADDRESS, NO2_enabled);
+    EEPROM.put(NO2_EN_MEM_ADDRESS, 0);
     EEPROM.put(TIME_ZONE_MEM_ADDRESS, -7);
     Time.zone(tempValue);
     EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, 0);
@@ -3707,7 +3710,7 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
 {
     Serial.println("Calibrating CO2");
     t6713.calibrate(1);
-    int timeout = 900; //600 seconds is 15 minutes
+    int timeout = 900; //900 seconds is 15 minutes
     time_t timer = Time.now();
     while (Time.now() < timer+timeout)
     {
@@ -3733,22 +3736,13 @@ int setEEPROMAddress(String data)
     Serial.print("This is the funciton input: ");
     Serial.println(data);
     int placeholder = data.indexOf(',');
-    float eepromValue = data.substring(0, placeholder).toFloat();
+    int eepromValue = data.substring(0, placeholder).toInt();
     int memAddress = data.substring(placeholder+1, data.length()).toInt();
     Serial.print("This is the eeprom value: ");
     Serial.println(eepromValue);
     Serial.print("This is the mem address: ");
     Serial.println(memAddress);
-    Serial.print("This is the EEPROM VALUE before: ");
-    float tempNumber = 0;
-    EEPROM.get(memAddress, tempNumber);
-    Serial.println(tempNumber);
     EEPROM.put(memAddress, eepromValue);
-
-    Serial.print("This is the EEPROM VALUE after: ");
-    EEPROM.get(memAddress, tempNumber);
-    Serial.println(tempNumber);
-        delay(400);
     System.reset();
 }
 
