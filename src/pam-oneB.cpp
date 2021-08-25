@@ -3856,22 +3856,14 @@ int setEEPROMAddress(String data)
     Serial.print("This is the funciton input: ");
     Serial.println(data);
     int placeholder = data.indexOf(',');
-    float eepromValue = data.substring(0, placeholder).toFloat();
+    int eepromValue = data.substring(0, placeholder).toInt();
     int memAddress = data.substring(placeholder+1, data.length()).toInt();
     Serial.print("This is the eeprom value: ");
     Serial.println(eepromValue);
     Serial.print("This is the mem address: ");
     Serial.println(memAddress);
-    Serial.print("This is the EEPROM VALUE before: ");
-    float tempNumber = 0;
-    EEPROM.get(memAddress, tempNumber);
-    Serial.println(tempNumber);
     EEPROM.put(memAddress, eepromValue);
-
-    Serial.print("This is the EEPROM VALUE after: ");
-    EEPROM.get(memAddress, tempNumber);
-    Serial.println(tempNumber);
-        delay(400);
+    delay(400);
     System.reset();
 }
 
