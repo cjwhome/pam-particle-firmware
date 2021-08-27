@@ -66,6 +66,7 @@ String showAndChooseFiles();
 void processAqsyncMessage(String data);
 int getChecksum(String data);
 bool checkStringIsValid(String data);
+int setSerialNumber(String serialNumber);
 #line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15083);
 PRODUCT_VERSION(1);
@@ -243,6 +244,7 @@ SdFile file;
 SdFile log_file;
 File file1;
 String fileName;
+time_t diagnostic_time = NULL;
 
 // These go together so I can keep track of how many lines i've put into the sd card. This is so I can push to particle data that
 //the PAM recieved when it didn't have cell service.
@@ -749,6 +751,7 @@ void setup()
     Particle.function("RebootADevice", rebootDevice);
     Particle.function("diagnostics", sendDiagnostics);
     Particle.function("setSetting", setSetting);
+    Particle.function("getSerialNumber", setSerialNumber);
     //Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -893,6 +896,8 @@ void setup()
 
     enableContinuousGPS();
 
+    diagnostic_time = Time.now();
+
     Log.info("System version: %s", (const char*)System.version());
 }
 
@@ -922,6 +927,12 @@ void loop()
             receivedData = receivedData.substring(0, receivedData.indexOf('*'));
             processAqsyncMessage(receivedData);
         }
+    }
+
+    if (diagnostic_time+3600 < Time.now())
+    {
+        sendDiagnostics("1");
+        diagnostic_time = Time.now();
     }
     outputCOtoPI();
     if (serial_cellular_enabled) 
@@ -3623,6 +3634,16 @@ void sendAqsyncData(String data)
         sendBack = sendBack+ checksumMaker(sendBack);
         serBuf.print(sendBack);
     }
+}
+
+int setSerialNumber(String serialNumber)
+{
+    if (serialNumber == "0" || serialNumber == "1555")
+    {
+        return 0;
+    }
+    EEPROM.put(DEVICE_ID_MEM_ADDRESS, serialNumber.toInt());
+    return 1;
 }
 
 
