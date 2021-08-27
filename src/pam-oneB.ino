@@ -780,6 +780,7 @@ void setup()
     Particle.function("setUploadSpeed", setUploadSpeed);
     Particle.function("calibrate CO2", calibrateCO2);
     Particle.function("setEEPROM (value,address)", setEEPROMAddress);
+    Particle.functoin("setSerialNumber", setSerialNumber);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -3701,6 +3702,16 @@ int setEEPROMAddress(String data)
     Serial.println(memAddress);
     EEPROM.put(memAddress, eepromValue);
     System.reset();
+}
+
+int setSerialNumber(String serialNumber)
+{
+    if (serialNumber == "0" || serialNumber == "1555")
+    {
+        return 0;
+    }
+    EEPROM.put(DEVICE_ID_MEM_ADDRESS, serialNumber.toInt());
+    return 1;
 }
 
 void checkButtonPush()
