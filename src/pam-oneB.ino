@@ -250,22 +250,22 @@ int measurement_count = 0;
 
 //calibration parameters
 float CO2_slope;
-float CO2_zero;
+int CO2_zero;
 float CO_slope;
-float CO_zero;
+int CO_zero;
 float PM_1_slope;
 float PM_25_slope;
 float PM_10_slope;
-float PM_1_zero;
-float PM_25_zero;
-float PM_10_zero;
-float ozone_offset;
+int PM_1_zero;
+int PM_25_zero;
+int PM_10_zero;
+int ozone_offset;
 float temp_slope;
-float temp_zero;
+int temp_zero;
 float pressure_slope;
-float pressure_zero;
+int pressure_zero;
 float rh_slope;
-float rh_zero;
+int rh_zero;
 float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according to Zheng et. al 2018
 int measurements_to_average = 0;
 int co2_calibration_timer = 0;
@@ -591,6 +591,7 @@ void readStoredVars(void){
 }
 
 void writeDefaultSettings(void){
+    Serial.println("Im here");
     EEPROM.put(DEVICE_ID_MEM_ADDRESS, 1555);
 
 
@@ -711,7 +712,6 @@ void check_wifi_file(void){
 
 void counter_incr()
 {
-    Serial.println("pushed button");
     times_pushed++;
 }
 
@@ -780,7 +780,7 @@ void setup()
     Particle.function("setUploadSpeed", setUploadSpeed);
     Particle.function("calibrate CO2", calibrateCO2);
     Particle.function("setEEPROM (value,address)", setEEPROMAddress);
-    Particle.functoin("setSerialNumber", setSerialNumber);
+    Particle.function("setSerialNumber", setSerialNumber);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -1539,7 +1539,6 @@ float readCO(void){
 
     CO_float = readAlpha2();
 
-
     CO_float *= CO_slope;
     CO_float += CO_zero;
 
@@ -1802,7 +1801,6 @@ float readAlpha2(void){
       Serial.print("Volt1 Aux:");
       Serial.print(volt1_aux);
       Serial.println("Volts");*/
-]
       return alpha2_ppmraw;
 }
 
@@ -1945,13 +1943,13 @@ void outputDataToESP(void){
 
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
     csv_output_string += String(CO_float, 3) + ",";
-    if (NO2_enabled)
+    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
+    csv_output_string += String(CO2_float, 0) + ",";
+        if (NO2_enabled)
     {
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
-    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
-    csv_output_string += String(CO2_float, 0) + ",";
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
     csv_output_string += String(PM01Value) + ",";
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
