@@ -403,30 +403,13 @@ void goToSleep(void){
 }
 
 void goToSleepBattery(void){
-    digitalWrite(POWER_LED_EN, HIGH);   // Sets the LED on
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, HIGH);   // Sets the LED on
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, HIGH);   // Sets the LED on
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, HIGH);    // Sets the LED off
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, HIGH);    // Sets the LED off
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, HIGH);    // Sets the LED off
-    delay(250);                   // waits for a second
-    digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
-
+    for (int i = 0; i < 6; i++)
+    {
+        digitalWrite(POWER_LED_EN, HIGH);   // Sets the LED on
+        delay(250);                   // waits for a second
+        digitalWrite(POWER_LED_EN, LOW);    // Sets the LED off
+        delay(250); 
+    }
     //Serial.println("Turning off batfet");
     writeRegister(7, 0b01101011);   //turn off batfet
 
