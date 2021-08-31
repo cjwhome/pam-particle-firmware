@@ -872,6 +872,7 @@ void loop()
         Serial.println("recieved Data: ");
         String receivedData = serBuf.readStringUntil('\n');
         Serial.println(receivedData);
+        Serial.println(receivedData.length());
         bool isValid = checkStringIsValid(receivedData);
         Serial.println(isValid);
         if (isValid)
@@ -3602,6 +3603,10 @@ int setSerialNumber(String serialNumber)
 void saveDiagnosticData(String data)
 {
     int s = data.indexOf(':');
+    if (s <= 0)
+    {
+        return ;
+    }
     String deviceName = data.substring(2, s-1);
     bool foundMatch = false;
     Serial.println("The name of the device: ");
