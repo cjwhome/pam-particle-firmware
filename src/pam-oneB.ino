@@ -3570,6 +3570,10 @@ void sendAqsyncData(String data)
     // String restOfString = data.substring(s, data.length());
     // String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
     int s = data.indexOf(':');
+    if (s <= 0)
+    {
+        return ;
+    }
     String deviceName = data.substring(2, s-1);
     data.replace("\\", "");
     sendToDataFile(data);
