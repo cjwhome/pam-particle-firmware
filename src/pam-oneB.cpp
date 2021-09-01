@@ -2952,7 +2952,6 @@ void serialMenu(){
         Serial.print("System status: ");
         byte systemStatus = pmic.getSystemStatus();
         Serial.println(systemStatus);
-
     }
     else if(incomingByte == '9'){
         Serial.println(System.deviceID());
