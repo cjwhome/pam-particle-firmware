@@ -2953,9 +2953,11 @@ void serialMenu(){
         byte systemStatus = pmic.getSystemStatus();
         Serial.println(systemStatus);
 
-    }else if(incomingByte == '9'){
-        serialIncreaseChargeCurrent();
-    }else if(incomingByte == '0'){
+    }
+    else if(incomingByte == '9'){
+        Serial.println(System.deviceID());
+    }
+    else if(incomingByte == '0'){
         serialIncreaseInputCurrent();
     }else if(incomingByte == 'A'){
         readAlpha1Constantly();
@@ -3829,7 +3831,6 @@ void outputSerialMenuOptions(void){
     Serial.println("5:  Disable Ozone");
     Serial.println("6:  Enable NO2");
     Serial.println("7:  Disable NO2");
-    //Serial.println("7:  Disable VOC's");
     Serial.println("8:  Output the PMIC system configuration");
 
     Serial.println("A:  Ouptput CO constantly and rapidly");
