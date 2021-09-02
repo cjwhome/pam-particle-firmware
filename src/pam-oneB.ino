@@ -37,7 +37,7 @@ PRODUCT_ID(2735);
 PRODUCT_VERSION(3);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 17
+#define BUILD_VERSION 999
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -984,6 +984,9 @@ void setup()
 
     
     Log.info("System version: %s", (const char*)System.version());
+
+    Serial.println("This is the header for the things we are testing: ");
+    Serial.println("gps, particle, plantower, ESP, CO, CO2, NO2, battery, temperature, pressure, humidity");
     
 
 }
@@ -1019,54 +1022,42 @@ void loop() {
     }
     String success_fail = "";
     readGpsStream();
-    if (String(gps.get_latitude()) != 999.9999999)
-    {
+
+    if (String(gps.get_latitude()) != "0.000000")
         success_fail += "1,";
-    }
     else
-    {
         success_fail += "0,";
-    }
 
     if (Particle.connected())
-    {
         success_fail += "1,";
-    }
     else
-    {
         success_fail += "0,";
-    }
 
-    int check_platower = readPlantower();
-    if (check_plantower == 1)
-    {
-        plantower_working = 1;
-    }
-    success_fail += plantower_working+",";
+    int check_plantower = readPlantower();
+    success_fail += String(check_plantower)+",";
     
     int ESP_check = checkESPWorking();
-    success_fail += ESP_check+",";
+    success_fail += String(ESP_check)+",";
 
     CO_float = readCO();
-    success_fail += CO_float+",";
+    success_fail += String(CO_float, 3)+",";
 
     CO2_float = readCO2();
-    success_fail += CO2_float+",";
+    success_fail += String(CO2_float, 0)+",";
 
     NO2_float = readNO2();
-    success_fail += NO2_float+",";
+    success_fail += String(NO2_float, 3)+",";
 
-    success_fail += String(fuel.getSoC())+",";
+    success_fail += String(fuel.getSoC(), 1)+",";
 
-    success_fail += String(readTemperature())+",";
+    success_fail += String(readTemperature(), 1)+",";
 
-    success_fail += String(bme.pressure / 100.0)+",";
+    success_fail += String(bme.pressure / 100.0, 1)+",";
 
-    success_fail += String(readHumidity(), 1)+",";
+    success_fail += String(readHumidity(), 1);
 
     Serial.println(success_fail);
     delay(1000);
-
 
 }
 

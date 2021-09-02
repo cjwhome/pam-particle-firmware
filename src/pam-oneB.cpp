@@ -57,10 +57,10 @@ float readCO2(void);
 float readAlpha1(void);
 float readAlpha2(void);
 void outputDataToESP(void);
-void getEspWifiStatus(void);
+int checkESPWorking(void);
 void sendWifiInfo(void);
 void outputParticles();
-void readPlantower(void);
+int readPlantower(void);
 char checkValue(char *thebuf, char leng);
 int transmitPM01(char *thebuf);
 float transmitPM2_5(char *thebuf);
@@ -101,7 +101,7 @@ PRODUCT_ID(2735);
 PRODUCT_VERSION(3);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 17
+#define BUILD_VERSION 999
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -234,6 +234,7 @@ int sound_input = B5;  //ozone monitor's voltage output is connected to this inp
 int co2_en = C5;        //enables the CO2 sensor power
 int plantower_select = D3;
 time_t buttonOffTime = NULL;
+bool plantower_working = 0;
 
 //manually control connection to cellular network
 SYSTEM_MODE(MANUAL);
@@ -1047,6 +1048,9 @@ void setup()
 
     
     Log.info("System version: %s", (const char*)System.version());
+
+    Serial.println("This is the header for the things we are testing: ");
+    Serial.println("gps, particle, plantower, ESP, CO, CO2, NO2, battery, temperature, pressure, humidity");
     
 
 }
@@ -1075,148 +1079,49 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-    checkButtonPush();
-
-    if (car_topper_power_en)
+    // gps, particle, plantower, ESP, (Values here forward)CO, CO2, NO2, battery, temperature, pressure, humidity, 
+    if (tried_cellular_connect == false)
     {
-        carTopperCheck();
+        Particle.connect();
     }
-
-    if(output_only_particles == 1){
-        outputParticles();
-    }
-    //read temp, press, humidity, and TVOCs
-    if(debugging_enabled){
-      Serial.println("Before reading bme");
-      writeLogFile("before reading bme");
-    }
-    if (! bme.performReading()) {
-      Serial.println("Failed to read BME680");
-      writeLogFile("Failed to read BME680");
-      return;
-    }else{
-      if(debugging_enabled){
-        Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
-      }
-    }
-    if(hih8120_enabled){
-        readHIH8120();
-    }
+    String success_fail = "";
     readGpsStream();
 
+    if (String(gps.get_latitude()) != "0.000000")
+        success_fail += "1,";
+    else
+        success_fail += "0,";
 
-    //read CO values and apply calibration factors
+    if (Particle.connected())
+        success_fail += "1,";
+    else
+        success_fail += "0,";
+
+    int check_plantower = readPlantower();
+    success_fail += String(check_plantower)+",";
+    
+    int ESP_check = checkESPWorking();
+    success_fail += String(ESP_check)+",";
+
     CO_float = readCO();
-    if (NO2_enabled)
-    {
-        NO2_float = readNO2();
-    }
+    success_fail += String(CO_float, 3)+",";
 
     CO2_float = readCO2();
+    success_fail += String(CO2_float, 0)+",";
 
-    //correct for altitude
-    float pressure_correction = bme.pressure/100;
-    if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
-        pressure_correction /= SEALEVELPRESSURE_HPA;
-        if(debugging_enabled){
-            Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
+    NO2_float = readNO2();
+    success_fail += String(NO2_float, 3)+",";
 
-        }
-        CO2_float *= pressure_correction;
-    }else{
-        Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
-        Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
+    success_fail += String(fuel.getSoC(), 1)+",";
 
-    }
+    success_fail += String(readTemperature(), 1)+",";
 
-    if(ozone_enabled){
-        readOzone();
-    }
+    success_fail += String(bme.pressure / 100.0, 1)+",";
 
-    //read PM values and apply calibration factors
-    readPlantower();
+    success_fail += String(readHumidity(), 1);
 
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-    if(debugging_enabled){
-        Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
-    }
-    corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
-    corrected_PM_25 = corrected_PM_25 + PM_25_zero;
-    corrected_PM_25 = corrected_PM_25 * PM_25_slope;
-
-    //getEspWifiStatus();
-    outputDataToESP();
-
-    sample_counter = ++sample_counter;
-    if(sample_counter == 99)    {
-          sample_counter = 0;
-    }
-
-    if (Serial.available() > 0) {
-        // read the incoming byte:
-        incomingByte = Serial.read();
-        if(debugging_enabled){
-            Serial.print("incomming byte:");
-            Serial.println(incomingByte);
-
-        }
-        Serial.println(incomingByte);
-        if(incomingByte == 'm'){
-          serialMenu();
-        }
-    }
-
-    if(serial_cellular_enabled){
-        status_word.status_int |= 0x01;
-        //Serial.println("Cellular is enabled.");
-      if (Particle.connected() == false && tried_cellular_connect == false) {
-        tried_cellular_connect = true;
-          if(debugging_enabled){
-            Serial.println("Connecting to cellular network");
-            writeLogFile("Connecting to cellular network");
-          }
-          Cellular.on();
-          if(debugging_enabled){
-            Serial.println("after cellularOn");
-            writeLogFile("After cellularOn");
-          }
-          Particle.connect();
-          if(debugging_enabled){
-            Serial.println("After particle connect");
-            writeLogFile("After particle connect");
-          }
-      }else if(Particle.connected() == true){  //this means that it is already connected
-        if(debugging_enabled){
-          Serial.println("setting tried_cellular_connect to false");
-        }
-        tried_cellular_connect = false;
-      }
-    }else{
-        //Serial.println("Cellular is disabled.");
-      if (Particle.connected() == true) {
-          if(debugging_enabled){
-            Serial.println("Disconnecting from cellular network");
-            writeLogFile("Disconnecting from cellular network");
-          }
-          Cellular.off();
-      }
-    }
-
-    //check power
-    powerCheck.loop();
-
-	//Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
-    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
-        Serial.println("Going to sleep because battery is below 20% charge");
-        goToSleepBattery();
-    }
-
-    if(co2_calibration_timer){
-        co2_calibration_timer--;
-        if(debugging_enabled){
-            t6713.readStatus(1);
-        }
-    }
+    Serial.println(success_fail);
+    delay(1000);
 
 }
 
@@ -2258,35 +2163,29 @@ void outputDataToESP(void){
 }
 
 //ask the ESP if it has a wifi connection
-void getEspWifiStatus(void){
+int checkESPWorking(void){
     //command to ask esp for wifi status
     String doYouHaveWifi = "!&";
     char yes_or_no = ' ';
-    //if esp doesn't answer, keep going
-    //Serial1.setTimeout(5000);
 
     Serial1.print(doYouHaveWifi);
-    while(!Serial1.available());
-    //delay(1000);
-    yes_or_no = Serial1.read();
-    if(debugging_enabled){
-        Serial.print("ESP Wifi connection status is: ");
-
+    bool timeOut = false;
+    double counterIndex = 0;
+    //if esp doesn't answer, keep going
+    Serial1.setTimeout(3000);
+    while(!Serial1.available() && timeOut == false){
+      //delay(1);
+      counterIndex++;
+      if(counterIndex > MAX_COUNTER_INDEX){
+        timeOut = true;
       }
-    //Serial.println(yes_or_no);
-    if(yes_or_no == 'y'){
-        if(debugging_enabled){
-            Serial.println("Connected!");
-            writeLogFile("ESP wifi connected");
-          }
-        esp_wifi_connection_status = 1;
-    }else{
-        if(debugging_enabled){
-            Serial.println("No Connection");
-            writeLogFile("ESP wifi not connected");
-          }
-        esp_wifi_connection_status = 0;
     }
+    if (Serial1.available())
+    {
+        return 1;
+    }
+    return 0;
+    
 }
 //send wifi information to the ESP
 void sendWifiInfo(void){
@@ -2551,7 +2450,7 @@ void readHIH8120(void){
     Serial.println(")");*/
 }
 //read from plantower pms 5500
-void readPlantower(void){
+int readPlantower(void){
     if(Serial4.find("B")){    //start to read when detect 0x42
         //if(debugging_enabled)
           //Serial.println("Found a B when reading plantower");
@@ -2564,6 +2463,7 @@ void readPlantower(void){
                   PM10Value=transmitPM10(buf); //count PM10 value of the air detector module
               }
           }
+          return 1;
       }
       else{
         //Serial.println("Clearing serial buffer from PM measurement");
@@ -2571,7 +2471,9 @@ void readPlantower(void){
             char clearBuffer = Serial4.read();
             //Serial.print(clearBuffer);
         }
+        return 0;
       }
+    return 0;
 }
 char checkValue(char *thebuf, char leng)  {
     char receiveflag=0;
