@@ -1061,10 +1061,11 @@ void loop() {
 
     success_fail += String(fuel.getSoC(), 1)+",";
 
-
     readHIH8120();
     success_fail += String(readTemperature(), 1)+",";
 
+
+    bme.performReading();
     success_fail += String(bme.pressure / 100.0, 1)+",";
 
     success_fail += String(readHumidity(), 1);
