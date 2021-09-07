@@ -1457,11 +1457,14 @@ void printPacket(byte *packet, byte len)
 float readTemperature(void){
     float temperature = 0;
     if(hih8120_enabled){
+        Serial.println("hih is enabled: ");
         temperature = hih.temperature();
+        Serial.println(temperature);
         if(debugging_enabled){
             Serial.println("Temperature reading from HIH8120");
         }
     }else if(new_temperature_sensor_enabled){
+        Serial.println("temperature reading from TMP36: ");
         if(debugging_enabled){
             Serial.println("Temperature reading from TMP36");
         }
@@ -1472,11 +1475,14 @@ float readTemperature(void){
 
         temperature -= TMP36_OFFSET;
         temperature /= TMP36_VPDC;
+        Serial.println(temperature);
     }else{
         if(debugging_enabled){
             Serial.println("Temperature reading from BME for Alphasense");
 
           }
+        Serial.println("Using the bme: ");
+        Serial.println(temperature);
         temperature = bme.temperature;
     }
     //temperature *= 100;
