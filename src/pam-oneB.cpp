@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/temp/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -96,7 +96,7 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 36 "c:/Users/abailly/temp/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(3);
 
@@ -1136,7 +1136,6 @@ void loop() {
 
     Serial.println(success_fail);
     delay(1000);
-
 }
 
 
@@ -1461,7 +1460,6 @@ float readTemperature(void){
     float temperature = 0;
     if(hih8120_enabled){
         temperature = hih.temperature();
-        Serial.println(temperature);
         if(debugging_enabled){
             Serial.println("Temperature reading from HIH8120");
         }

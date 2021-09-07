@@ -1072,7 +1072,6 @@ void loop() {
 
     Serial.println(success_fail);
     delay(1000);
-
 }
 
 
@@ -1397,7 +1396,6 @@ float readTemperature(void){
     float temperature = 0;
     if(hih8120_enabled){
         temperature = hih.temperature();
-        Serial.println(temperature);
         if(debugging_enabled){
             Serial.println("Temperature reading from HIH8120");
         }
