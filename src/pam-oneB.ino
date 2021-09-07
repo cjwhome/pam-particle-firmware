@@ -1061,6 +1061,8 @@ void loop() {
 
     success_fail += String(fuel.getSoC(), 1)+",";
 
+
+    readHIH8120();
     success_fail += String(readTemperature(), 1)+",";
 
     success_fail += String(bme.pressure / 100.0, 1)+",";
@@ -1393,14 +1395,12 @@ void printPacket(byte *packet, byte len)
 float readTemperature(void){
     float temperature = 0;
     if(hih8120_enabled){
-        Serial.println("hih is enabled: ");
         temperature = hih.temperature();
         Serial.println(temperature);
         if(debugging_enabled){
             Serial.println("Temperature reading from HIH8120");
         }
     }else if(new_temperature_sensor_enabled){
-        Serial.println("temperature reading from TMP36: ");
         if(debugging_enabled){
             Serial.println("Temperature reading from TMP36");
         }
@@ -1411,26 +1411,17 @@ float readTemperature(void){
 
         temperature -= TMP36_OFFSET;
         temperature /= TMP36_VPDC;
-        Serial.println(temperature);
     }else{
         if(debugging_enabled){
             Serial.println("Temperature reading from BME for Alphasense");
 
           }
-        Serial.println("Using the bme: ");
-        Serial.println(temperature);
         temperature = bme.temperature;
     }
     //temperature *= 100;
 
-    Serial.print("Temp before cal: ");
-    Serial.println(temperature);
-
     temperature *= temp_slope;
     temperature += temp_zero;       //user input zero offset
-
-    Serial.print("Temp after cal: ");
-    Serial.println(temperature);
 
     return temperature;
     //temperature = temperature +
