@@ -34,7 +34,7 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(3);
+PRODUCT_VERSION(5);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 17
@@ -436,8 +436,6 @@ void outputToCloud(String data, String sensible_data){
 
         if(Particle.connected() && serial_cellular_enabled){
             status_word.status_int |= 0x0002;
-            Serial.println("This is accumulated data: ");
-            Serial.println(accumulated_data);
             if (accumulated_data.length()+data.length() >= 500)
             {
                 Particle.publish("uploadCellular", accumulated_data, PRIVATE);
@@ -561,10 +559,13 @@ void readStoredVars(void){
     EEPROM.get(RH_SLOPE_MEM_ADDRESS, tempValue);
     rh_slope = tempValue;
     rh_slope /= 100;
+    EEPROM.get(NO2_SLOPE_MEM_ADDRESS, tempValue);
+    NO2_slope = tempValue;
+    NO2_slope /= 100;
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
-    EEPROM.get(NO2_SLOPE_MEM_ADDRESS, NO2_slope);
+
     EEPROM.get(NO2_ZERO_MEM_ADDRESS, NO2_zero);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
