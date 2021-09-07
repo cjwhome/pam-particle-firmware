@@ -495,6 +495,7 @@ int remoteReadStoredVars(String mem_address){
 
 //read all eeprom stored variables
 void readStoredVars(void){
+    Serial.println("Making it here");
     int tempValue;
 
     EEPROM.get(DEVICE_ID_MEM_ADDRESS, DEVICE_id);
@@ -532,6 +533,8 @@ void readStoredVars(void){
     rh_slope /= 100;
 
 
+
+
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
     EEPROM.get(NO2_ZERO_MEM_ADDRESS, NO2_zero);
@@ -559,6 +562,20 @@ void readStoredVars(void){
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
+
+
+    Serial.print("These are the slopes temp: ");
+    Serial.println(temp_slope);
+    Serial.print("This is the zero: ");
+    Serial.println(temp_zero);
+    Serial.print("These are the slopes press: ");
+    Serial.println(pressure_slope);
+    Serial.print("This is the zero: ");
+    Serial.println(pressure_zero);
+    Serial.print("These are the slopes hum: ");
+    Serial.println(rh_slope);
+    Serial.print("This is the zero: ");
+    Serial.println(rh_zero);
 
     if(sensible_iot_en){
         Time.zone(0);       //use UTC if using sensible iot upload
@@ -738,9 +755,6 @@ void setup()
     pinMode(co2_en, OUTPUT);
     pinMode(plantower_select, OUTPUT);
 
-    //read all stored variables (calibration parameters)
-    readStoredVars();
-
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
 
@@ -794,19 +808,14 @@ void setup()
     // Setup the PMIC manually (resets the BQ24195 charge controller)
     // REG00 Input Source Control Register  (disabled)
     /*writeRegister(0, 0b00110000);  //0x30
-
     // REG01 Power-On Configuration Register (charge battery, 3.5 V)
     writeRegister(1, 0b00011011);   //0x1B
-
     // REG02 Charge Current Control Register (1024 + 512 mA)
     writeRegister(2, 0b01100000);   //0x60
-
     // REG03 Pre-Charge/Termination Current Control Register (128mA pre charge, 128mA termination current)
     writeRegister(3, 0b00010001);   //0x11
-
     // REG04 Charge Voltage Control Register Format
     writeRegister(4, 0b10110010);   //0xB2
-
     // REG05 Charge Termination/Timer Control Register
     writeRegister(5, 0b10011010);   //0x9A
     // REG06 Thermal Regulation Control Register
@@ -819,6 +828,9 @@ void setup()
 
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
+
+    //read all stored variables (calibration parameters)
+    readStoredVars();
 
     #if sd_en
      fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
@@ -833,7 +845,6 @@ void setup()
       init_log += "MCP,";
       file.print(init_log);
       file.close();
-
       //look for a wifi file
       check_wifi_file();
       //look for a calibration file
@@ -1406,8 +1417,14 @@ float readTemperature(void){
     }
     //temperature *= 100;
 
+    Serial.print("Temp before cal: ");
+    Serial.println(temperature);
+
     temperature *= temp_slope;
     temperature += temp_zero;       //user input zero offset
+
+    Serial.print("Temp after cal: ");
+    Serial.println(temperature);
 
     return temperature;
     //temperature = temperature +
