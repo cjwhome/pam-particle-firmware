@@ -1059,10 +1059,6 @@ void loop() {
 
         }
         CO2_float *= pressure_correction;
-    }else{
-        Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
-        Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
-
     }
 
     if(ozone_enabled){
