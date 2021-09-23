@@ -41,7 +41,7 @@
 void writeRegister(uint8_t reg, uint8_t value);
 void outputToCloud(String data, String sensible_data);
 void check_wifi_file(void);
-void counter_incr();
+void button_work();
 void setup();
 void loop();
 void readGpsStream(void);
@@ -101,7 +101,7 @@ PRODUCT_ID(2735);
 PRODUCT_VERSION(3);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 17
+#define BUILD_VERSION 19
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -200,8 +200,6 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 #define NO2_PACKET_CONSTANT 'n'
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),Batt(%),Latitude,Longitude,Date/Time"
-#define HEADER_STRING_OZONE "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,Date/Time"
 
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
 
@@ -334,6 +332,7 @@ float pm_25_correction_factor;      //based on rh, this corrects pm2.5 according
 int measurements_to_average = 0;
 int co2_calibration_timer = 0;
 int times_pushed = 0;
+bool pressed_button = false;
 time_t pushed_time = NULL;
 
 int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
@@ -367,6 +366,7 @@ union{
 
 char cellular_status = 0;
 char gps_status = 0;
+bool calibratingCO2 = false;
 
 /*
 The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
@@ -434,6 +434,7 @@ void writeDefaultSettings(void);
 void readHIH8120(void);
 void dateTime(uint16_t* date, uint16_t* time);
 void checkButtonPush();
+String buildHeaderString();
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -454,6 +455,23 @@ void writeRegister(uint8_t reg, uint8_t value) {
     Wire3.endTransmission(true);
 }
 
+String buildHeaderString()
+{
+    String header = "DEV,CO(ppm),CO2(ppm),";
+    if (NO2_enabled == 1)
+    {
+        header += "NO2,";
+    }
+    header += "PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),";
+    if (ozone_enabled == 1)
+    {
+        header += "O3,";
+    }
+    header += "Batt(%),Latitude,Longitude,Date/Time";
+    return header;
+}
+
+// Sets the date time for the sd card so we can see when we make changes
 void dateTime(uint16_t* date, uint16_t* time) {
 
   // return date using FAT_DATE macro to format fields
@@ -774,9 +792,32 @@ void check_wifi_file(void){
 
 }
 
-void counter_incr()
+void button_work()
 {
-    times_pushed++;
+
+    if (pressed_button == true)
+    {
+        times_pushed++;
+        return ;
+    }
+    if (calibratingCO2 == true)
+    {
+        Serial.println("You have interrupted the CO2 cal. Restarting now.");
+    }
+    pressed_button = true;
+    digitalWrite(power_led_en, LOW); 
+    pushed_time = Time.now();
+    while (pushed_time+3 < Time.now())
+    {
+        if (times_pushed >= 12)
+        {
+            calibratingCO2 = true;
+            calibrateCO2("1");
+            return ;
+        }
+    }
+    System.reset();
+    return ;
 }
 
 void setup()
@@ -822,7 +863,7 @@ void setup()
         goToSleepBattery();
     }
     //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D4, counter_incr, RISING);
+    attachInterrupt(D4, button_work, RISING);
     //attachInterrupt(D4, System.reset, RISING);
 
     if(digitalRead(D4)){
@@ -1018,20 +1059,17 @@ void setup()
     bme.setPressureOversampling(BME680_OS_4X);
     bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
     bme.setGasHeater(320, 150); // 320*C for 150 ms
-//Serial.println("After bme setup");
-    //output current time
 
-    //Serial.printf("Time now: %u\n\r", Time.now());
-    //Serial.println(Time.timeStr());
-    /*Serial.println(String(HEADER_STRING));
+    String header = buildHeaderString();
+    Serial.println(String(header));
     if (sd.begin(CS)){
         file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
         file.println("File Start timestamp: ");
         file.println(Time.timeStr());
-        file.println(String(HEADER_STRING));
+        file.println(String(header));
         file.close();
         file_started = 1;
-    }*/
+    }
     resetESP();
 
     Serial.println("ESP reset!");
@@ -1123,10 +1161,6 @@ void loop() {
 
         }
         CO2_float *= pressure_correction;
-    }else{
-        Serial.println("Error: Pressure out of range, not using pressure correction for CO2.");
-        Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
-
     }
 
     if(ozone_enabled){
@@ -1974,7 +2008,8 @@ void outputDataToESP(void){
         writer.name("NO2").value(String(NO2_float, 3));
     }
     writer.name("PM1_0").value(String(PM01Value));
-    writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
+    writer.name("PM2_5").value(String(corrected_PM_25, 1)); 
+    writer.name("PM10").value(String(PM10Value));
     writer.name("Temp").value(String(readTemperature(), 1));
     writer.name("Press").value(String(bme.pressure / 100.0, 1));
     writer.name("Hmdty").value(String(readHumidity(), 1));
@@ -2102,7 +2137,8 @@ void outputDataToESP(void){
         if(file_started == 0){
             file.println("File Start timestamp: ");
             file.println(Time.timeStr());
-            file.println(String(HEADER_STRING));
+            String header = buildHeaderString();
+            file.println(String(header));
             file_started = 1;
         }
         file.println(csv_output_string);
@@ -2732,7 +2768,7 @@ void serialMenu(){
         debugging_enabled = 0;
         EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
     }else if(incomingByte == 's'){
-        Serial.println(String(HEADER_STRING));
+        Serial.println(buildHeaderString());
     }else if(incomingByte == 't'){
         serialGetTimeDate();
     }else if(incomingByte == 'u'){
@@ -2952,7 +2988,6 @@ void serialMenu(){
         Serial.print("System status: ");
         byte systemStatus = pmic.getSystemStatus();
         Serial.println(systemStatus);
-
     }
     else if(incomingByte == '9'){
         Serial.println(System.deviceID());
@@ -3743,7 +3778,7 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
     }
     System.reset();
     return 1;
-
+    // Add a check in the middle to see if you press the button more. If so, turn off and on.
 }
 
 void readAlpha1Constantly(void){
@@ -3766,6 +3801,7 @@ int setEEPROMAddress(String data)
     Serial.println(memAddress);
     EEPROM.put(memAddress, eepromValue);
     System.reset();
+    return 1;
 }
 
 int setSerialNumber(String serialNumber)
@@ -3781,7 +3817,8 @@ int setSerialNumber(String serialNumber)
 void checkButtonPush()
 {
     if (times_pushed != 0)
-    {   
+    {  
+        digitalWrite(power_led_en, LOW); 
         if (pushed_time == NULL)
         {
             pushed_time = Time.now();
@@ -3792,6 +3829,7 @@ void checkButtonPush()
         }
         else if (times_pushed >= 11)
         {
+            calibratingCO2 = true;
             calibrateCO2("1");
         }
     }
