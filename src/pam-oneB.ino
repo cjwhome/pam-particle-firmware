@@ -752,7 +752,7 @@ void button_work()
     int lastSteadyState = LOW;
 
     Serial.println("About to do time");
-    pushed_time = millis()+10000;
+    pushed_time = millis()+5000;
 
     Serial.println("Getting here");
 
@@ -781,39 +781,18 @@ void button_work()
             // if the button state has changed:
             if(lastSteadyState == HIGH && currentState == LOW)
             {
+                times_pushed++;
                 Serial.println("The button is pressed");
+                if (times_pushed >= 3)
+                {
+                    digitalWrite(power_led_en, HIGH);
+                    calibratingCO2 = true;
+                    return ;
+                }
             }
             else if(lastSteadyState == LOW && currentState == HIGH)
             {
-                times_pushed++;
                 Serial.println("The button is released");
-                Serial.print("The times_pushed is: ");
-                Serial.println(times_pushed);
-                if (times_pushed >= 3)
-                {
-                        Serial.println("Calibrating CO2");
-                        t6713.calibrate(1);
-                        int timeout = 900000; //900000 milliseconds is 15 minutes
-                        time_t timer = millis();
-                        Serial.println("before while loop");
-                        while (millis() < timer+timeout)
-                        {
-                            int newState = digitalRead(D4);
-                            if (newState != currentState)
-                            {
-                                Serial.println("Restarting now.");
-                                digitalWrite(power_led_en, LOW);
-                                System.reset();
-                            }
-                            digitalWrite(power_led_en, HIGH);   // Sets the LED on
-                            delay(10000);                   // waits for a second
-                            digitalWrite(power_led_en, LOW);    // Sets the LED off
-                            delay(10000);
-                        }
-                        Serial.println("About to reset");
-                        System.reset();
-                        return ;
-                }
             }
             // save the the last steady state
             lastSteadyState = currentState;
@@ -1117,7 +1096,10 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-    checkButtonPush();
+    if (calibratingCO2)
+    {
+        calibrateCO2("1");
+    }
 
     if (car_topper_power_en)
     {
@@ -3773,23 +3755,25 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
     int currentState = digitalRead(D4);
     Serial.println("Calibrating CO2");
     t6713.calibrate(1);
-    int timeout = 900000; //900 seconds is 15 minutes
+    int timeout = 900000; //900000 milliseconds is 15 minutes
     time_t timer = millis();
     while (millis() < timer+timeout)
     {
         int newState = digitalRead(D4);
-        if (newState == currentState)
+        if (newState != currentState)
         {
-            Serial.println("You interrupted the CO2 cal. Restarting now.");
+            Serial.println("Restarting now.");
+            digitalWrite(power_led_en, LOW);
+            System.reset();
         }
         digitalWrite(power_led_en, HIGH);   // Sets the LED on
         delay(250);                   // waits for a second
         digitalWrite(power_led_en, LOW);    // Sets the LED off
         delay(250);
     }
+    Serial.println("About to reset");
     System.reset();
     return 1;
-    // Add a check in the middle to see if you press the button more. If so, turn off and on.
 }
 
 void readAlpha1Constantly(void){
