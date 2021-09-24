@@ -742,7 +742,7 @@ void button_work()
 
     detachInterrupt(D4);
     digitalWrite(power_led_en, LOW);
-    Serial.println("Should only see once ever.");
+    //Serial.println("Should only see once ever.");
     int buttonState = digitalRead(D4);
 
     int DEBOUNCE_DELAY = 50;
@@ -751,10 +751,10 @@ void button_work()
     unsigned long lastDebounceTime = 0;
     int lastSteadyState = LOW;
 
-    Serial.println("About to do time");
+    //Serial.println("About to do time");
     pushed_time = millis()+10000;
 
-    Serial.println("Getting here");
+    //Serial.println("Getting here");
 
     while( pushed_time > millis() )
     //|| pushed_time > millis())
@@ -781,13 +781,13 @@ void button_work()
             // if the button state has changed:
             if(lastSteadyState == HIGH && currentState == LOW)
             {
-                Serial.println("The button is pressed");
+                //Serial.println("The button is pressed");
             }
             else if(lastSteadyState == LOW && currentState == HIGH)
             {
                 times_pushed++;
-                Serial.println("The button is released");
-                Serial.print("The times_pushed is: ");
+                //Serial.println("The button is released");
+                //Serial.print("The times_pushed is: ");
                 Serial.println(times_pushed);
                 if (times_pushed >= 3)
                 {
@@ -795,13 +795,13 @@ void button_work()
                         t6713.calibrate(1);
                         int timeout = 900000; //900000 milliseconds is 15 minutes
                         time_t timer = millis();
-                        Serial.println("before while loop");
+                       //Serial.println("before while loop");
                         while (millis() < timer+timeout)
                         {
                             int newState = digitalRead(D4);
                             if (newState != currentState)
                             {
-                                Serial.println("Restarting now.");
+                                //Serial.println("Restarting now.");
                                 digitalWrite(power_led_en, LOW);
                                 System.reset();
                             }
@@ -810,7 +810,7 @@ void button_work()
                             digitalWrite(power_led_en, LOW);    // Sets the LED off
                             delay(10000);
                         }
-                        Serial.println("About to reset");
+                       // Serial.println("About to reset");
                         System.reset();
                         return ;
                 }
@@ -819,7 +819,7 @@ void button_work()
             lastSteadyState = currentState;
         }
     }
-    Serial.println("Doing a system reset");
+    Serial.println("System Reset");
     System.reset();
     return ;
 }
