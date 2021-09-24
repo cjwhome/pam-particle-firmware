@@ -168,6 +168,7 @@ int sound_input = B5;  //ozone monitor's voltage output is connected to this inp
 int co2_en = C5;        //enables the CO2 sensor power
 int plantower_select = D3;
 time_t buttonOffTime = NULL;
+const int DEBOUNCE_DELAY = 50;
 
 //manually control connection to cellular network
 SYSTEM_MODE(MANUAL);
@@ -728,30 +729,97 @@ void check_wifi_file(void){
 
 }
 
+// bool_t DebounceSwitch2()
+// {
+//     static uint16_t State = 0; // Current debounce status
+//     State=(State<<1) | !RawKeyPressed() | 0xe000;
+//     if (State===0xf000) return true;
+//     return false;
+// }
+
 void button_work()
 {
-    Serial.println("In button_work");
-    if (pressed_button == true)
+
+    detachInterrupt(D4);
+    digitalWrite(power_led_en, LOW);
+    Serial.println("Should only see once ever.");
+    int buttonState = digitalRead(D4);
+
+    int DEBOUNCE_DELAY = 50;
+    int currentState;
+    int lastFlickerableState = LOW;
+    unsigned long lastDebounceTime = 0;
+    int lastSteadyState = LOW;
+
+    Serial.println("About to do time");
+    pushed_time = millis()+10000;
+
+    Serial.println("Getting here");
+
+    while( pushed_time > millis() )
+    //|| pushed_time > millis())
     {
-        times_pushed++;
-        return ;
-    }
-    if (calibratingCO2 == true)
-    {
-        Serial.println("You have interrupted the CO2 cal. Restarting now.");
-    }
-    pressed_button = true;
-    digitalWrite(power_led_en, LOW); 
-    pushed_time = Time.now();
-    while (pushed_time+3 < Time.now())
-    {
-        if (times_pushed >= 12)
-        {
-            calibratingCO2 = true;
-            calibrateCO2("1");
-            return ;
+        // read the state of the switch/button:
+        currentState = digitalRead(D4);
+
+        // check to see if you just pressed the button
+        // (i.e. the input went from LOW to HIGH), and you've waited long enough
+        // since the last press to ignore any noise:
+
+        // If the switch/button changed, due to noise or pressing:
+        if (currentState != lastFlickerableState) {
+            // reset the debouncing timer
+            lastDebounceTime = millis();
+            // save the the last flickerable state
+            lastFlickerableState = currentState;
+        }
+
+        if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+            // whatever the reading is at, it's been there for longer than the debounce
+            // delay, so take it as the actual current state:
+
+            // if the button state has changed:
+            if(lastSteadyState == HIGH && currentState == LOW)
+            {
+                Serial.println("The button is pressed");
+            }
+            else if(lastSteadyState == LOW && currentState == HIGH)
+            {
+                times_pushed++;
+                Serial.println("The button is released");
+                Serial.print("The times_pushed is: ");
+                Serial.println(times_pushed);
+                if (times_pushed >= 3)
+                {
+                        Serial.println("Calibrating CO2");
+                        t6713.calibrate(1);
+                        int timeout = 900000; //900000 milliseconds is 15 minutes
+                        time_t timer = millis();
+                        Serial.println("before while loop");
+                        while (millis() < timer+timeout)
+                        {
+                            int newState = digitalRead(D4);
+                            if (newState != currentState)
+                            {
+                                Serial.println("Restarting now.");
+                                digitalWrite(power_led_en, LOW);
+                                System.reset();
+                            }
+                            digitalWrite(power_led_en, HIGH);   // Sets the LED on
+                            delay(10000);                   // waits for a second
+                            digitalWrite(power_led_en, LOW);    // Sets the LED off
+                            delay(10000);
+                        }
+                        Serial.println("About to reset");
+                        System.reset();
+                        return ;
+                }
+            }
+            // save the the last steady state
+            lastSteadyState = currentState;
         }
     }
+    Serial.println("Doing a system reset");
     System.reset();
     return ;
 }
@@ -774,7 +842,7 @@ void setup()
     pinMode(power_led_en, OUTPUT);
     pinMode(esp_wroom_en, OUTPUT);
     pinMode(blower_en, OUTPUT);
-    pinMode(D4, INPUT);
+    // pinMode(D4, INPUT);
     pinMode(co2_en, OUTPUT);
     pinMode(plantower_select, OUTPUT);
 
@@ -1157,7 +1225,7 @@ void loop() {
           }
       }else if(Particle.connected() == true){  //this means that it is already connected
         if(debugging_enabled){
-          Serial.println("setting tried_cellular_connect to false");
+          Serial.println("Connected to Particle");
         }
         tried_cellular_connect = false;
       }
@@ -3694,19 +3762,26 @@ int setUploadSpeed(String uploadSpeed)
     Serial.println(newAverage);
 
     measurements_to_average = newAverage;
-    measurement_count == 0;
+    measurement_count = 0;
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
+    System.reset();
     return 1;
 }
 
 int calibrateCO2(String nothing) // this has a nothing string so we can call this as a function using the particle.io stuff.
 {
+    int currentState = digitalRead(D4);
     Serial.println("Calibrating CO2");
     t6713.calibrate(1);
-    int timeout = 900; //900 seconds is 15 minutes
-    time_t timer = Time.now();
-    while (Time.now() < timer+timeout)
+    int timeout = 900000; //900 seconds is 15 minutes
+    time_t timer = millis();
+    while (millis() < timer+timeout)
     {
+        int newState = digitalRead(D4);
+        if (newState == currentState)
+        {
+            Serial.println("You interrupted the CO2 cal. Restarting now.");
+        }
         digitalWrite(power_led_en, HIGH);   // Sets the LED on
         delay(250);                   // waits for a second
         digitalWrite(power_led_en, LOW);    // Sets the LED off
