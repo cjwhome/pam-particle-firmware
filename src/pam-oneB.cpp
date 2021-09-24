@@ -1116,7 +1116,7 @@ void setup()
     }
 
     if(!t6713.begin()){
-      Serial.println("Could not find a valid T6713 sensor, check wiring!");
+      //Serial.println("Could not find a valid T6713 sensor, check wiring!");
       if(debugging_enabled)
           writeLogFile("Could not find a valid T6713");
     }
@@ -1701,12 +1701,14 @@ float readHumidity(void){
 //read Carbon monoxide alphasense sensor
 float readCO(void){
     float float_offset;
-
+    
+    float_offset = CO_zero;
+    float_offset /= 1000;
 
     CO_float = readAlpha2();
 
     CO_float *= CO_slope;
-    CO_float += CO_zero;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -1714,10 +1716,13 @@ float readCO(void){
 float readNO2(void){
     float float_offset;
 
+    float_offset = NO2_zero;
+    float_offset /= 1000;
+
     NO2_float = readAlpha1();
 
     NO2_float *= NO2_slope;
-    NO2_float += NO2_zero;
+    NO2_float += float_offset;
 
     return NO2_float;
 }
