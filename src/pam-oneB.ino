@@ -867,7 +867,7 @@ void setup()
         goToSleepBattery();
     }
     //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D4, button_work, RISING);
+    attachInterrupt(D4, System.reset, FALLING);
     //attachInterrupt(D4, System.reset, RISING);
 
     if(digitalRead(D4)){
@@ -1117,7 +1117,7 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-    checkButtonPush();
+    //checkButtonPush();
 
     if (car_topper_power_en)
     {
@@ -2652,6 +2652,8 @@ int transmitPM10(char *thebuf)  {
 }
 
 void goToSleep(void){
+    Serial.println("Going to sleep:)");
+    
     //Serial.println("Going to sleep:)");
     digitalWrite(power_led_en, LOW);
     digitalWrite(plantower_en, LOW);
