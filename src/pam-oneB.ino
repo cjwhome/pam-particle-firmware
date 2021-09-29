@@ -137,7 +137,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,HorizontalDillution,Status,Date/Time"
+#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Latitude,Longitude,Date/Time"
 
 
 #define NUMBER_OF_SPECIES 12    //total number of species (measurements) being output
@@ -2031,15 +2031,7 @@ void outputDataToESP(void){
     }
 
     cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
-    if (gps.get_longitude() != 0) {
-        csv_output_string += String(gps.get_horizontalDillution() / 10.0) + ",";
-        cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
-    } else {
-        csv_output_string += String(geolocation_accuracy) + ",";
-        cloud_output_string += String(geolocation_accuracy);
-    }
-
-    csv_output_string += String(status_word.status_int) + ",";
+    
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
