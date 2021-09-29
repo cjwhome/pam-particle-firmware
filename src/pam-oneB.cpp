@@ -931,7 +931,7 @@ void setup()
         goToSleepBattery();
     }
     //if user presses power button during operation, reset and it will go to low power mode
-    attachInterrupt(D4, System.reset, FALLING);
+    attachInterrupt(D4, System.reset, RISING);
     //attachInterrupt(D4, System.reset, RISING);
 
     if(digitalRead(D4)){
@@ -1241,6 +1241,7 @@ void loop() {
     pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
     if(debugging_enabled){
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
+        Serial.printf("PM2.5 value befor correction: %d\n", PM2_5Value);
     }
     corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
     corrected_PM_25 = corrected_PM_25 + PM_25_zero;
