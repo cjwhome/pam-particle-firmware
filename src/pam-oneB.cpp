@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -96,12 +96,12 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 36 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
-PRODUCT_VERSION(3);
+PRODUCT_VERSION(6);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 19
+#define BUILD_VERSION 21
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -1181,7 +1181,6 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-    //checkButtonPush();
 
     if (car_topper_power_en)
     {

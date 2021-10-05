@@ -34,10 +34,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(3);
+PRODUCT_VERSION(6);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 19
+#define BUILD_VERSION 21
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -1117,7 +1117,6 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-    //checkButtonPush();
 
     if (car_topper_power_en)
     {
