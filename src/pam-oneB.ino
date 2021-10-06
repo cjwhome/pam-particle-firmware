@@ -15,6 +15,17 @@
   BSD license, all text above must be included in any redistribution
  ***************************************************************************/
 
+
+// Changes for 7-21:
+// Changed from using powerCheck to using batteryState to determine if the PAM is getting power.
+
+// Changed users to not be able to set the time, but only the time zone. The particle handshakes will set the RTC whenever is connects.
+
+// The pams will no longer do two pushes, one for sensible and one for us. Now, they push to our servers with a number at the end 
+// of the upload, telling the servers where it is supposed to go. 0 for just us, 1 for just sensible, and 2 for both. At the moment,
+// there is no scenario where it is sent to just sensible. We may or may not implement that in the future. 
+
+
 //#include <Wire.h>
 //#include <SPI.h>
 #include <Adafruit_Sensor.h>
@@ -304,6 +315,7 @@ union{
 char cellular_status = 0;
 char gps_status = 0;
 bool calibratingCO2 = false;
+String accumulated_data = "";
 
 /*
 The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
@@ -418,8 +430,7 @@ void dateTime(uint16_t* date, uint16_t* time) {
   *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
 }
 //todo: average everything except ozone
-void outputToCloud(String data, String sensible_data){
-    String webhook_data = " ";
+void outputToCloud(String data) {
     CO_sum += CO_float;
     CO2_sum += CO2_float;
     O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
@@ -431,48 +442,50 @@ void outputToCloud(String data, String sensible_data){
         //O3_sum /= measurements_to_average;
 
         measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1);
-        if(ozone_enabled){
-            webhook_data += ",O3: " + String(O3_sum);
-        } 
-        webhook_data += "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
-            status_word.status_int |= 0x0002;
-            Particle.publish("pamup", data, PRIVATE);
-            Particle.process(); //attempt at ensuring the publish is complete before sleeping
-            if(debugging_enabled){
-              Serial.println("Published pamup data!");
-              writeLogFile("Published pamup data!");
-            }
-            if(sensible_iot_en){
-                Particle.publish("sensiblePamUp", sensible_data, PRIVATE);
-                //testsensible();
-                Particle.process();
-                if(debugging_enabled){
-                    Serial.println("Published sensible data!");
-                    writeLogFile("Published sensible data!");
+            if (measurements_to_average <= 20)
+            {
+                if (accumulated_data.length()+data.length() >= 500)
+                {
+                    if (sensible_iot_en == 1)
+                    {
+                        accumulated_data += "2";
+                    }
+                    else
+                    {
+                        accumulated_data += "0";
+                    }
+                    Particle.publish("uploadCellular", accumulated_data, PRIVATE);
+                    Particle.process();
+                    accumulated_data = data;
+                }
+                else
+                {
+                    if (accumulated_data == "")
+                    {
+                        accumulated_data = data;
+                    }
+                    accumulated_data += "," + data;
                 }
             }
-        }else{
-            if(serial_cellular_enabled == 0){
-                if(debugging_enabled){
-                    Serial.println("Cellular is disabled.");
-                    writeLogFile("Cellular is disabled.");
-
-                  }
-            }else{
-                status_word.status_int &= 0xFFFD;   //clear the connected bit
-                if(debugging_enabled){
-                    Serial.println("Couldn't connect to particle.");
-                    writeLogFile("Couldn't connect to particle.");
-                  }
+            else
+            {
+                if (sensible_iot_en == 1)
+                {
+                    data += '2';
+                }
+                else
+                {
+                    data += "0";
+                }
+                Particle.publish("uploadCellular", data, PRIVATE);
+                Particle.process();
             }
+            CO_sum = 0;
+            CO2_sum = 0;
+            O3_sum = 0;
         }
-        CO_sum = 0;
-        CO2_sum = 0;
-        O3_sum = 0;
     }
 }
 
@@ -564,7 +577,6 @@ void readStoredVars(void){
     EEPROM.get(OZONE_EN_MEM_ADDRESS, ozone_enabled);
     EEPROM.get(NO2_EN_MEM_ADDRESS, NO2_enabled);
     EEPROM.get(TIME_ZONE_MEM_ADDRESS, tempValue);
-    Time.zone(tempValue);
     EEPROM.get(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
     EEPROM.get(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
     EEPROM.get(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
@@ -638,7 +650,7 @@ void writeDefaultSettings(void){
     EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, 0);
     EEPROM.put(OZONE_EN_MEM_ADDRESS, 0);
     EEPROM.put(NO2_EN_MEM_ADDRESS, 0);
-    EEPROM.put(TIME_ZONE_MEM_ADDRESS, -7);
+    EEPROM.put(TIME_ZONE_MEM_ADDRESS, 0);
     Time.zone(tempValue);
     EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, 0);
     EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, 0);
@@ -857,12 +869,13 @@ void setup()
     writeRegister(0, 0b00110100);
     writeRegister(1, 0b00011011);
     //writeRegister(2, 0b01100000);
-    //check power
-    powerCheck.loop();
 
-    if(car_topper_power_en && powerCheck.getHasPower() == 0){
+    if(car_topper_power_en && System.batteryState() == 4)
+    {
         goToSleepBattery();
-    }else if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
+    }
+
+    else if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() == 4)){
             //Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
@@ -1117,7 +1130,6 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-
     if (car_topper_power_en)
     {
         carTopperCheck();
@@ -1240,11 +1252,7 @@ void loop() {
       }
     }
 
-    //check power
-    powerCheck.loop();
-
-	//Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
-    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
+    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() == 4)){
         Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
@@ -1989,71 +1997,20 @@ void outputDataToESP(void){
     //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
     String cloud_output_string = "";    //create a clean string
     String csv_output_string = "";
-    String sensible_string = "";
     String latitude_string = "";
     String longitude_string = "";
 
-    char sensible_buf[256];
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
     csv_output_string += String(DEVICE_id) + ",";
 
 
-
-
-    JSONBufferWriter writer(sensible_buf, sizeof(sensible_buf) - 1);
-    writer.beginObject();
-    String device_string = "PAM-" + String(DEVICE_id);
-    //String device_time = String(Time.format(time, "%Y/%m/%dT%H:%M:%SZ"));
-    //String co2_string = String(CO2_float, 0);
-    //String co_string = String(CO_float, 3);
-    writer.name("instrumentKey").value(device_string);
-    writer.name("datetime").value(String(Time.format(time, "%Y-%m-%dT%H:%M:%SZ")));
-    writer.name("CO2").value(String(CO2_float, 0));
-    writer.name("CO").value(String(CO_float, 3));
-    if (NO2_enabled)
-    {
-        writer.name("NO2").value(String(NO2_float, 3));
-    }
-    writer.name("PM1_0").value(String(PM01Value));
-    writer.name("PM2_5").value(String(corrected_PM_25, 1)); 
-    writer.name("PM10").value(String(PM10Value));
-    writer.name("Temp").value(String(readTemperature(), 1));
-    writer.name("Press").value(String(bme.pressure / 100.0, 1));
-    writer.name("Hmdty").value(String(readHumidity(), 1));
-    writer.name("Battery").value(String(fuel.getSoC()));
-    //add gps coordinates to json:
-    if(gps.get_latitude() != 0){
-        if(gps.get_nsIndicator() == 0){
-            latitude_string += "-";
-        }
-    
-        latitude_string += String(gps.get_latitude());
-    }else{
-        latitude_string = "";
-    }
-    writer.name("Lat").value(latitude_string);
-
-    if(gps.get_longitude() != 0){
-        if(gps.get_ewIndicator() == 0x01){
-            longitude_string += "-";
-            
-        }
-        longitude_string += String(gps.get_longitude());
-    }  
-      
-    writer.name("Long").value(longitude_string);
-    
-    
-    writer.endObject();
-    writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0;
-
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
     csv_output_string += String(CO_float, 3) + ",";
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
-        if (NO2_enabled)
+    if (NO2_enabled)
     {
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
@@ -2117,15 +2074,30 @@ void outputDataToESP(void){
     }
 
     //csv_output_string += String(status_word.status_int) + ",";
-    csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
+    int zone;
+    EEPROM.get(TIME_ZONE_MEM_ADDRESS, zone);
+    int newHour = Time.hour();
+    newHour = newHour+zone;
+
+    int day = Time.day();
+    int year = Time.year();
+    int minute = Time.minute();
+    int second = Time.second();
+    int month = Time.month();
+        if (newHour < 0)
+    {
+        newHour = newHour+24;
+    }
+    if (newHour > 24)
+    {
+        newHour = newHour-24;
+    }
+    csv_output_string += String(day)+"/"+String(month)+"/"+String(year)+","+String(newHour)+":"+String(minute)+":"+String(second);
+    //csv_output_string += String(Time.format(local_time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
-    if(debugging_enabled){
-        Serial.println("Line to write to cloud:");
-        Serial.println(cloud_output_string);
-    }
     
-    outputToCloud(cloud_output_string, sensible_buf);
+    outputToCloud(cloud_output_string);
     
     if(esp_wifi_connection_status){
         if(debugging_enabled){
@@ -2780,11 +2752,14 @@ void serialMenu(){
         EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
     }else if(incomingByte == 's'){
         Serial.println(buildHeaderString());
-    }else if(incomingByte == 't'){
+    }
+    else if(incomingByte == 't'){
         serialGetTimeDate();
-    }else if(incomingByte == 'u'){
+    }
+    else if(incomingByte == 'u'){
         serialGetZone();
-    }else if(incomingByte == 'v'){
+    }
+    else if(incomingByte == 'v'){
         serialGetDeviceId();
     }else if(incomingByte == 'w'){
         serialGetWifiCredentials();
@@ -3303,7 +3278,6 @@ void serialGetZone(void){
     int tempValue = tempString.toInt();
     Serial.println("");
     if(tempValue >= -12 && tempValue <= 14){       //min is the year 2000, max is the year 2100
-        Time.zone(tempValue);
         Serial.print("\n\rNew Device time zone:");
         Serial.println(tempValue);
         EEPROM.put(TIME_ZONE_MEM_ADDRESS, tempValue);
@@ -3741,7 +3715,8 @@ void startCarTopperTimer()
 
 void carTopperCheck()
 {
-    if(System.batteryState() == 4){ // battery is discharging
+    int batteryState = System.batteryState();
+    if(batteryState == 4 || batteryState == 1){ // battery is discharging
         if (buttonOffTime == NULL)
         {
             startCarTopperTimer();
@@ -3874,8 +3849,8 @@ void outputSerialMenuOptions(void){
     Serial.println("q:  Enable serial debugging");
     Serial.println("r:  Disable serial debugging");
     Serial.println("s:  Output header string");
-    Serial.println("t:  Enter new time and date");
-    Serial.println("u:  Enter new time zone");
+    Serial.println("t:  Enter new time and date (Will be overwritten upon cellular connection)");
+    Serial.println("u:  Enter new time zone (This will not accommodate daylight savings time in your area)");
     Serial.println("v:  Adjust the Device ID");
     Serial.println("w:  Get wifi credentials");
     Serial.println("y:  Enable cellular");
