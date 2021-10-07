@@ -1838,8 +1838,6 @@ float readAlpha2(void){
           //delay(200);
           //digitalWrite(red_status_led, LOW);
           //delay(200);
-          Serial.print("half vref2 ads1");
-          Serial.println(volt_half_Vref/1000);
 
         }
     }
