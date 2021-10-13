@@ -238,7 +238,6 @@ int abc_logic_enabled = 0;
 bool tried_cellular_connect = false;
 int battery_threshold_enable;
 int CO_socket = 0;
-int google_location_en = 0;
 int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 
@@ -581,7 +580,6 @@ void readStoredVars(void){
     EEPROM.get(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
     EEPROM.get(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
-    EEPROM.get(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
 
@@ -772,6 +770,11 @@ void setup()
     //writeRegister(2, 0b01100000);
     //check power
     powerCheck.loop();
+
+    if (powerCheck.getHasPower() == 0)
+    {
+        goToSleepBattery();
+    }
 
     
     // if(car_topper_power_en && powerCheck.getHasPower() == 0){
@@ -1020,14 +1023,11 @@ void setup()
     Serial.print("FW Version: ");
     Serial.println(APP_VERSION);
     Serial.print("Build: ");
-    Serial.println("AQLite-"+AQLITE_VERSION);
+    Serial.print("AQLite-");
+    Serial.println(AQLITE_VERSION);
 
     enableContinuousGPS();
 
-    if(google_location_en){
-        Serial.println("Setting up google maps geolocation.");
-        locator.withSubscribe(locationCallback).withLocatePeriodic(5); //setup google maps geolocation
-    }
 
     
     Log.info("System version: %s", (const char*)System.version());
@@ -1058,16 +1058,17 @@ void locationCallback(float lat, float lon, float accuracy) {
   }
 }
 
-void loop() {
-    // if(car_topper_power_en && powerCheck.getHasPower() == 0){
-        
-    //     goToSleepBattery();
-    // }
-    locator.loop();
-    
-    if(output_only_particles == 1){
-        outputParticles();
+void loop() 
+{
+    if(powerCheck.getHasPower() == 0){
+        goToSleepBattery();
     }
+    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() == 4)) // a battery state of 4 is discharging
+    {
+        Serial.println("Going to sleep because battery is below 20% charge");
+        goToSleepBattery();
+    }
+    
     //read temp, press, humidity, and TVOCs
     if(debugging_enabled){
       Serial.println("Before reading bme");
@@ -1094,9 +1095,6 @@ void loop() {
     {
         NO2_float = readNO2();
     }
-
-
-
 
     //CO_float_2 += CO_zero_2;
     //CO_float_2 *= CO_slope_2;
@@ -1195,11 +1193,7 @@ void loop() {
     //check power
     powerCheck.loop();
 
-	//Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
-    if((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)){
-        Serial.println("Going to sleep because battery is below 20% charge");
-        goToSleepBattery();
-    }
+
 
     if(co2_calibration_timer){
         co2_calibration_timer--;
@@ -1813,8 +1807,6 @@ float readAlpha2(void){
           //delay(200);
           //digitalWrite(red_status_led, LOW);
           //delay(200);
-          Serial.print("half vref2 ads1");
-          Serial.println(volt_half_Vref/1000);
 
         }
     }
@@ -1983,8 +1975,8 @@ void outputDataToESP(void){
     writer.name("o3").value(String(O3_float, 3));
     writer.name("PM1_0").value(String(PM01Value));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
-    writer.name("Temp").value(String(readTemperature(), 1));
-    writer.name("Press").value(String(bme.pressure / 100.0, 1));
+    writer.name("Temp").value(String(O3_CellTemp, 1));
+    writer.name("Press").value(String(O3_CellPress, 1));
     writer.name("Hmdty").value(String(readHumidity(), 1));
     //add gps coordinates to json:
     if(gps.get_latitude() != 0){
@@ -2014,15 +2006,14 @@ void outputDataToESP(void){
 
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
     csv_output_string += String(CO_float, 3) + ",";
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float_2, 3);
-    csv_output_string += String(CO_float_2, 3) + ",";
+        cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
+    csv_output_string += String(CO2_float, 0) + ",";
     if (NO2_enabled)
     {
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
-    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
-    csv_output_string += String(CO2_float, 0) + ",";
+
 
     // if(voc_enabled){
     //     cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
@@ -2034,10 +2025,10 @@ void outputDataToESP(void){
     csv_output_string += String(corrected_PM_25, 0) + ",";
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
     csv_output_string += String(PM10Value) + ",";
-    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
-    csv_output_string += String(readTemperature(), 1) + ",";
-    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
-    csv_output_string += String(bme.pressure / 100.0, 1) + ",";
+    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(O3_CellTemp, 1);
+    csv_output_string += String(O3_CellTemp, 1) + ",";
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(O3_CellPress, 1);
+    csv_output_string += String(O3_CellPress, 1) + ",";
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
     csv_output_string += String(readHumidity(), 1) + ",";
         cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
