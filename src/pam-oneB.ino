@@ -16,14 +16,10 @@
  ***************************************************************************/
 
 
-// Changes for 7-21:
-// Changed from using powerCheck to using batteryState to determine if the PAM is getting power.
+// Changes for 7-22"
 
-// Changed users to not be able to set the time, but only the time zone. The particle handshakes will set the RTC whenever is connects.
+// Going to have a variable that checks an sd card variable set by the user. The user can send data to the sd cards, or not.
 
-// The pams will no longer do two pushes, one for sensible and one for us. Now, they push to our servers with a number at the end 
-// of the upload, telling the servers where it is supposed to go. 0 for just us, 1 for just sensible, and 2 for both. At the moment,
-// there is no scenario where it is sent to just sensible. We may or may not implement that in the future. 
 
 
 //#include <Wire.h>
@@ -111,8 +107,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CO_SOCKET_MEM_ADDRESS 132
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
-#define UPDATE_MEM_ADDRESS 148
-#define MAX_MEM_ADDRESS 148
+#define SD_CARD_EN_MEM_ADDRESS 148
+#define UPDATE_MEM_ADDRESS 152
+#define MAX_MEM_ADDRESS 152
 
 
 //max and min values
@@ -245,6 +242,7 @@ int car_topper_power_en = 0;
 float NO2_slope = 0;
 int NO2_zero = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
+int sd_enabled = 0;  // sd_enabled in memory is defaulted to zero. Since this is the case, zero means we are using the sd card, and 1 means we are not.
 
 char geolocation_latitude[12] = "999.9999999";
 char geolocation_longitude[13] = "99.9999999";
@@ -317,6 +315,7 @@ char cellular_status = 0;
 char gps_status = 0;
 bool calibratingCO2 = false;
 String accumulated_data = "";
+
 
 /*
 The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
@@ -590,6 +589,7 @@ void readStoredVars(void){
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
+    EEPROM.get(SD_CARD_EN_MEM_ADDRESS, sd_enabled);
 
     if(sensible_iot_en){
         Time.zone(0);       //use UTC if using sensible iot upload
@@ -623,7 +623,6 @@ void readStoredVars(void){
 }
 
 void writeDefaultSettings(void){
-    Serial.println("Im here");
     EEPROM.put(DEVICE_ID_MEM_ADDRESS, 1555);
 
 
@@ -665,6 +664,7 @@ void writeDefaultSettings(void){
     EEPROM.put(CO_SOCKET_MEM_ADDRESS, 0);
     EEPROM.put(SENSIBLEIOT_ENABLE_MEM_ADDRESS, 0);
     EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, 0);
+    EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 0);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -943,6 +943,7 @@ void setup()
     delay(10000);
 
     #if sd_en
+
      fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
      Serial.println("Checking for sd card");
      logFileName = "log_" + fileName;
@@ -3862,7 +3863,8 @@ void outputSerialMenuOptions(void){
     Serial.println("6:  Enable NO2");
     Serial.println("7:  Disable NO2");
     Serial.println("8:  Output the PMIC system configuration");
-
+    Serial.println("9:  Enable SD card (default)");
+    Serial.println("0:  Disable SD card")
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celcius");
