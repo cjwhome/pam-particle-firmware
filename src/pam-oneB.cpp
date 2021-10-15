@@ -2042,7 +2042,7 @@ void outputDataToESP(void){
     writer.name("PM1_0").value(String(PM01Value));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
     writer.name("Temp").value(String(O3_CellTemp, 1));
-    writer.name("Press").value(String(O3_CellPress, 1));
+    writer.name("Press").value(String(bme.pressure / 100.0, 1));
     writer.name("Hmdty").value(String(readHumidity(), 1));
     //add gps coordinates to json:
     if(gps.get_latitude() != 0){
@@ -2093,8 +2093,8 @@ void outputDataToESP(void){
     csv_output_string += String(PM10Value) + ",";
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(O3_CellTemp, 1);
     csv_output_string += String(O3_CellTemp, 1) + ",";
-    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(O3_CellPress, 1);
-    csv_output_string += String(O3_CellPress, 1) + ",";
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
+    csv_output_string += String(bme.pressure / 100.0, 1) + ",";
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
     csv_output_string += String(readHumidity(), 1) + ",";
         cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
@@ -2416,14 +2416,7 @@ void getEspOzoneData(void){
     delay(10);
     char incomingByte = NULL;
     Serial1.setTimeout(3000);
-    // while(recievedData == "" && timeout < )
-    // {
-    //     incomingByte = Serial1.read();
-    //     recievedData += incomingByte;
-    //     Serial.println("Going around the rosies. receivedData: ");
-    //     Serial.println(recievedData);
-    // }
-    // Serial1.flush();
+
     recievedData = Serial1.readString();
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
     if(debugging_enabled)
@@ -3951,8 +3944,8 @@ void outputSerialMenuOptions(void){
     Serial.println("h:  Adjust PM2.5 zero");
     Serial.println("i:  Adjust PM10 slope");
     Serial.println("j:  Adjust PM10 zero");
-    Serial.println("k:  Adjust Temperature slope");
-    Serial.println("l:  Adjust Temperature zero");
+    Serial.println("k:  Adjust Temperature slope (Need to set the temp slope in the 108)");
+    Serial.println("l:  Adjust Temperature zero (Need to set the temp zero in the 108)");
     Serial.println("m:  Adjust Pressure slope");
     Serial.println("n:  Adjust Pressure zero");
     Serial.println("o:  Adjust Humidity slope");
