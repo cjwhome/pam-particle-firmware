@@ -20,6 +20,8 @@
 
 // Going to have a variable that checks an sd card variable set by the user. The user can send data to the sd cards, or not.
 
+// Added units to NO2 reading
+
 
 
 //#include <Wire.h>
@@ -409,7 +411,7 @@ String buildHeaderString()
     String header = "DEV,CO(ppm),CO2(ppm),";
     if (NO2_enabled == 1)
     {
-        header += "NO2,";
+        header += "NO2(ppm),";
     }
     header += "PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),";
     if (ozone_enabled == 1)
@@ -685,61 +687,63 @@ size_t readField(File* file, char* str, size_t size, const char* delim) {
 }
 
 void check_wifi_file(void){
-    SdFile::dateTimeCallback(dateTime);
-    file1 = sd.open("wifi.txt", O_READ);
-    size_t n;      // Length of returned field with delimiter.
-    char str[50];  // Must hold longest field with delimiter and zero byte.
-    // Read the file and print fields.
-    int cred = 0;
-    int i = 0;
-    Serial.println("Contents of wifi file line by line:");
-    while(1)
+    if (sd_enabled == 0)
     {
-        n = readField(&file1, str, sizeof(str), ",\n");
-        // done if Error or at EOF.
-        if (n == 0){
-            break;
-        }
-        //Serial.print("I:");
-        //Serial.print(i);
-        //Serial.print(":");
-        //Serial.println(str);
-        //the first field is "SSID,PASSWORD", the second is the actual values
-        if(i>1)
+        SdFile::dateTimeCallback(dateTime);
+        file1 = sd.open("wifi.txt", O_READ);
+        size_t n;      // Length of returned field with delimiter.
+        char str[50];  // Must hold longest field with delimiter and zero byte.
+        // Read the file and print fields.
+        int cred = 0;
+        int i = 0;
+        Serial.println("Contents of wifi file line by line:");
+        while(1)
         {
-            if (str[n-1] == ','){
-              str[n-1] = 0;
-              ssid = str;
-              ssid.trim();
-              cred++;
+            n = readField(&file1, str, sizeof(str), ",\n");
+            // done if Error or at EOF.
+            if (n == 0){
+                break;
             }
-            else if (str[n-1] == '\n') {
-              str[n-1] = 0;
-              password = str;
-              password.trim();
-              cred++;
+            //Serial.print("I:");
+            //Serial.print(i);
+            //Serial.print(":");
+            //Serial.println(str);
+            //the first field is "SSID,PASSWORD", the second is the actual values
+            if(i>1)
+            {
+                if (str[n-1] == ','){
+                str[n-1] = 0;
+                ssid = str;
+                ssid.trim();
+                cred++;
+                }
+                else if (str[n-1] == '\n') {
+                str[n-1] = 0;
+                password = str;
+                password.trim();
+                cred++;
+                }
+                else if(file1.available() == 0) { //There's a better way to do this. Buggy, fix soon!
+                password = str;
+                cred++;
+                }
+                else {
+                // At eof, too long, or read error.  Too long is error.
+                Serial.print(file1.available() ? F("error: ") : F("eof:   "));
+                }
+                if(cred >= 2){ //at least one pair of ssid and password
+                Serial.print("Found SSID:");
+                Serial.println(ssid);
+                Serial.print("Found password:");
+                Serial.println(password);
+                break;
+                }
+                //WiFi.setCredentials(ssid, password);
             }
-            else if(file1.available() == 0) { //There's a better way to do this. Buggy, fix soon!
-              password = str;
-              cred++;
-            }
-            else {
-              // At eof, too long, or read error.  Too long is error.
-              Serial.print(file1.available() ? F("error: ") : F("eof:   "));
-            }
-            if(cred >= 2){ //at least one pair of ssid and password
-              Serial.print("Found SSID:");
-              Serial.println(ssid);
-              Serial.print("Found password:");
-              Serial.println(password);
-              break;
-            }
-            //WiFi.setCredentials(ssid, password);
+            i++;
         }
-        i++;
+        file1.close();
     }
-    file1.close();
-
 }
 
 // bool_t DebounceSwitch2()
@@ -942,14 +946,14 @@ void setup()
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
 
-    #if sd_en
+    if (sd_enabled == 0)
+    {
+        fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
+        Serial.println("Checking for sd card");
+        logFileName = "log_" + fileName;
 
-     fileName = String(DEVICE_id) + "_" + String(Time.year()) + String(Time.month()) + String(Time.day()) + "_" + String(Time.hour()) + String(Time.minute()) + String(Time.second()) + ".txt";
-     Serial.println("Checking for sd card");
-     logFileName = "log_" + fileName;
-
-    if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
-        SdFile::dateTimeCallback(dateTime);
+        if (sd.begin(CS)) { //if uSD is functioning and MCP error has not been logged yet.
+            SdFile::dateTimeCallback(dateTime);
       /*file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
       file.remove();
       file.open("log.txt", O_CREAT | O_APPEND | O_WRITE);
@@ -962,12 +966,10 @@ void setup()
       //look for a calibration file
       check_cal_file();*/
 
-      Serial.print("Created new file to log to uSD card: ");
-      Serial.println(fileName);
-    }else { //uSD is not functioning
-        Serial.println("No uSD card detected.");
+            Serial.print("Created new file to log to uSD card: ");
+            Serial.println(fileName);
+        }
     }
-    #endif
 
 
     //setup the AFE
@@ -1079,15 +1081,18 @@ void setup()
     bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
     bme.setGasHeater(320, 150); // 320*C for 150 ms
 
-    String header = buildHeaderString();
-    Serial.println(String(header));
-    if (sd.begin(CS)){
-        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
-        file.println("File Start timestamp: ");
-        file.println(Time.timeStr());
-        file.println(String(header));
-        file.close();
-        file_started = 1;
+    if (sd_enabled == 0)
+    {
+        String header = buildHeaderString();
+        Serial.println(String(header));
+        if (sd.begin(CS)){
+            file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
+            file.println("File Start timestamp: ");
+            file.println(Time.timeStr());
+            file.println(String(header));
+            file.close();
+            file_started = 1;
+        }
     }
     resetESP();
 
@@ -1939,20 +1944,23 @@ void readOzone(void){
 
 
 void writeLogFile(String data){
-  if (sd.begin(CS)){
-      SdFile::dateTimeCallback(dateTime);
-      log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
-      if(log_file_started == 0){
-          log_file.println("File Start timestamp: ");
-          log_file.println(Time.timeStr());
-          log_file_started = 1;
-      }
-      log_file.println(data);
+    if (sd_enabled == 0)
+    {
+        if (sd.begin(CS)){
+            SdFile::dateTimeCallback(dateTime);
+            log_file.open(logFileName, O_CREAT | O_APPEND | O_WRITE);
+            if(log_file_started == 0){
+                log_file.println("File Start timestamp: ");
+                log_file.println(Time.timeStr());
+                log_file_started = 1;
+            }
+            log_file.println(data);
 
-      log_file.close();
-  }else{
-    Serial.println("Unable to write to log file");
-  }
+            log_file.close();
+        }else{
+        Serial.println("Unable to write to log file");
+        }
+    }
 }
 
 void outputDataToESP(void){
@@ -2108,28 +2116,27 @@ void outputDataToESP(void){
     }
     Serial.println(csv_output_string);
 
-    //write data to file
-    if (sd.begin(CS)){
-        SdFile::dateTimeCallback(dateTime);
-        if(debugging_enabled)
-            Serial.println("Writing row to file.");
-        SdFile::dateTimeCallback(dateTime);
-        file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
-        if(file_started == 0){
-            file.println("File Start timestamp: ");
-            file.println(Time.timeStr());
-            String header = buildHeaderString();
-            file.println(String(header));
-            file_started = 1;
+    if (sd_enabled == 0)
+    {
+        //write data to file
+        if (sd.begin(CS)){
+            SdFile::dateTimeCallback(dateTime);
+            if(debugging_enabled)
+                Serial.println("Writing row to file.");
+            SdFile::dateTimeCallback(dateTime);
+            file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
+            if(file_started == 0){
+                file.println("File Start timestamp: ");
+                file.println(Time.timeStr());
+                String header = buildHeaderString();
+                file.println(String(header));
+                file_started = 1;
+            }
+            file.println(csv_output_string);
+
+            file.close();
         }
-        file.println(csv_output_string);
-
-        file.close();
     }
-    //delay(5000);
-
-    //Serial.print("Successfully output Cloud string to ESP: ");
-    //Serial.println(cloud_output_string);
 
     //create an array of binary data to store and send all data at once to the ESP
     //Each "section" in the array is separated by a #
@@ -2976,11 +2983,31 @@ void serialMenu(){
         Serial.println(systemStatus);
     }
     else if(incomingByte == '9'){
-        Serial.println(System.deviceID());
+        if(SD_CARD_EN_MEM_ADDRESS == 1)
+        {
+            Serial.println("Enabling SD card");
+            sd_enabled = 0;
+            EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 0);
+        }
+        else
+        {
+            Serial.println("SD Card already enabled");
+        }
     }
-    else if(incomingByte == '0'){
-        serialIncreaseInputCurrent();
-    }else if(incomingByte == 'A'){
+    else if(incomingByte == '0')
+    {
+        if (SD_CARD_EN_MEM_ADDRESS == 1)
+        {
+            Serial.println("SD card is already disabled");
+        }
+        else
+        {
+            Seiral.println("Disabling SD card");
+            sd_enabled = 1;
+            EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 1);
+        }
+    }
+    else if(incomingByte == 'A'){
         readAlpha1Constantly();
     }else if(incomingByte == 'B'){
         if(output_only_particles == 1){
@@ -3864,7 +3891,7 @@ void outputSerialMenuOptions(void){
     Serial.println("7:  Disable NO2");
     Serial.println("8:  Output the PMIC system configuration");
     Serial.println("9:  Enable SD card (default)");
-    Serial.println("0:  Disable SD card")
+    Serial.println("0:  Disable SD card");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celcius");
