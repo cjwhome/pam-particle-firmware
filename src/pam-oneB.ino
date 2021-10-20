@@ -22,6 +22,8 @@
 
 // Added units to NO2 reading
 
+// Going to add a variable that is checking ESP connectivity
+
 
 
 //#include <Wire.h>
@@ -43,10 +45,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(6);
+PRODUCT_VERSION(7);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 21
+#define BUILD_VERSION 22
 
 
 //define constants
@@ -317,6 +319,7 @@ char cellular_status = 0;
 char gps_status = 0;
 bool calibratingCO2 = false;
 String accumulated_data = "";
+String ESP_connected = "";
 
 
 /*
@@ -908,6 +911,7 @@ void setup()
     Particle.function("calibrate CO2", calibrateCO2);
     Particle.function("setEEPROM (value,address)", setEEPROMAddress);
     Particle.function("setSerialNumber", setSerialNumber);
+    Particle.variable("ESP_connected", ESP_connected);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -1271,6 +1275,7 @@ void loop() {
         }
     }
 
+    getEspWifiStatus();
 }
 
 
@@ -2283,16 +2288,19 @@ void outputDataToESP(void){
 
 //ask the ESP if it has a wifi connection
 void getEspWifiStatus(void){
+    ESP_connected = "Not Connected. Run one more time.";
     //command to ask esp for wifi status
     String doYouHaveWifi = "!&";
     char yes_or_no = ' ';
     //if esp doesn't answer, keep going
-    //Serial1.setTimeout(5000);
+    Serial1.setTimeout(5000);
 
     Serial1.print(doYouHaveWifi);
     while(!Serial1.available());
+
     //delay(1000);
     yes_or_no = Serial1.read();
+    ESP_connected = "Working";
     if(debugging_enabled){
         Serial.print("ESP Wifi connection status is: ");
 
