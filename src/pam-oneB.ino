@@ -3010,7 +3010,7 @@ void serialMenu(){
         }
         else
         {
-            Seiral.println("Disabling SD card");
+            Serial.println("Disabling SD card");
             sd_enabled = 1;
             EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 1);
         }
