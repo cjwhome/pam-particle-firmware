@@ -70,6 +70,7 @@ float readAlpha2(void);
 void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
+void checkESPWorking(void);
 void outputParticles();
 void readPlantower(void);
 char checkValue(char *thebuf, char leng);
@@ -453,6 +454,7 @@ void readHIH8120(void);
 void dateTime(uint16_t* date, uint16_t* time);
 void checkButtonPush();
 String buildHeaderString();
+void checkESPWorking();
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -1339,7 +1341,7 @@ void loop() {
         }
     }
 
-    getEspWifiStatus();
+    checkESPWorking();
 }
 
 
@@ -2357,9 +2359,10 @@ void getEspWifiStatus(void){
     String doYouHaveWifi = "!&";
     char yes_or_no = ' ';
     //if esp doesn't answer, keep going
-    Serial1.setTimeout(5000);
+
 
     Serial1.print(doYouHaveWifi);
+    Serial1.setTimeout(5000);
     while(!Serial1.available());
 
     //delay(1000);
@@ -2390,6 +2393,32 @@ void sendWifiInfo(void){
     Serial.println("Sending new wifi credentials to ESP");
     Serial1.println(wifiCredentials);
     Serial.println("Success!");
+}
+
+//ask the ESP if it has a wifi connection
+void checkESPWorking(void){
+    ESP_connected = "Not Connected. Run one more time.";
+    //command to ask esp for wifi status
+    String doYouHaveWifi = "!&";
+    char yes_or_no = ' ';
+    int counterIndex = 0;
+    bool timeOut = false;
+    //if esp doesn't answer, keep going
+
+    Serial1.setTimeout(3000);
+
+    while(!Serial1.available() && timeOut == false){
+      counterIndex++;
+      if(counterIndex > MAX_COUNTER_INDEX){
+        timeOut = true;
+      }
+    }
+    Serial1.flush();
+    if (timeOut == false)
+    {
+        ESP_connected = "Working";
+    }
+
 }
 
 float getEspOzoneData(void){
