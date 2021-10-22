@@ -165,6 +165,7 @@ int kill_power = WKP;
 int esp_wroom_en = D7;
 int blower_en = D2;
 int co2_en = C5;        //enables the CO2 sensor power
+int plantower_select = D3;
 
 
 
@@ -753,6 +754,7 @@ void setup()
     pinMode(blower_en, OUTPUT);
     pinMode(D4, INPUT);
     pinMode(co2_en, OUTPUT);
+    pinMode(plantower_select, OUTPUT);
 
     //read all stored variables (calibration parameters)
     readStoredVars();
@@ -794,6 +796,7 @@ void setup()
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
     //digitalWrite(fiveVolt_en, HIGH);
+    digitalWrite(plantower_select, LOW);
 
 
 
@@ -1093,9 +1096,6 @@ void loop()
         NO2_float = readNO2();
     }
 
-    //CO_float_2 += CO_zero_2;
-    //CO_float_2 *= CO_slope_2;
-
     CO2_float = readCO2();
 
 
@@ -1116,8 +1116,6 @@ void loop()
     // This line will always grab the Ozone data from the 108. I am doing this because this is for the AQLite, which will always have a 108.
     getEspOzoneData();
 
-
-    calculateAQI();
     //read PM values and apply calibration factors
     readPlantower();
 
@@ -1630,10 +1628,12 @@ float readCO(void){
 float readNO2(void){
     float float_offset;
 
+    float_offset = NO2_zero;
+    float_offset /= 1000;
     NO2_float = readAlpha1();
 
     NO2_float *= NO2_slope;
-    NO2_float += NO2_zero;
+    NO2_float += float_offset;
 
     return NO2_float;
 }
@@ -2326,7 +2326,7 @@ void getEspOzoneData(void){
     bool timeOut = false;
     double counterIndex = 0;
     //if esp doesn't answer, keep going
-    Serial1.setTimeout(3000);
+    Serial1.setTimeout(500);
     if(debugging_enabled){
         Serial.println("Getting ozone data from esp");
         writeLogFile("Getting ozone data from esp");
@@ -2346,7 +2346,6 @@ void getEspOzoneData(void){
 
     delay(10);
     char incomingByte = NULL;
-    Serial1.setTimeout(3000);
 
     recievedData = Serial1.readString();
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
@@ -2549,6 +2548,7 @@ void readHIH8120(void){
 }
 //read from plantower pms 5500
 void readPlantower(void){
+    Serial4.setTimeout(1000);
     if(Serial4.find("B")){    //start to read when detect 0x42
         //if(debugging_enabled)
           //Serial.println("Found a B when reading plantower");
