@@ -1817,7 +1817,7 @@ float readAlpha1(void){
         else{
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
-        alpha1_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        alpha1_ppmraw = (correctedCurrent / -0.358); //sensitivity -.358 nA/ppb - from Alphasense calibration certificate, So -.358 uA/ppm
         alpha1_ppmRounded = String(alpha1_ppmraw, 2);
       }
 
