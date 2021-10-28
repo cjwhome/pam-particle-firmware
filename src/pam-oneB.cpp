@@ -1335,7 +1335,6 @@ void loop() {
             t6713.readStatus(1);
         }
     }
-
     checkESPWorking();
 }
 
@@ -2400,7 +2399,7 @@ void checkESPWorking(void){
     bool timeOut = false;
     //if esp doesn't answer, keep going
 
-    Serial1.setTimeout(3000);
+    Serial1.setTimeout(50);
 
     while(!Serial1.available() && timeOut == false){
       counterIndex++;
@@ -2408,7 +2407,10 @@ void checkESPWorking(void){
         timeOut = true;
       }
     }
-    Serial1.flush();
+    while (Serial1.available())
+    {
+        char clear_serial = Serial1.read();
+    }
     if (timeOut == false)
     {
         ESP_connected = "Working";
