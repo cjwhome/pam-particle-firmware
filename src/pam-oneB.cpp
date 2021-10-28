@@ -71,7 +71,6 @@ void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
 void checkESPWorking(void);
-void outputParticles();
 void readPlantower(void);
 char checkValue(char *thebuf, char leng);
 int transmitPM01(char *thebuf);
@@ -1210,10 +1209,6 @@ void loop() {
     if (car_topper_power_en)
     {
         carTopperCheck();
-    }
-
-    if(output_only_particles == 1){
-        outputParticles();
     }
     //read temp, press, humidity, and TVOCs
     if(debugging_enabled){
@@ -2514,149 +2509,6 @@ float getEspOzoneData(void){
     //parseOzoneString(recievedData);
 }
 
-
-
-/***start of all plantower functions***/
-
-void outputParticles(){
-    union{
-	       double myDouble;
-	       unsigned char bytes[sizeof(double)];
-    } doubleBytes;
-    //doubleBytes.myDouble = double;
-    //
-
-    //used for converting float to bytes for measurement value
-    union {
-        float myFloat;
-        unsigned char bytes[4];
-    } floatBytes;
-
-    //used for converting word to bytes for lat and longitude
-    union {
-        int16_t myWord;
-        unsigned char bytes[2];
-    }wordBytes;
-
-    while(!Serial.available()){
-        if (! bme.performReading()) {
-          Serial.println("Failed to read BME680");
-
-        }
-        readPlantower();
-        readGpsStream();
-        CO2_float = t6713.readPPM();
-
-        CO2_float *= CO2_slope;
-        CO2_float += CO2_zero;
-
-        //correct for altitude
-        float pressure_correction = bme.pressure/100;
-        if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
-            pressure_correction /= SEALEVELPRESSURE_HPA;
-            CO2_float *= pressure_correction;
-        }
-        pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-        corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
-
-        byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
-
-
-        for(int i=0; i<5; i++){
-
-            //************Fill the ble output array**********************//
-            //Serial.printf("making array[%d]\n", i);
-            //byte 0 - version
-            ble_output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
-
-            //bytes 1,2 - Device ID
-            //DEVICE_id = 555;
-            wordBytes.myWord = DEVICE_id;
-            ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            //byte 3 - Measurement number
-            ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
-
-            //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
-            //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
-            //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
-            /*
-            0-battery
-            1-PM01Value
-            2-PM2_5Value
-            3-PM10Value
-
-
-            */
-
-            if(i == 0){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
-                floatBytes.myFloat = fuel.getSoC();
-            }else if(i == 1){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-                floatBytes.myFloat = PM01Value;
-            }else if(i == 2){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-                floatBytes.myFloat = corrected_PM_25;
-            }else if(i == 3){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-                floatBytes.myFloat = PM10Value;
-            }else if(i == 4){
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
-                floatBytes.myFloat = CO2_float;
-            }
-
-            //bytes 5,6,7,8 - Measurement Value
-            ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
-            ble_output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
-            ble_output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
-            ble_output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
-
-
-            //bytes 9-12 - latitude
-            wordBytes.myWord = gps.get_latitudeWhole();
-            ble_output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            wordBytes.myWord = gps.get_latitudeFrac();
-            ble_output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            //bytes 14-17 - longitude
-            wordBytes.myWord = gps.get_longitudeWhole();
-            ble_output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-            wordBytes.myWord = gps.get_longitudeFrac();
-            ble_output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-            ble_output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-
-            //byte 18 - east west and north south indicator
-            //  LSB 0 = East, LSB 1 = West
-            //  MSB 0 = South, MSB 1 = North
-            int northSouth = gps.get_nsIndicator();
-            int eastWest = gps.get_ewIndicator();
-
-            ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
-            ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
-
-            ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
-
-        }
-
-        //send start delimeter to ESP
-        Serial1.print("$");
-        //send the packaged data with # delimeters in between packets
-        Serial1.write(ble_output_array, 5*BLE_PAYLOAD_SIZE);
-
-        //send ending delimeter
-        Serial1.print("&");
-        sample_counter += 1;
-    }
-}
-
 void readHIH8120(void){
     hih.start();
 
@@ -3084,7 +2936,8 @@ void serialMenu(){
         Serial.println(systemStatus);
     }
     else if(incomingByte == '9'){
-        if(SD_CARD_EN_MEM_ADDRESS == 1)
+
+        if(sd_enabled == 1)
         {
             Serial.println("Enabling SD card");
             sd_enabled = 0;
@@ -3097,15 +2950,15 @@ void serialMenu(){
     }
     else if(incomingByte == '0')
     {
-        if (SD_CARD_EN_MEM_ADDRESS == 1)
-        {
-            Serial.println("SD card is already disabled");
-        }
-        else
+        if (sd_enabled == 0)
         {
             Serial.println("Disabling SD card");
             sd_enabled = 1;
             EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 1);
+        }
+        else
+        {
+            Serial.println("SD card is already disabled");
         }
     }
     else if(incomingByte == 'A'){
