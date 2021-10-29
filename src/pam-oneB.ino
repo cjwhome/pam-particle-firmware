@@ -596,6 +596,11 @@ void readStoredVars(void){
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
     EEPROM.get(SD_CARD_EN_MEM_ADDRESS, sd_enabled);
+    if (sd_enabled != 0 || sd_enabled != 1)
+    {
+        EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 0);
+        sd_enabled = 0;
+    }
 
     if(sensible_iot_en){
         Time.zone(0);       //use UTC if using sensible iot upload
@@ -2822,7 +2827,7 @@ void serialMenu(){
         }
     }else if(incomingByte == 'V'){
         Serial.println("Reseting the CO2 sensor");
-        t6713.resetSensor();
+        calibrateCO2("1");
 
     }else if(incomingByte == '1'){
         serialGetNO2Slope();
