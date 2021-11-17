@@ -3203,7 +3203,8 @@ void usbSerialMenu(){
 void outputCOtoPI(void)
 {
     String CO_string = "M";
-    //Serial.println("Outputting CO to PI.");
+    if (debugging_enabled)
+      Serial.println("Outputting CO to PI.");
 
     CO_string += String(CO_float_A, 3) + ",";
     CO_string += String(CO_float_B, 3) + ",";
