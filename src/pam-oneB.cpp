@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
 #include <string>
 //#include <Wire.h>
 //#include <SPI.h>
@@ -56,6 +56,8 @@ void serialSetSensibleIotEnable(void);
 void serialGetTimeDate(void);
 void serialGetZone(void);
 void serialGetAverageTime(void);
+void usbSerialGetCoZeroA(void);
+void usbSerialGetCoZeroB(void);
 String readSerBufUntilDone();
 void sendToDataFile(String receivedData);
 void sendToUploadLater(String receivedData);
@@ -67,9 +69,9 @@ void processAqsyncMessage(String data);
 int getChecksum(String data);
 bool checkStringIsValid(String data);
 int setSerialNumber(String serialNumber);
-#line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 23 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
 PRODUCT_ID(15083);
-PRODUCT_VERSION(2);
+PRODUCT_VERSION(3);
 
 bool haveOfflineData = false;
 String diagnosticData = "";
@@ -401,6 +403,11 @@ void checkCalFile(void);
 size_t readField(File* file, char* str, size_t size, const char* delim);
 void checkWifiFile(void);
 void serialMenu();
+void usbSerialMenu();
+void usbSerialGetCoZeroA();
+void usbSerialGetCoZeroB();
+void usbSerialGetCoSlopeA(void);
+void usbSerialGetCoSlopeB(void);
 void serialGetDeviceId(void);
 void serialGetCo2Zero(void);
 void serialGetCo2Slope(void);
@@ -915,6 +922,15 @@ void loop()
     systemTime = Time.now();
     Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
+    if (Serial.available() > 0) {
+        // read the incoming byte:
+        incomingByte = Serial.read();
+        Serial.println(incomingByte);
+        if(incomingByte == 'm'){
+          usbSerialMenu();
+        }
+    }
+
     if (serBuf.available() > 0)
     {
         Serial.println("recieved Data: ");
@@ -936,6 +952,7 @@ void loop()
         diagnostic_time = Time.now();
     }
     outputCOtoPI();
+    outputDataToESP();
     if (serial_cellular_enabled) 
     {
         status_word.status_int |= 0x01;
@@ -2041,12 +2058,12 @@ void outputDataToESP(void)
     }
 
     //send start delimeter to ESP
-    Serial1.print("$");
+    //Serial1.print("$");
     //send the packaged data with # delimeters in between packets
-    Serial1.write(ble_output_array, NUMBER_OF_SPECIES * BLE_PAYLOAD_SIZE);
+    //Serial1.write(ble_output_array, NUMBER_OF_SPECIES * BLE_PAYLOAD_SIZE);
 
     //send ending delimeter
-    Serial1.print("&");
+    //Serial1.print("&");
 
     /*Serial.println("Successfully output BLE string to ESP");
     for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
@@ -2767,10 +2784,476 @@ void serialMenu()
 
 }
 
+void usbSerialMenu(){
+  incomingByte = '0';
+  while(incomingByte!= 'x')
+  {
+    Serial.print("Menu>");
+    Serial.flush();
+    while(!Serial.available());
+    incomingByte = Serial.read();
+    switch (incomingByte)
+    {
+        case 'a':
+            usbSerialGetCoSlopeA();
+            break;
+        case 'b':
+            usbSerialGetCoZeroA();
+            break;
+        case 'c':
+            usbSerialGetCoSlopeB();
+            break;
+        case 'd':
+            usbSerialGetCoZeroB();
+            break;
+        case 'e':
+            Serial.printf("S %i", DEVICE_id);
+            break;
+        case 'f':
+            Serial.printf("f %s", System.deviceID());
+            break;
+        case 'g':
+            Serial.println("Turning on cellular (should already be on)");
+            EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+            break;
+
+        case 'q':
+            Serial.println("Serial debugging enabled.");
+            debugging_enabled = 1;
+            EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
+            break;
+
+        case 'r':
+            Serial.println("Serial debugging disabled.");
+            debugging_enabled = 0;
+            EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
+            break;
+
+        case 's':
+            Serial.println("activating saving offline data to send later.");
+            sending_offline = true;
+            break;
+
+        case 't':
+            serialGetTimeDate();
+            break;
+
+        case 'u':
+            serialGetZone();
+            break;
+
+        case 'v':
+            serialGetDeviceId();
+            break;
+
+        case 'w':
+            serialGetWifiCredentials();
+            break;
+
+        // case 'y':
+        //     deleteFiles();
+        //     break;
+        case 'y':
+            if (serial_cellular_enabled == 0)
+            {
+                Serial.println("Enabling Cellular.");
+            }
+            else
+            {
+                Serial.println("Cellular already enabled.");
+            }
+            serial_cellular_enabled = 1;
+            EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+            break;
+
+        case 'z':
+            printFileToSerial();
+            break;
+
+        case 'B':
+            if (output_only_particles == 1)
+            {
+                output_only_particles = 0;
+                Serial.println("Outputting normally");
+            }
+            else
+            {
+                output_only_particles = 1;
+                Serial.println("Outputting only PM");
+            }
+            EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
+            break;
+
+        case 'C':
+            if (temperature_units == FAHRENHEIT)
+            {
+                temperature_units = CELSIUS;
+            }
+            else
+            {
+                Serial.println("Temperature units already set to Celsius.");
+            }
+
+            EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
+            break;
+
+        case 'D':
+            if (new_temperature_sensor_enabled == 1)
+            {
+                new_temperature_sensor_enabled = 0;
+                Serial.println("Disabling new temperature sensor");
+            }
+            else
+            {
+
+                Serial.println("Temperature sensor already disabled");
+            }
+            EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
+            break;
+
+        case 'E':
+            if (new_temperature_sensor_enabled == 1)
+            {
+                Serial.println("Temperature sensor already enabled");
+            }
+            else
+            {
+                new_temperature_sensor_enabled = 1;
+                Serial.println("Temperatue sensor now enabled");
+            }
+            EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
+            break;
+
+        case 'F':
+            if (temperature_units == CELSIUS)
+            {
+                temperature_units = FAHRENHEIT;
+            }
+            else
+            {
+                Serial.println("Temperature units already set to Fahrenheit.");
+            }
+            EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
+            break;
+
+            //Enable analog reading of ozone and disable esp reading of ozone
+        case 'G':
+            if (ozone_analog_enabled == 1)
+            {
+                Serial.println("Analog reading of ozone already enabled");
+            }
+            else
+            {
+                ozone_analog_enabled = 1;
+                Serial.println("Analog reading of ozone now enabled");
+            }
+            EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
+            break;
+
+            //disable analog reading of ozone and read from esp
+        case 'H':
+            if (ozone_analog_enabled == 0)
+            {
+                Serial.println("Digital reading of ozone already enabled");
+            }
+            else
+            {
+                ozone_analog_enabled = 0;
+                Serial.println("Digital reading of ozone now enabled");
+            }
+            EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
+            break;
+
+            //disable analog reading of ozone and read from esp
+        case 'I':
+            serialGetAverageTime();
+            break;
+
+        case 'J':
+            resetESP();
+            Serial.println("ESP reset!");
+            break;
+
+        case 'K':
+            Serial.println("Outputting GPS continuously");
+            echoGps();
+            break;
+
+        case 'L':
+            serialResetSettings();
+            break;
+
+        case 'M':
+            //serialTestRemoteFunction();
+            if (battery_threshold_enable == 1)
+            {
+                Serial.println("Battery threshold already enabled");
+            }
+            else
+            {
+                Serial.println("Enabling battery threshold limiting");
+                battery_threshold_enable = 1;
+                EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
+            }
+            break;
+
+        case 'N':
+            //serialTestRemoteFunction();
+            if (battery_threshold_enable == 0)
+            {
+                Serial.println("Battery threshold already disabled");
+            }
+            else
+            {
+                Serial.println("Disabling battery threshold limiting");
+                battery_threshold_enable = 0;
+                EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
+            }
+            break;
+
+        case 'O':
+            //Serial.println("Changing frequency for gps");
+            //changeFrequency();
+            Serial.println("Enabling low power for gps");
+            enableLowPowerGPS();
+            break;
+
+            //turn off batfet
+        case 'P':
+            Serial.println("Turning off batfet");
+            writeRegister(7, 0b01101011);
+            break;
+
+            //allow batfet to turn on
+        /*case 'Q':
+            Serial.println("Allowing batfet to turn on");
+            writeRegister(7, 0b01001011);
+            break;*/
+
+        case 'R':
+            if (abc_logic_enabled)
+            {
+                Serial.println("Disabling ABC logic for CO2 sensor");
+                abc_logic_enabled = 0;
+                EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
+                t6713.disableABCLogic();
+            }
+            else
+            {
+                Serial.println("ABC logic already disabled");
+            }
+            break;
+
+        case 'S':
+            if (!abc_logic_enabled)
+            {
+                Serial.println("Enabling abc logic for CO2 sensor");
+                abc_logic_enabled = 1;
+                EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
+                t6713.enableABCLogic();
+            }
+            else
+            {
+                Serial.println("ABC logic already enabled");
+            }
+            break;
+
+        case 'T':
+            if (!hih8120_enabled)
+            {
+                Serial.println("Enabling HIH8120 RH sensor");
+                hih8120_enabled = 1;
+                EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
+
+            }
+            else
+            {
+                Serial.println("Disabling HIH8120 RH sensor");
+                hih8120_enabled = 0;
+                EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
+            }
+            break;
+
+        case 'U':
+            if (!CO_socket)
+            {
+                Serial.println("Now reading CO from U20-Alpha2");
+                CO_socket = 1;
+                EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
+            }
+            else
+            {
+                Serial.println("Now reading CO from U19-Alpha1");
+                CO_socket = 0;
+                EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
+            }
+            break;
+
+        case 'V':
+            Serial.println("Reseting the CO2 sensor");
+            t6713.resetSensor();
+            break;
+
+        case 'W':
+            if (google_location_en == 1)
+            {
+                Serial.println("Disabling google location services.");
+                google_location_en = 0;
+                EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
+            }
+            else
+            {
+                Serial.println("Enabling google location services.");
+                google_location_en = 1;
+                EEPROM.put(GOOGLE_LOCATION_MEM_ADDRESS, google_location_en);
+            }
+            break;
+
+            //calibrate CO2 sensor
+        case 'X':
+            t6713.calibrate(1);
+            //6 minutes if measurement cycle is 2 seconds
+            co2_calibration_timer = 180;
+            break;
+
+        case 'Z':
+            Serial.println("Getting cellular information, this may take a while...");
+            Log.info("IMEI=%s", CellularHelper.getIMEI().c_str());
+            Log.info("IMSI=%s", CellularHelper.getIMSI().c_str());
+            Log.info("ICCID=%s", CellularHelper.getICCID().c_str());
+            break;
+
+        case '3':
+            Serial.print("APP Version: ");
+            Serial.println(APP_VERSION);
+            Serial.print("Build: ");
+            Serial.println(BUILD_VERSION);
+            break;
+
+        case '4':
+            if (ozone_enabled == 0)
+            {
+                Serial.println("Enabling Ozone");
+            }
+            else
+            {
+                Serial.println("Ozone already enabled");
+            }
+            ozone_enabled = 1;
+            EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
+            break;
+
+        case '5':
+            if (ozone_enabled == 1)
+            {
+                Serial.println("Disabling Ozone");
+            }
+            else
+            {
+                Serial.println("Ozone already disabled");
+            }
+            ozone_enabled = 0;
+            EEPROM.put(OZONE_EN_MEM_ADDRESS, ozone_enabled);
+            break;
+
+        case '6':
+            if (voc_enabled == 0)
+            {
+                Serial.println("Enabling VOCs");
+            }
+            else
+            {
+                Serial.println("VOCs already enabled");
+            }
+            voc_enabled = 1;
+            EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+            break;
+
+        case '7':
+            if (voc_enabled == 1)
+            {
+                Serial.println("Disabling VOC's");
+            }
+            else
+            {
+                Serial.println("VOC's already disabled");
+            }
+            voc_enabled = 0;
+            EEPROM.put(VOC_EN_MEM_ADDRESS, voc_enabled);
+            break;
+
+        case '8':
+            Serial.print("Fault: ");
+            break;
+
+        case '9':
+            serialIncreaseChargeCurrent();
+            break;
+
+        case '0':
+            serialIncreaseInputCurrent();
+            break;
+
+        case '!':
+            Serial.println("Outputting VOCs continuously!  Press any button to exit...");
+            while (!Serial.available())
+            {
+                if (!bme.performReading())
+                {
+                    Serial.println("Failed to read BME680");
+                    return;
+                }
+                else
+                {
+                    Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance / 100, bme.temperature, bme.pressure, bme.humidity);
+                }
+            }
+            break;
+
+        case '@':
+            if (sensible_iot_en == 1)
+            {
+                Serial.println("Disabling sensible iot data push.");
+                sensible_iot_en = 0;
+                EEPROM.put(SENSIBLE_IOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
+            }
+            else
+            {
+                serialSetSensibleIotEnable();
+            }
+            break;
+
+        case '#':
+            if (car_topper_power_en == 1)
+            {
+                car_topper_power_en = 0;
+                Serial.println("Disabling car topper power.  ");
+                EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
+            }
+            else
+            {
+                car_topper_power_en = 1;
+                Serial.println("Enabling car topper power.  If no external power, system will turn off.");
+                EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
+            }
+            break;
+
+        case '*':
+            outputCOtoPI();
+            break;
+        case '?':
+            outputSerialMenuOptions();
+            break;
+    }
+  }
+  Serial.println("Exiting serial menu...");
+
+}
+
 void outputCOtoPI(void)
 {
     String CO_string = "M";
-    Serial.println("Outputting CO to PI.");
+    //Serial.println("Outputting CO to PI.");
 
     CO_string += String(CO_float_A, 3) + ",";
     CO_string += String(CO_float_B, 3) + ",";
@@ -3354,6 +3837,96 @@ void serialGetCoZeroB(void)
     }
 }
 
+void usbSerialGetCoSlopeA(void){
+
+    Serial.println();
+    Serial.print("Current COA slope:");
+    Serial.print(String(CO_slopeA, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new COA slope\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.1 && tempfloat < 2.0){
+        CO_slopeA = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("\n\rNew COA slope: ");
+        Serial.println(String(CO_slopeA,2));
+
+        EEPROM.put(CO_SLOPE_A_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
+void usbSerialGetCoSlopeB(void){
+
+    Serial.println();
+    Serial.print("Current COB slope:");
+    Serial.print(String(CO_slopeB, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new COB slope\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.1 && tempfloat < 2.0){
+        CO_slopeB = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("\n\rNew COB slope: ");
+        Serial.println(String(CO_slopeB,2));
+
+        EEPROM.put(CO_SLOPE_B_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
+void usbSerialGetCoZeroA(void){
+    Serial.println();
+    Serial.print("Current COA zero:");
+    Serial.print(CO_zeroA);
+    Serial.println(" ppb");
+    Serial.print("Enter new COA Zero\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -5000 && tempValue < 5000){
+        Serial.print("\n\rNew COA zero: ");
+        Serial.println(tempValue);
+        CO_zeroA = tempValue;
+        EEPROM.put(CO_ZERO_A_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
+void usbSerialGetCoZeroB(void){
+    Serial.println();
+    Serial.print("Current COB zero:");
+    Serial.print(CO_zeroB);
+    Serial.println(" ppb");
+    Serial.print("Enter new COB Zero\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -5000 && tempValue < 5000){
+        Serial.print("\n\rNew COB zero: ");
+        Serial.println(tempValue);
+        CO_zeroB = tempValue;
+        EEPROM.put(CO_ZERO_B_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
 String readSerBufUntilDone()
 {
     String inputString;
@@ -3618,6 +4191,10 @@ void sendAqsyncData(String data)
     // String restOfString = data.substring(s, data.length());
     // String deviceName = restOfString.substring(0, restOfString.indexOf('"'));
     int s = data.indexOf(':');
+    if (s <= 0)
+    {
+        return ;
+    }
     String deviceName = data.substring(2, s-1);
     data.replace("\\", "");
     sendToDataFile(data);
