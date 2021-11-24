@@ -470,21 +470,6 @@ int remoteWriteStoredVars(String addressAndValue)
     }
 }
 
-int remoteReadStoredVars(String mem_address) 
-{
-    uint16_t tempValue = 0;
-    int numerical_mem_address = mem_address.toInt();
-    if (numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS) 
-    {
-        EEPROM.get(numerical_mem_address, tempValue);
-        return tempValue;
-    }
-    else 
-    {
-        return -1;
-    }
-}
-
 //read all eeprom stored variables
 void readStoredVars(void) 
 {
@@ -709,6 +694,8 @@ void setup()
     Particle.function("diagnostics", sendDiagnostics);
     Particle.function("setSetting", setSetting);
     Particle.function("getSerialNumber", setSerialNumber);
+    Particle.function("geteepromdata", remoteReadStoredVars);
+    Particle.function("setEEPROM (value,address)", setEEPROMAddress);
     //Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -4009,6 +3996,34 @@ String showAndChooseFiles()
     String fileName = String(listOfFiles+numbers);
     free(listOfFiles);
     return String(fileName);
+}
+
+//send memory address and value separated by a comma
+int setEEPROMAddress(String data)
+{
+    Serial.print("This is the funciton input: ");
+    Serial.println(data);
+    int placeholder = data.indexOf(',');
+    int eepromValue = data.substring(0, placeholder).toInt();
+    int memAddress = data.substring(placeholder+1, data.length()).toInt();
+    Serial.print("This is the eeprom value: ");
+    Serial.println(eepromValue);
+    Serial.print("This is the mem address: ");
+    Serial.println(memAddress);
+    EEPROM.put(memAddress, eepromValue);
+    System.reset();
+    return 1;
+}
+
+int remoteReadStoredVars(String mem_address){
+    uint16_t tempValue = 0;
+    int numerical_mem_address = mem_address.toInt();
+    if(numerical_mem_address >= 0 && numerical_mem_address <= MAX_MEM_ADDRESS){
+        EEPROM.get(numerical_mem_address, tempValue);
+        return tempValue;
+    }else{
+        return -1;
+    }
 }
 
 
