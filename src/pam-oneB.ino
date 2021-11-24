@@ -874,6 +874,7 @@ void loop()
 
     if (Serial.available() > 0) {
         // read the incoming byte:
+        
         incomingByte = Serial.read();
         Serial.println(incomingByte);
         if(incomingByte == 'm'){
@@ -883,12 +884,16 @@ void loop()
 
     if (serBuf.available() > 0)
     {
-        Serial.println("recieved Data: ");
+        if(debugging_enabled)
+            Serial.println("recieved Data: ");
         String receivedData = serBuf.readStringUntil('\n');
-        Serial.println(receivedData);
-        Serial.println(receivedData.length());
+        if(debugging_enabled){
+            Serial.println(receivedData);
+            Serial.println(receivedData.length());
+        }
         bool isValid = checkStringIsValid(receivedData);
-        Serial.println(isValid);
+        if(debugging_enabled)
+            Serial.println(isValid);
         if (isValid)
         {
             receivedData = receivedData.substring(0, receivedData.indexOf('*'));
