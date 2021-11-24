@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
 #include <string>
 //#include <Wire.h>
 //#include <SPI.h>
@@ -70,17 +70,16 @@ void processAqsyncMessage(String data);
 int getChecksum(String data);
 bool checkStringIsValid(String data);
 int setSerialNumber(String serialNumber);
-#line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 23 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
 PRODUCT_ID(15083);
-PRODUCT_VERSION(3);
-
+PRODUCT_VERSION(4);
 bool haveOfflineData = false;
 String diagnosticData = "";
 
 #define SERIAL_PASSWORD "bould"
 
 #define APP_VERSION 70
-#define BUILD_VERSION 13
+#define BUILD_VERSION 14
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -1874,7 +1873,7 @@ void outputDataToESP(void)
         Serial.println(cloud_output_string);
     }
 
-    outputToCloud(cloud_output_string, "blahfornow");
+    //outputToCloud(cloud_output_string, "blahfornow");
 
     if (esp_wifi_connection_status)
     {

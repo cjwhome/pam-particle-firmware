@@ -21,15 +21,14 @@
 #include "SerialBufferRK.h"
 
 PRODUCT_ID(15083);
-PRODUCT_VERSION(3);
-
+PRODUCT_VERSION(4);
 bool haveOfflineData = false;
 String diagnosticData = "";
 
 #define SERIAL_PASSWORD "bould"
 
 #define APP_VERSION 70
-#define BUILD_VERSION 13
+#define BUILD_VERSION 14
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -1823,7 +1822,7 @@ void outputDataToESP(void)
         Serial.println(cloud_output_string);
     }
 
-    outputToCloud(cloud_output_string, "blahfornow");
+    //outputToCloud(cloud_output_string, "blahfornow");
 
     if (esp_wifi_connection_status)
     {
