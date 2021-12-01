@@ -2808,6 +2808,8 @@ void outputCOtoPI(void)
     {
         CO_string += '0';
     }
+    CO_string += ',';
+    CO_string += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
 
     int checksum = 0;
     for (int i = 0; i < CO_string.length(); i++)
