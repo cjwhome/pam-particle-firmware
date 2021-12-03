@@ -36,7 +36,6 @@
 //#include "Serial1/Serial1.h"
 #include "../lib/SdFat/src/SdFat.h"
 #include "HIH61XX.h"
-#include "google-maps-device-locator.h"
 #include "CellularHelper.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
@@ -99,8 +98,9 @@ int setUploadSpeed(String uploadSpeed);
 int calibrateCO2(String nothing);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 37 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
-GoogleMapsDeviceLocator locator;
+#line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+PRODUCT_ID(15205);
+PRODUCT_VERSION(1);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
