@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 #include <string>
 //#include <Wire.h>
 //#include <SPI.h>
@@ -70,7 +70,7 @@ void processAqsyncMessage(String data);
 int getChecksum(String data);
 bool checkStringIsValid(String data);
 int setSerialNumber(String serialNumber);
-#line 23 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15083);
 PRODUCT_VERSION(4);
 bool haveOfflineData = false;
@@ -1453,17 +1453,16 @@ float readHumidity(void)
 //read Carbon monoxide alphasense sensor
 float readCO_A(void)
 {
-    //float float_offset;
+    float float_offset;
     float CO_float;
 
     CO_float = readAlpha1();
 
-    // float_offset = CO_zeroA;
-    // float_offset /= 1000;
+    float_offset = CO_zeroA;
+    float_offset /= 1000;
 
     CO_float *= CO_slopeA;
-    CO_float += CO_zeroA;
-    // CO_float += float_offset;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -1471,17 +1470,16 @@ float readCO_A(void)
 //read Carbon monoxide alphasense sensor
 float readCO_B(void)
 {
-    //float float_offset;
+    float float_offset;
     float CO_float;
 
     CO_float = readAlpha2();
 
-    // float_offset = CO_zeroB;
-    // float_offset /= 1000;
+    float_offset = CO_zeroB;
+    float_offset /= 1000;
 
     CO_float *= CO_slopeB;
-    CO_float += CO_zeroB;
-    // CO_float += float_offset;
+    CO_float += float_offset;
 
     return CO_float;
 }

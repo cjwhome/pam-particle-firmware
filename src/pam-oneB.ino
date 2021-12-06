@@ -1402,17 +1402,16 @@ float readHumidity(void)
 //read Carbon monoxide alphasense sensor
 float readCO_A(void)
 {
-    //float float_offset;
+    float float_offset;
     float CO_float;
 
     CO_float = readAlpha1();
 
-    // float_offset = CO_zeroA;
-    // float_offset /= 1000;
+    float_offset = CO_zeroA;
+    float_offset /= 1000;
 
     CO_float *= CO_slopeA;
-    CO_float += CO_zeroA;
-    // CO_float += float_offset;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -1420,17 +1419,16 @@ float readCO_A(void)
 //read Carbon monoxide alphasense sensor
 float readCO_B(void)
 {
-    //float float_offset;
+    float float_offset;
     float CO_float;
 
     CO_float = readAlpha2();
 
-    // float_offset = CO_zeroB;
-    // float_offset /= 1000;
+    float_offset = CO_zeroB;
+    float_offset /= 1000;
 
     CO_float *= CO_slopeB;
-    CO_float += CO_zeroB;
-    // CO_float += float_offset;
+    CO_float += float_offset;
 
     return CO_float;
 }
