@@ -100,7 +100,7 @@ int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 #line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15205);
-PRODUCT_VERSION(1);
+PRODUCT_VERSION(2);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
@@ -504,21 +504,20 @@ void outputToCloud(String data, String sensible_data){
         webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
+            if (sensible_iot_en == 1)
+            {
+                data += "2";
+            }
+            else
+            {
+                data += "0";
+            }
             status_word.status_int |= 0x0002;
-            Particle.publish("pamup", data, PRIVATE);
+            Particle.publish("AQLite Upload Dev", data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
               Serial.println("Published pamup data!");
               writeLogFile("Published pamup data!");
-            }
-            if(sensible_iot_en){
-                Particle.publish("sensibleAQLiteUp", sensible_data, PRIVATE);
-                //testsensible();
-                Particle.process();
-                if(debugging_enabled){
-                    Serial.println("Published sensible data!");
-                    writeLogFile("Published sensible data!");
-                }
             }
         }else{
             if(serial_cellular_enabled == 0){
