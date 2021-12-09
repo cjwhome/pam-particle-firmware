@@ -1329,7 +1329,7 @@ void loop() {
       }
     }
 
-    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() == 4)){
+    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() != 2)){
         Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
