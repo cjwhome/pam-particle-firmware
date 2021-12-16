@@ -3276,7 +3276,7 @@ void outputCOtoPI(void)
 
     if (Particle.connected())
     {
-        CO_string += '1';
+        CO_string += '1,';
     }
     else 
     {
