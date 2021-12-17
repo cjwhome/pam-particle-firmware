@@ -893,7 +893,7 @@ void loop()
         diagnostic_time = Time.now();
     }
     outputCOtoPI();
-    outputDataToESP();
+    // outputDataToESP();
     if (serial_cellular_enabled) 
     {
         status_word.status_int |= 0x01;
@@ -3231,6 +3231,9 @@ void outputCOtoPI(void)
     {
         CO_string += '0';
     }
+    Serial.println("The string before time: "+CO_string);
+    CO_string += ","+String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
+    Serial.println("The string after time: "+CO_string);
 
     int checksum = 0;
     for (int i = 0; i < CO_string.length(); i++)
