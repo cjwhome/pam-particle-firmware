@@ -39,7 +39,7 @@
 #include "CellularHelper.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
-void outputToCloud(String data, String sensible_data);
+void outputToCloud();
 void check_wifi_file(void);
 void setup();
 void loop();
@@ -95,6 +95,7 @@ String readSerBufUntilDone();
 void printFileToSerial();
 String showAndChooseFiles();
 int setUploadSpeed(String uploadSpeed);
+int setSkipReadings(String numberOfSkips);
 int calibrateCO2(String nothing);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
@@ -104,7 +105,7 @@ PRODUCT_VERSION(2);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
-#define AQLITE_VERSION 2
+#define AQLITE_VERSION 3
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -128,6 +129,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 //enable AFE 2 (just for testing now using a second CO sensor connected to it)
 #define AFE2_en 0
+
+// The amount of measurements we skip right after we send an upload
+#define NUMBER_OF_MEASUREMENTS_SKIP 5
 
 //define addresses of eeprom stored variables
 #define DEVICE_ID_MEM_ADDRESS 0
@@ -166,7 +170,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define GOOGLE_LOCATION_MEM_ADDRESS 136
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
-#define MAX_MEM_ADDRESS 144
+#define NUMBER_OF_MEASUREMENTS_SKIP 148
+#define MAX_MEM_ADDRESS 148
 
 
 //max and min values
@@ -313,11 +318,18 @@ char geolocation_accuracy[6] = "255.0";
 //used for averaging
 float CO_sum = 0;
 float CO2_sum = 0;
+float NO2_sum = 0;
 float O3_sum = 0;
-
+float O3_celltemp_sum = 0;
+float pressure_sum = 0;
+float humidity_sum = 0;
+float PM1_sum = 0;
 float PM25_sum = 0;
 float PM10_sum = 0;
+
 int measurement_count = 0;
+int ozone_measurement_count = 0;
+int number_of_measurements_skip;
 
 
 //calibration parameters
@@ -428,6 +440,7 @@ void serialTestRemoteFunction(void);
 void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
 String buildHeaderString();
+String buildAverageCloudString();
 
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
@@ -487,33 +500,89 @@ String buildHeaderString()
     Particle.publish("testJson", data, PRIVATE);
 }*/
 //todo: average everything except ozone
-void outputToCloud(String data, String sensible_data){
+void outputToCloud(){
     String webhook_data = " ";
-    CO_sum += CO_float;
-    CO2_sum += CO2_float;
-    O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
+    if (measurement_count >= number_of_measurements_skip)
+    {
+        CO_sum += CO_float;
+        CO2_sum += CO2_float;
+        PM1_sum += PM01Value;
+        PM25_sum += corrected_PM_25;
+        PM10_sum += PM10Value;
+        pressure_sum += bme.pressure / 100.0;
+        humidity_sum += readHumidity();
+
+        if (NO2_enabled)
+        {
+            NO2_sum += NO2_float;
+        }
+
+        // if (sd.begin(CS)){
+        //     log_file.open("average test", O_CREAT | O_APPEND | O_WRITE);
+        //     log_file.print("This is the count: ");
+        //     log_file.println(measurement_count);
+        //     log_file.print("This is the Co_float value: ");
+        //     log_file.println(CO_float);
+        //     log_file.print("This is the CO_sum: ");
+        //     log_file.println(CO_sum);
+
+        //     log_file.close();
+        // }
+        // else
+        // {
+        //     Serial.println("Unable to write to log file");
+        // }
+
+    }
     measurement_count++;
 
-    if(measurement_count == measurements_to_average){
-        CO_sum /= measurements_to_average;
-        CO2_sum /= measurements_to_average;
-        //O3_sum /= measurements_to_average;
+    if(measurement_count == measurements_to_average)
+    {
+        int fixed_count = measurement_count-number_of_measurements_skip;
+        CO_sum /= fixed_count;
+        CO2_sum /= fixed_count;
+        PM1_sum /= fixed_count;
+        PM25_sum /= fixed_count;
+        PM10_sum /= fixed_count;
+        pressure_sum /= fixed_count;
+        humidity_sum /= fixed_count;
 
-        measurement_count = 0;
-        String webhook_data = String(DEVICE_id) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM01Value + ",PM2.5: " + corrected_PM_25 + ", PM10: " + PM10Value + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
-        webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",O3: " + O3_sum + "\n\r";
+        if (NO2_enabled)
+        {
+            NO2_sum /= fixed_count;
+        }
+
+        O3_sum /= ozone_measurement_count;
+        O3_celltemp_sum /= ozone_measurement_count;
+
+        // if (sd.begin(CS)){
+        //     log_file.open("average test", O_CREAT | O_APPEND | O_WRITE);
+        //     log_file.println("-----------------------------------------");
+        //     log_file.print("This is the Co_sum value: ");
+        //     log_file.println(CO_sum);
+
+        //     log_file.close();
+        // }
+        // else
+        // {
+        //     Serial.println("Unable to write to log file");
+        // }
+
+        String webhook_data = buildAverageCloudString();
+        //String(DEVICE_id) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM1_sum + ",PM2.5: " + PM25_sum + ", PM10: " + PM10_sum + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
+        //webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",O3: " + O3_sum + "\n\r";
 
         if(Particle.connected() && serial_cellular_enabled){
             if (sensible_iot_en == 1)
             {
-                data += "2";
+                webhook_data += "2";
             }
             else
             {
-                data += "0";
+                webhook_data += "0";
             }
             status_word.status_int |= 0x0002;
-            Particle.publish("AQLite Upload Dev", data, PRIVATE);
+            Particle.publish("AQLite Upload Dev", webhook_data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
               Serial.println("Published pamup data!");
@@ -536,7 +605,17 @@ void outputToCloud(String data, String sensible_data){
         }
         CO_sum = 0;
         CO2_sum = 0;
+        NO2_sum = 0;
         O3_sum = 0;
+        PM1_sum = 0;
+        PM25_sum = 0;
+        PM10_sum = 0;
+        pressure_sum = 0;
+        humidity_sum = 0;
+        O3_celltemp_sum = 0;
+
+        measurement_count = 0;
+        ozone_measurement_count = 0;
     }
 }
 
@@ -645,6 +724,14 @@ void readStoredVars(void){
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
+
+    EEPROM.get(NUMBER_OF_MEASUREMENTS_SKIP, number_of_measurements_skip);
+
+    // We don't want this to ever be less than 5.
+    if (number_of_measurements_skip < 5)
+    {
+        number_of_measurements_skip = 5;
+    }
 
     if(sensible_iot_en){
         Time.zone(0);       //use UTC if using sensible iot upload
@@ -871,6 +958,7 @@ void setup()
     Particle.function("calibrate CO2", calibrateCO2);
     Particle.function("setEEPROM (value,address)", setEEPROMAddress);
     Particle.function("setSerialNumber", setSerialNumber);
+    Particle.function("setSkipReadings", setSkipReadings);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
@@ -1178,11 +1266,12 @@ void loop()
         Serial.printf("Pressure=%1.2f\n\r", pressure_correction);
 
     }
-    // This line will always grab the Ozone data from the 108. I am doing this because this is for the AQLite, which will always have a 108.
-    getEspOzoneData();
+
 
     //read PM values and apply calibration factors
     readPlantower();
+        // This line will always grab the Ozone data from the 108. I am doing this because this is for the AQLite, which will always have a 108.
+    getEspOzoneData();
 
     pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
     if(debugging_enabled){
@@ -2005,16 +2094,12 @@ void outputDataToESP(void){
     //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/
     //This is different than the ble packet in that we are putting all of the data that we have in one packet
     //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
-    String cloud_output_string = "";    //create a clean string
     String csv_output_string = "";
     String sensible_string = "";
     String latitude_string = "";
     String longitude_string = "";
 
     char sensible_buf[259];
-    cloud_output_string += '^';         //start delimeter
-    cloud_output_string += String(1) + ";";           //header
-    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
     csv_output_string += String(DEVICE_id) + ",";
 
 
@@ -2066,13 +2151,10 @@ void outputDataToESP(void){
     writer.endObject();
     writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0;
 
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
     csv_output_string += String(CO_float, 3) + ",";
-        cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
     if (NO2_enabled)
     {
-        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
 
@@ -2081,70 +2163,47 @@ void outputDataToESP(void){
     //     cloud_output_string += String(VOC_PACKET_CONSTANT) + String(air_quality_score, 1);
     //     csv_output_string += String(air_quality_score, 1) + ",";
     // }
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
+   
     csv_output_string += String(PM01Value) + ",";
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
+    
     csv_output_string += String(corrected_PM_25, 0) + ",";
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
+    
     csv_output_string += String(PM10Value) + ",";
-    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(O3_CellTemp, 1);
+    
     csv_output_string += String(O3_CellTemp, 1) + ",";
-    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
+    
     csv_output_string += String(bme.pressure / 100.0, 1) + ",";
-    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
+    
     csv_output_string += String(readHumidity(), 1) + ",";
-        cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_float, 1);
+        
         csv_output_string += String(O3_float, 1) + ",";
-    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
+    
     csv_output_string += String(fuel.getSoC(), 1) + ",";
-
-    cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
 
     if(gps.get_latitude() != 0){
         if(gps.get_nsIndicator() == 0){
             csv_output_string += "-";
-            cloud_output_string += "-";
         }
         csv_output_string += String(gps.get_latitude()) + ",";
-        cloud_output_string += String(gps.get_latitude());
     }else{
         csv_output_string += String(geolocation_latitude)+ ",";
-        cloud_output_string += String(geolocation_latitude);
     }
 
-    cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
 
     if(gps.get_longitude() != 0){
         if(gps.get_ewIndicator() == 0x01){
             csv_output_string += "-";
-            cloud_output_string += "-";
         }
         csv_output_string += String(gps.get_longitude()) + ",";
-        cloud_output_string += String(gps.get_longitude());
     }else{
         csv_output_string += String(geolocation_longitude) + ",";
-        cloud_output_string += String(geolocation_longitude);
     }
-
-    cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
     
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
-    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
-    cloud_output_string += '&';
-    if(debugging_enabled){
-        Serial.println("Line to write to cloud:");
-        Serial.println(cloud_output_string);
-    }
+
+    outputToCloud();
     
-    outputToCloud(cloud_output_string, sensible_buf);
-    
-    if(esp_wifi_connection_status){
-        if(debugging_enabled){
-            Serial.println("Sending data to esp to upload via wifi...");
-            writeLogFile("Sending data to esp to upload via wifi");
-          }
-        Serial1.println(cloud_output_string);
-    }
+
     Serial.println(csv_output_string);
 
     //write data to file
@@ -2163,10 +2222,6 @@ void outputDataToESP(void){
 
         file.close();
     }
-    //delay(5000);
-
-    //Serial.print("Successfully output Cloud string to ESP: ");
-    //Serial.println(cloud_output_string);
 
     //create an array of binary data to store and send all data at once to the ESP
     //Each "section" in the array is separated by a #
@@ -2434,9 +2489,13 @@ void getEspOzoneData(void){
         { 
             case 0:
                 O3_float = nextData.toFloat();
+                ozone_measurement_count += 1;
+                // I would normally do this averaging with the other varibales, but this is the only way to make sure we are only suming ozone when we get the new measurement
+                O3_sum += O3_float;
                 break;
             case 1:
                 O3_CellTemp = nextData.toFloat();
+                O3_celltemp_sum += O3_CellTemp;
                 break;
             case 2: 
                 O3_CellPress = nextData.toFloat();
@@ -3882,7 +3941,15 @@ int setUploadSpeed(String uploadSpeed)
     measurements_to_average = newAverage;
     measurement_count == 0;
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
-    return 1;
+    return newAverage;
+}
+
+int setSkipReadings(String numberOfSkips)
+{
+    int numOfSkips = numberOfSkips.toInt();
+    number_of_measurements_skip = numOfSkips;
+    EEPROM.put(NUMBER_OF_MEASUREMENTS_SKIP, number_of_measurements_skip);
+    return numOfSkips;
 }
 
 int calibrateCO2(String nothing) // this has a nothing string so we can call this as a function using the particle.io stuff.
@@ -3926,6 +3993,65 @@ int setSerialNumber(String serialNumber)
     }
     EEPROM.put(DEVICE_ID_MEM_ADDRESS, serialNumber.toInt());
     return 1;
+}
+
+String buildAverageCloudString()
+{
+    String cloud_output_string = "";    //create a clean string
+    cloud_output_string += '^';         //start delimeter
+    cloud_output_string += String(1) + ";";           //header
+    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_sum, 3);
+    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_sum, 0);
+    if (NO2_enabled)
+    {
+        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
+    }
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM1_sum);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM25_sum, 0);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10_sum);
+    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(O3_CellTemp, 1);
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
+    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
+    cloud_output_string += String(OZONE_PACKET_CONSTANT) + String(O3_sum, 1);
+    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
+    cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
+
+    if(gps.get_latitude() != 0){
+        if(gps.get_nsIndicator() == 0){
+            cloud_output_string += "-";
+        }
+        cloud_output_string += String(gps.get_latitude());
+    }else{
+        cloud_output_string += String(geolocation_latitude);
+    }
+
+    cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
+
+    if(gps.get_longitude() != 0){
+        if(gps.get_ewIndicator() == 0x01){
+            cloud_output_string += "-";
+        }
+        cloud_output_string += String(gps.get_longitude());
+    }else{
+        cloud_output_string += String(geolocation_longitude);
+    }
+
+    cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
+    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
+    cloud_output_string += '&';
+    if(debugging_enabled){
+        Serial.println("Line to write to cloud:");
+        Serial.println(cloud_output_string);
+    }
+    if(esp_wifi_connection_status){
+        if(debugging_enabled){
+            Serial.println("Sending data to esp to upload via wifi...");
+            writeLogFile("Sending data to esp to upload via wifi");
+        }
+        Serial1.println(cloud_output_string);
+    }
+    return cloud_output_string;
 }
 
 void outputSerialMenuOptions(void){
