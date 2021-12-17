@@ -72,7 +72,7 @@ bool checkStringIsValid(String data);
 int setSerialNumber(String serialNumber);
 #line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15083);
-PRODUCT_VERSION(4);
+PRODUCT_VERSION(5);
 bool haveOfflineData = false;
 String diagnosticData = "";
 
@@ -213,6 +213,7 @@ int esp_wroom_en = D7;
 int blower_en = D2;
 int sound_input = B5;       //ozone monitor's voltage output is connected to this input
 int co2_en = C5;            //enables the CO2 sensor power
+int plantower_select = D3;
 
 std::allocator<String> alloc;
 std::vector<String> diagnostics;
@@ -700,6 +701,7 @@ void setup()
     pinMode(blower_en, OUTPUT);
     //pinMode(D4, INPUT);
     pinMode(co2_en, OUTPUT);
+    pinMode(plantower_select, OUTPUT);
 
     //read all stored variables (calibration parameters)
     readStoredVars();
@@ -738,6 +740,7 @@ void setup()
     digitalWrite(blower_en, HIGH);
     digitalWrite(co2_en, HIGH);
     digitalWrite(fiveVolt_en, HIGH);
+    digitalWrite(plantower_select, LOW);
 
     // register the cloud function
     Particle.function("RebootADevice", rebootDevice);
@@ -3282,9 +3285,7 @@ void outputCOtoPI(void)
     {
         CO_string += '0';
     }
-    Serial.println("The string before time: "+CO_string);
     CO_string += ","+String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
-    Serial.println("The string after time: "+CO_string);
 
     int checksum = 0;
     for (int i = 0; i < CO_string.length(); i++)
