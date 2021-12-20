@@ -101,7 +101,7 @@ int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 #line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15205);
-PRODUCT_VERSION(2);
+PRODUCT_VERSION(3);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
@@ -2200,7 +2200,6 @@ void outputDataToESP(void){
     }
     
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
-
     outputToCloud();
     
 
@@ -4038,6 +4037,11 @@ String buildAverageCloudString()
     }
 
     cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
+    if (gps.get_longitude() != 0) {
+        cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
+    } else {
+        cloud_output_string += String(geolocation_accuracy);
+    }
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
     if(debugging_enabled){
