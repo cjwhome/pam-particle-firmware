@@ -34,7 +34,7 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(15205);
-PRODUCT_VERSION(3);
+PRODUCT_VERSION(4);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
@@ -516,6 +516,8 @@ void outputToCloud(){
             }
             status_word.status_int |= 0x0002;
             Particle.publish("AQLite Upload Dev", webhook_data, PRIVATE);
+            Particle.process(); //attempt at ensuring the publish is complete before sleeping
+            Particle.publish("AQLite Upload", webhook_data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             if(debugging_enabled){
               Serial.println("Published pamup data!");
@@ -3988,6 +3990,7 @@ String buildAverageCloudString()
         }
         Serial1.println(cloud_output_string);
     }
+    
     return cloud_output_string;
 }
 
