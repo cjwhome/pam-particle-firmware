@@ -292,6 +292,7 @@ int co2_calibration_timer = 0;
 
 int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
 
+bool restart = false;
 
 //serial menu variables
 int addr;
@@ -1284,6 +1285,10 @@ void loop()
         if(debugging_enabled){
             t6713.readStatus(1);
         }
+    }
+    if (restart == true)
+    {
+        System.reset();
     }
 }
 
@@ -3875,6 +3880,7 @@ int setUploadSpeed(String uploadSpeed)
     measurements_to_average = newAverage;
     measurement_count == 0;
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
+    restart = true;
     return newAverage;
 }
 
@@ -3899,7 +3905,7 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
         digitalWrite(power_led_en, LOW);    // Sets the LED off
         delay(250);
     }
-    System.reset();
+    restart = true;
     return 1;
 
 }
@@ -3916,7 +3922,7 @@ int setEEPROMAddress(String data)
     Serial.print("This is the mem address: ");
     Serial.println(memAddress);
     EEPROM.put(memAddress, eepromValue);
-    System.reset();
+    restart = true;
 }
 
 int setSerialNumber(String serialNumber)
