@@ -44,6 +44,7 @@ void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
 int rebootDevice(String deviceName);
+int restartPAM(String placeholder);
 int sendDiagnostics(String deviceName);
 int setSetting(String information);
 void goToSleep(void);
@@ -72,7 +73,7 @@ bool checkStringIsValid(String data);
 int setSerialNumber(String serialNumber);
 #line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15083);
-PRODUCT_VERSION(5);
+PRODUCT_VERSION(6);
 bool haveOfflineData = false;
 String diagnosticData = "";
 
@@ -309,7 +310,8 @@ float O3_sum = 0;
 float PM25_sum = 0;
 float PM10_sum = 0;
 int measurement_count = 0;
-double sound_average;
+float sound_average = 0;
+bool restart = false;
 
 //calibration parameters
 float CO2_slope;
@@ -749,6 +751,7 @@ void setup()
     Particle.function("getSerialNumber", setSerialNumber);
     Particle.function("geteepromdata", remoteReadStoredVars);
     Particle.function("setEEPROM (value,address)", setEEPROMAddress);
+    Particle.function("restartPAM", restartPAM);
     //Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -1002,10 +1005,14 @@ void loop()
     powerCheck.loop();
 
     //Serial.printf("hasPower=%d hasBattery=%d isCharging=%d\n\r", powerCheck.getHasPower(), powerCheck.getHasBattery(), powerCheck.getIsCharging());
-    if ((battery_threshold_enable == 1) && (fuel.getSoC() < BATTERY_THRESHOLD) && (powerCheck.getHasPower() == 0)) 
+    if ((powerCheck.getHasPower() == 0)) 
     {
-        Serial.println("Going to sleep because battery is below 20% charge");
+        Serial.println("Going to sleep since AQSync is turned off");
         goToSleepBattery();
+    }
+    if (restart == 1)
+    {
+        System.reset();
     }
 }
 
@@ -2139,6 +2146,12 @@ int rebootDevice(String deviceName)
     }
     command += checksumMaker(command)+'\n';
     serBuf.print(command);
+    return 1;
+}
+
+int restartPAM(String placeholder) // Calling this function will just restart the system
+{
+    restart = true;
     return 1;
 }
 
@@ -4063,7 +4076,7 @@ int setEEPROMAddress(String data)
     Serial.print("This is the mem address: ");
     Serial.println(memAddress);
     EEPROM.put(memAddress, eepromValue);
-    System.reset();
+    restart = 1;
     return 1;
 }
 
