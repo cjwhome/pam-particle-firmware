@@ -351,6 +351,7 @@ bool pressed_button = false;
 time_t pushed_time = NULL;
 
 int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
+bool restart = false;
 
 //serial menu variables
 int addr;
@@ -1329,7 +1330,7 @@ void loop() {
       }
     }
 
-    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() != 2)){
+    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() == 4)){
         Serial.println("Going to sleep because battery is below 20% charge");
         goToSleepBattery();
     }
@@ -1341,6 +1342,10 @@ void loop() {
         }
     }
     checkESPWorking();
+    if (restart == true)
+    {
+        System.reset();
+    }
 }
 
 
@@ -3734,7 +3739,7 @@ int setUploadSpeed(String uploadSpeed)
     measurements_to_average = newAverage;
     measurement_count = 0;
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
-    System.reset();
+    restart = true;
     return 1;
 }
 
@@ -3757,7 +3762,7 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
         digitalWrite(power_led_en, LOW);    // Sets the LED off
         delay(250);
     }
-    System.reset();
+    restart = true;
     return 1;
     // Add a check in the middle to see if you press the button more. If so, turn off and on.
 }
@@ -3781,7 +3786,7 @@ int setEEPROMAddress(String data)
     Serial.print("This is the mem address: ");
     Serial.println(memAddress);
     EEPROM.put(memAddress, eepromValue);
-    System.reset();
+    restart = 1;
     return 1;
 }
 
