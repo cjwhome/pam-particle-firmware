@@ -683,7 +683,6 @@ void writeDefaultSettings(void)
 void setup()
 {
 
-    serial_cellular_enabled = 1;
     status_word.status_int = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
     status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
@@ -951,6 +950,7 @@ void loop()
     }
     outputCOtoPI();
     // outputDataToESP();
+
     if (serial_cellular_enabled) 
     {
         status_word.status_int |= 0x01;
@@ -2341,6 +2341,7 @@ void serialMenu()
                     break;
                 case 'g':
                     Serial.println("Turning on cellular (should already be on)");
+                    serial_cellular_enabled = 1;
                     EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
                     break;
 
@@ -2384,13 +2385,16 @@ void serialMenu()
                     if (serial_cellular_enabled == 0)
                     {
                         Serial.println("Enabling Cellular.");
+                        serial_cellular_enabled = 1;
+                        EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
                     }
                     else
                     {
-                        Serial.println("Cellular already enabled.");
+                        Serial.println("Disabling cellular");
+                        serial_cellular_enabled = 0;
+                        EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
                     }
-                    serial_cellular_enabled = 1;
-                    EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+
                     break;
 
                 case 'z':
@@ -2862,14 +2866,16 @@ void usbSerialMenu(){
         case 'y':
             if (serial_cellular_enabled == 0)
             {
+                serial_cellular_enabled = 1;
+                EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
                 Serial.println("Enabling Cellular.");
             }
             else
             {
-                Serial.println("Cellular already enabled.");
+                serial_cellular_enabled = 0;
+                EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
+                Serial.println("Disabling cellular.");
             }
-            serial_cellular_enabled = 1;
-            EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
             break;
 
         case 'z':
@@ -4109,8 +4115,7 @@ void outputSerialMenuOptions(void)
     Serial.println("u:  Enter new time zone");
     Serial.println("v:  Adjust the Device ID");
     Serial.println("w:  Get wifi credentials");
-    Serial.println("y:  List files to choose what to delete");
-    Serial.println("z:  List files to choose what to print in serial");
+    Serial.println("y:  Toggle Cellular connection (for calibration)");
     Serial.println("1:  Adjust gas lower limit");
     Serial.println("2:  Adjust gas upper limit");
     Serial.println("3:  Get build version");
