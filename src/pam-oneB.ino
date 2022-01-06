@@ -48,7 +48,7 @@ PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 22
+#define BUILD_VERSION 24
 
 
 //define constants
@@ -989,7 +989,7 @@ void setup()
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_1_en, LOW); //enable the chip
 
-    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_TIA_ON) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for CO");
           if(debugging_enabled){
@@ -1033,7 +1033,7 @@ void setup()
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_2_en, LOW); //enable the chip
 
-    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_TIA_ON) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for 2");
           writeLogFile("Couldn't communicate with LMP91000 for 2");
@@ -1783,15 +1783,22 @@ float readAlpha1(void){
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
         volt2_temperature = A2_temperature * ads_bitmv;
+        volt2_temperature = -volt2_temperature*0.12345679 + 191.481;
         volt_half_Vref = half_Vref * ads_bitmv;
 
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
+        if(debugging_enabled){
+            Serial.print("Sensor1 temperature:");
+            Serial.print(volt2_temperature, 1);
+            Serial.print(", ambient temperature:");
+            Serial.println(readTemperature());
+        }
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
+        if(volt2_temperature <= 15){
           correctedCurrent = ((sensorCurrent) - (auxCurrent));
         }
-        else if(readTemperature() <= 25){
+        else if(volt2_temperature <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
         else{
@@ -1891,18 +1898,26 @@ float readAlpha2(void){
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
         volt2_temperature = A2_temperature * ads_bitmv;
+        volt2_temperature = -volt2_temperature*0.12345679 + 191.481;                    //B2*-0.12345679 + 191.481
         volt_half_Vref = half_Vref * ads_bitmv;
 
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
+
+        if(debugging_enabled){
+            Serial.print("Sensor2 temperature:");
+            Serial.print(volt2_temperature, 1);
+            Serial.print(", ambient temperature:");
+            Serial.println(readTemperature());
+        }
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
+        if(volt2_temperature <= 15){
           correctedCurrent = ((sensorCurrent) - (auxCurrent));
         }
-        else if(readTemperature() <= 25){
+        else if(volt2_temperature <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
-        else if(readTemperature() > 25){
+        else if(volt2_temperature > 25){
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
         alpha2_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
