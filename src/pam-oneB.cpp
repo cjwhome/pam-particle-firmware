@@ -65,8 +65,9 @@ float readTemperature(void);
 float readHumidity(void);
 float readNO2(void);
 float readCO2(void);
-float readAlpha1(void);
-float readAlpha2(void);
+float readAlpha1(float sensor_temperature);
+float readAlpha2(float sensor_temperature);
+float read_sensor_temperature(void);
 void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
@@ -112,7 +113,7 @@ PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 22
+#define BUILD_VERSION 24
 
 
 //define constants
@@ -1053,7 +1054,7 @@ void setup()
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_1_en, LOW); //enable the chip
 
-    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_TIA_ON) == 0)
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for CO");
           if(debugging_enabled){
@@ -1097,7 +1098,7 @@ void setup()
     Wire.begin();   //this must be done for the LMP91000
     digitalWrite(lmp91000_2_en, LOW); //enable the chip
 
-    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_TIA_ON) == 0)
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
     {
           Serial.println("Couldn't communicate with LMP91000 for 2");
           writeLogFile("Couldn't communicate with LMP91000 for 2");
@@ -1725,8 +1726,9 @@ float readCO(void){
     
     float_offset = CO_zero;
     float_offset /= 1000;
-
-    CO_float = readAlpha2();
+    float sensor_temperature = read_sensor_temperature();
+    //float sensor_temperature = 30;
+    CO_float = readAlpha2(sensor_temperature);
 
     CO_float *= CO_slope;
     CO_float += float_offset;
@@ -1739,8 +1741,9 @@ float readNO2(void){
 
     float_offset = NO2_zero;
     float_offset /= 1000;
-
-    NO2_float = readAlpha1();
+    float sensor_temperature = read_sensor_temperature();
+     //float sensor_temperature = 30;
+    NO2_float = readAlpha1(sensor_temperature);
 
     NO2_float *= NO2_slope;
     NO2_float += float_offset;
@@ -1766,7 +1769,7 @@ float readCO2(void){
     
     return CO2_float;
 }
-float readAlpha1(void){
+float readAlpha1(float sensor_temperature){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -1835,19 +1838,19 @@ float readAlpha1(void){
         for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
           A0_gas += ads1.readADC_SingleEnded(0); //gas
           A1_aux += ads1.readADC_SingleEnded(1); //aux out
-          A2_temperature += ads1.readADC_SingleEnded(2); //temperature
+          //A2_temperature += ads1.readADC_SingleEnded(2); //temperature
           half_Vref += ads1.readADC_SingleEnded(3); //half of Vref
         }
 
         A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
         A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
+        //A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
         half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
-        volt2_temperature = A2_temperature * ads_bitmv;
-        volt2_temperature = -volt2_temperature*0.12345679 + 191.481;
+        //volt2_temperature = A2_temperature * ads_bitmv;
+        //volt2_temperature = -volt2_temperature*0.12345679 + 191.481;
         volt_half_Vref = half_Vref * ads_bitmv;
 
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
@@ -1859,10 +1862,10 @@ float readAlpha1(void){
             Serial.println(readTemperature());
         }
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(volt2_temperature <= 15){
+        if(sensor_temperature <= 15){
           correctedCurrent = ((sensorCurrent) - (auxCurrent));
         }
-        else if(volt2_temperature <= 25){
+        else if(sensor_temperature <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
         else{
@@ -1885,7 +1888,7 @@ float readAlpha1(void){
       return alpha1_ppmraw;
 }
 
-float readAlpha2(void){
+float readAlpha2(float sensor_temperature){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -1950,19 +1953,19 @@ float readAlpha2(void){
         for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
           A0_gas += ads2.readADC_SingleEnded(0); //gas
           A1_aux += ads2.readADC_SingleEnded(1); //aux out
-          A2_temperature += ads2.readADC_SingleEnded(2); //temperature
+          //A2_temperature += ads2.readADC_SingleEnded(2); //temperature
           half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
         }
 
         A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
         A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
+        //A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
         half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
-        volt2_temperature = A2_temperature * ads_bitmv;
-        volt2_temperature = -volt2_temperature*0.12345679 + 191.481;                    //B2*-0.12345679 + 191.481
+        //volt2_temperature = A2_temperature * ads_bitmv;
+        //volt2_temperature = -volt2_temperature*0.12345679 + 191.481;                    //B2*-0.12345679 + 191.481
         volt_half_Vref = half_Vref * ads_bitmv;
 
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
@@ -1975,13 +1978,13 @@ float readAlpha2(void){
             Serial.println(readTemperature());
         }
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(volt2_temperature <= 15){
+        if(sensor_temperature <= 15){
           correctedCurrent = ((sensorCurrent) - (auxCurrent));
         }
-        else if(volt2_temperature <= 25){
+        else if(sensor_temperature <= 25){
           correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
         }
-        else if(volt2_temperature > 25){
+        else if(sensor_temperature > 25){
           correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
         }
         alpha2_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -2007,6 +2010,68 @@ float readAlpha2(void){
       Serial.print(volt1_aux);
       Serial.println("Volts");*/
       return alpha2_ppmraw;
+}
+
+//read the sensor temperature from the LMP91000
+float read_sensor_temperature(void)
+{
+    int32_t temp_int;
+    float sensor_temperature = 0.0;
+
+    Wire.begin();   //this must be done for the LMP91000
+    digitalWrite(lmp91000_2_en, LOW); //enable the chip
+
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_TIA_ON) == 0)
+    {
+        if(debugging_enabled)
+                Serial.println("Couldn't communicate with LMP91000_2 for temperature setting");
+    }else{
+          
+          if(debugging_enabled)
+                Serial.println("Setup LMP91000 to output temperature");
+          /*Serial.print("STATUS: ");
+          Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
+          Serial.print("TIACN: ");
+          Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
+          Serial.print("REFCN: ");
+          Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
+          Serial.print("MODECN: ");
+          Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
+          digitalWrite(lmp91000_2_en, HIGH);  //disable
+    }
+
+    //after setting up to output the temperature, now read it from the ADS
+    temp_int = ads2.readADC_SingleEnded(2); //temperature
+    temp_int = ads2.readADC_SingleEnded(2); //temperature
+    temp_int = ads2.readADC_SingleEnded(2); //temperature
+
+    sensor_temperature = temp_int * ads_bitmv;
+    sensor_temperature = -sensor_temperature*0.12345679 + 191.481;
+    //Serial.print("Sensor temperature:");
+    //Serial.println(sensor_temperature, 2);
+
+
+    //must set it back to normal configuration after reading the temperature
+    digitalWrite(lmp91000_2_en, LOW); //enable the chip
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    {
+        if(debugging_enabled)
+                Serial.println("Couldn't communicate with LMP91000_2 for temperature setting");
+    }else{
+          
+          if(debugging_enabled)
+                Serial.println("Setup LMP91000 to output temperature");
+          /*Serial.print("STATUS: ");
+          Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
+          Serial.print("TIACN: ");
+          Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
+          Serial.print("REFCN: ");
+          Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
+          Serial.print("MODECN: ");
+          Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
+          digitalWrite(lmp91000_2_en, HIGH);  //disable
+    }
+    return sensor_temperature;
 }
 
 void readOzone(void){
