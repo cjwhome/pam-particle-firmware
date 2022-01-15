@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 1 "c:/Users/Michael/Desktop/Projects/2BTech/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -48,6 +48,7 @@
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
+#include "CloudHandler.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
 void outputToCloud(String data);
@@ -108,7 +109,7 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 47 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 48 "c:/Users/Michael/Desktop/Projects/2BTech/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
@@ -253,6 +254,7 @@ SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
 
 //global objects
+CloudHandler cloud(&Particle);
 Adafruit_BME680 bme; // I2C
 Telaire_T6713 t6713;  //CO2 sensor
 LMP91000 lmp91000;
@@ -420,6 +422,7 @@ Bits 1-0: Mask 0b11
 
 
 //function declarations
+Upload buildUpload(void);
 void readStoredVars(void);
 void fixStoredVars();
 void checkCalFile(void);
@@ -465,6 +468,50 @@ void sendPacket(byte *packet, byte len);
 
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
+
+// build Upload object for protobuf
+Upload buildUpload(void) {
+    Upload upload = Upload_init_zero;
+
+    upload.temp = readTemperature();
+    upload.hum = readHumidity();
+    upload.batt = fuel.getSoC();
+    double latitude = gps.get_latitude();
+    double longitude = gps.get_longitude();
+    double acc = gps.get_horizontalDillution() / 10.0;
+
+    if (latitude != 0 && longitude != 0)
+    {
+        if (gps.get_nsIndicator() != 0)
+            latitude = -1 * latitude;
+
+        if (gps.get_ewIndicator() == 0x01)
+            longitude = -1 * longitude;
+
+        upload.gps = CloudHandler::buildGPS(latitude, longitude, acc);
+    }
+
+    upload.device_id = DEVICE_id;
+    upload.co = CO_float;
+    upload.co2 = CO2_float;
+    upload.pm01 = PM01Value;
+    upload.pm25 = corrected_PM_25;
+    upload.pm10 = PM10Value;
+    upload.press = bme.pressure / 100.0;
+    upload.o3 = O3_float;
+
+    if (NO2_enabled)
+        upload.no2 = NO2_float;
+
+    if (sensible_iot_en == 1)
+        upload.sensible = true;
+    else
+        upload.sensible = false;
+    
+    upload.epoch = Time.now();
+
+    return upload;
+}
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -2255,6 +2302,8 @@ void outputDataToESP(void){
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
     
+    Upload cloudUpload = buildUpload();
+    cloud.publish(cloudUpload);
     outputToCloud(cloud_output_string);
     
     if(esp_wifi_connection_status){
