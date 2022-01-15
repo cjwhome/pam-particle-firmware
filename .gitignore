@@ -2,4 +2,3 @@
 
 *.pch
 target/
-*.cpp
