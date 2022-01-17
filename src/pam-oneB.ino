@@ -2238,10 +2238,15 @@ void outputDataToESP(void){
     cloud_output_string += '&';
     
     // protobuf upload
-    if (Particle.connected() && serial_cellular_enabled) {
-        Upload cloudUpload = buildUpload();
-        cloud.publish(cloudUpload);
-    }
+    Upload cloudUpload = buildUpload();
+    cloud.publish(cloudUpload);
+    Serial.println(cloud_output_string);
+    Serial.println(cloud_output_string.length());
+
+    // if (Particle.connected() && serial_cellular_enabled) {
+    //     Upload cloudUpload = buildUpload();
+    //     cloud.publish(cloudUpload);
+    // }
 
     outputToCloud(cloud_output_string);
     
