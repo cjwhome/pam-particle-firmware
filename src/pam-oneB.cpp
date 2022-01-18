@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
 #include <string>
 //#include <Wire.h>
 //#include <SPI.h>
@@ -71,7 +71,7 @@ void processAqsyncMessage(String data);
 int getChecksum(String data);
 bool checkStringIsValid(String data);
 int setSerialNumber(String serialNumber);
-#line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 23 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
 PRODUCT_ID(15083);
 PRODUCT_VERSION(6);
 bool haveOfflineData = false;
@@ -80,7 +80,7 @@ String diagnosticData = "";
 #define SERIAL_PASSWORD "bould"
 
 #define APP_VERSION 70
-#define BUILD_VERSION 14
+#define BUILD_VERSION 15
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -3316,6 +3316,12 @@ void outputCOtoPI(void)
     CO_string += '\n';
 
     serBuf.print(CO_string);
+    if(debugging_enabled)
+    {
+        Serial.print("string to PI:");
+        Serial.println(CO_string);
+    }
+
 }
 
 void serialTestRemoteFunction(void)

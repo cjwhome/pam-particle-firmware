@@ -28,7 +28,7 @@ String diagnosticData = "";
 #define SERIAL_PASSWORD "bould"
 
 #define APP_VERSION 70
-#define BUILD_VERSION 14
+#define BUILD_VERSION 15
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -3264,6 +3264,12 @@ void outputCOtoPI(void)
     CO_string += '\n';
 
     serBuf.print(CO_string);
+    if(debugging_enabled)
+    {
+        Serial.print("string to PI:");
+        Serial.println(CO_string);
+    }
+
 }
 
 void serialTestRemoteFunction(void)
