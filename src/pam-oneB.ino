@@ -2034,11 +2034,11 @@ void outputDataToESP(void){
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value, 0);
     csv_output_string += String(PM01Value) + ",";
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
     csv_output_string += String(corrected_PM_25, 0) + ",";
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value, 0);
     csv_output_string += String(PM10Value) + ",";
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(readTemperature(), 1);
     csv_output_string += String(readTemperature(), 1) + ",";
