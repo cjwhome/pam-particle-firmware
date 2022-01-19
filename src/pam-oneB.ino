@@ -2060,7 +2060,7 @@ void outputDataToESP(void){
         writer.name("NO2").value(String(NO2_float, 3));
     }
     writer.name("o3").value(String(O3_float, 3));
-    writer.name("PM1_0").value(String(PM01Value));
+    writer.name("PM1_0").value(String(PM01Value, 0));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
     writer.name("Temp").value(String(O3_CellTemp, 1));
     writer.name("Press").value(String(bme.pressure / 100.0, 1));
@@ -2104,11 +2104,11 @@ void outputDataToESP(void){
     //     csv_output_string += String(air_quality_score, 1) + ",";
     // }
    
-    csv_output_string += String(PM01Value) + ",";
+    csv_output_string += String(PM01Value, 0) + ",";
     
     csv_output_string += String(corrected_PM_25, 0) + ",";
     
-    csv_output_string += String(PM10Value) + ",";
+    csv_output_string += String(PM10Value, 0) + ",";
     
     csv_output_string += String(O3_CellTemp, 1) + ",";
     
