@@ -317,9 +317,9 @@ bool restart = false;
 float CO2_slope;
 int CO2_zero;
 float CO_slopeA;
-float CO_zeroA;
+int CO_zeroA;
 float CO_slopeB;
-float CO_zeroB;
+int CO_zeroB;
 float PM_1_slope;
 float PM_25_slope;
 float PM_10_slope;
@@ -567,6 +567,8 @@ void readStoredVars(void)
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
     EEPROM.get(CO_ZERO_A_MEM_ADDRESS, CO_zeroA);
+    Serial.print("This is CO_zerA: ");
+    Serial.println(CO_zeroA);
     EEPROM.get(CO_ZERO_B_MEM_ADDRESS, CO_zeroB);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
@@ -3767,14 +3769,12 @@ void serialGetCoZeroA(void)
     if (isValid)
     {
         receivedData = receivedData.substring(0, receivedData.indexOf('*')-1);
-        float tempfloat = receivedData.toFloat();
-        if (tempfloat >= 0.1 && tempfloat < 5.0)
+        int tempValue = receivedData.toFloat();
+        if (tempValue >= -5000 && tempValue < 5000)
         {
-            CO_slopeA = tempfloat;
-            tempfloat *= 100;
-            tempValue = tempfloat;
+            CO_zeroA = tempValue;
             Serial.print("\n\rNew COA zero: ");
-            Serial.println(String(CO_zeroA, 2));
+            Serial.println(String(CO_zeroA));
 
             EEPROM.put(CO_ZERO_A_MEM_ADDRESS, tempValue);
         }
@@ -3803,7 +3803,7 @@ void serialGetCoSlopeB(void)
         float tempfloat = receivedData.toFloat();
         if (tempfloat >= 0.1 && tempfloat < 5.0)
         {
-            CO_slopeA = tempfloat;
+            CO_slopeB = tempfloat;
             tempfloat *= 100;
             tempValue = tempfloat;
             Serial.print("\n\rNew COB slope: ");
@@ -3833,14 +3833,12 @@ void serialGetCoZeroB(void)
     if (isValid)
     {
         receivedData = receivedData.substring(0, receivedData.indexOf('*')-1);
-        float tempfloat = receivedData.toFloat();
-        if (tempfloat >= 0.1 && tempfloat < 5.0)
+        float tempValue = receivedData.toFloat();
+        if (tempValue >= -5000 && tempValue < 5000)
         {
-            CO_slopeA = tempfloat;
-            tempfloat *= 100;
-            tempValue = tempfloat;
+            CO_zeroB = tempValue;
             Serial.print("\n\rNew CO_B zero: ");
-            Serial.println(String(CO_zeroB, 2));
+            Serial.println(String(CO_zeroB));
 
             EEPROM.put(CO_ZERO_B_MEM_ADDRESS, tempValue);
         }
