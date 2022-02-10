@@ -178,7 +178,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
 #define SD_CARD_EN_MEM_ADDRESS 148
 #define UPDATE_MEM_ADDRESS 152
-#define MAX_MEM_ADDRESS 152
+#define TEMP_CORRECTION_EN_ADDRESS 156
+#define MAX_MEM_ADDRESS 156
 
 
 //max and min values
@@ -348,6 +349,7 @@ float NO2_slope = 0;
 int NO2_zero = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 int sd_enabled = 0;  // sd_enabled in memory is defaulted to zero. Since this is the case, zero means we are using the sd card, and 1 means we are not.
+int temperature_correction_enabled = 0;
 
 char geolocation_latitude[12] = "999.9999999";
 char geolocation_longitude[13] = "99.9999999";
@@ -697,6 +699,7 @@ void readStoredVars(void){
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
     EEPROM.get(SD_CARD_EN_MEM_ADDRESS, sd_enabled);
+    EEPROM.get(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
     if (sd_enabled != 0 || sd_enabled != 1)
     {
         EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 0);
@@ -777,6 +780,7 @@ void writeDefaultSettings(void){
     EEPROM.put(SENSIBLEIOT_ENABLE_MEM_ADDRESS, 0);
     EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, 0);
     EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 0);
+    EEPROM.put(TEMP_CORRECTION_EN_ADDRESS, 1);
 }
 
 size_t readField(File* file, char* str, size_t size, const char* delim) {
@@ -1081,7 +1085,11 @@ void setup()
             Serial.println(fileName);
         }
     }
-
+    if(temperature_correction_enabled){
+        Serial.println("Temperature correction for EC sensors is enabled.");
+    }else{
+        Serial.println("Temperature correction for EC sensors is disabled.");
+    }
 
     //setup the AFE
     Serial.println("Starting LMP91000 CO initialization");
@@ -1752,6 +1760,10 @@ float readCO(void){
     float_offset = CO_zero;
     float_offset /= 1000;
     float sensor_temperature = read_sensor_temperature();
+    if(!temperature_correction_enabled)
+    {
+        sensor_temperature = 25;
+    }
     //float sensor_temperature = 30;
     CO_float = readAlpha2(sensor_temperature, CO_SENSOR);
 
@@ -1767,6 +1779,10 @@ float readNO2(void){
     float_offset = NO2_zero;
     float_offset /= 1000;
     float sensor_temperature = read_sensor_temperature();
+    if(!temperature_correction_enabled)
+    {
+        sensor_temperature = 25;
+    }
      //float sensor_temperature = 30;
     NO2_float = readAlpha1(sensor_temperature, NO2_SENSOR);
 
@@ -1888,46 +1904,22 @@ float readAlpha1(float sensor_temperature, int species){
             Serial.print(", ambient temperature:");
             Serial.println(readTemperature());
         }
-       switch (species){
-            case 1: 
-                coefficient_low = CO_COEFF_TEMP_LOW;
-                coefficient_med = CO_COEFF_TEMP_MED;
-                coefficient_high = CO_COEFF_TEMP_HIGH;
-                sensor_sensitivity = CO_SENSITIVITY;
-                break;
-            case 2: 
-                coefficient_low = NO2_COEFF_TEMP_LOW;
-                coefficient_med = NO2_COEFF_TEMP_MED;
-                coefficient_high = NO2_COEFF_TEMP_HIGH;
-                sensor_sensitivity = NO2_SENSITIVITY;
-                break;   
-            case 3: 
-                coefficient_low = NO_COEFF_TEMP_LOW;
-                coefficient_med = NO_COEFF_TEMP_MED;
-                coefficient_high = NO_COEFF_TEMP_HIGH;
-                sensor_sensitivity = NO_SENSITIVITY;
-                break; 
-            case 4: 
-                coefficient_low = O3_COEFF_TEMP_LOW;
-                coefficient_med = O3_COEFF_TEMP_MED;
-                coefficient_high = O3_COEFF_TEMP_HIGH;
-                sensor_sensitivity = O3_SENSITIVITY;
-                break;
-            case 5: 
-                coefficient_low = SO2_COEFF_TEMP_LOW;
-                coefficient_med = SO2_COEFF_TEMP_MED;
-                coefficient_high = SO2_COEFF_TEMP_HIGH;
-                sensor_sensitivity = SO2_SENSITIVITY;
-                break;
+       
+        coefficient_low = NO2_COEFF_TEMP_LOW;
+        coefficient_med = NO2_COEFF_TEMP_MED;
+        coefficient_high = NO2_COEFF_TEMP_HIGH;
+
+        if(debugging_enabled){
+            Serial.printf("NO2 Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
         }
-        
-        if(sensor_temperature <= 15){
+               
+        if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 25){
+        else if(sensor_temperature <= 30){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 25){
+        else if(sensor_temperature > 30){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha1_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -2036,46 +2028,22 @@ float readAlpha2(float sensor_temperature, int species){
             Serial.print(", ambient temperature:");
             Serial.println(readTemperature());
         }
-        switch (species){
-            case 1: 
-                coefficient_low = CO_COEFF_TEMP_LOW;
-                coefficient_med = CO_COEFF_TEMP_MED;
-                coefficient_high = CO_COEFF_TEMP_HIGH;
-                sensor_sensitivity = CO_SENSITIVITY;
-                break;
-            case 2: 
-                coefficient_low = NO2_COEFF_TEMP_LOW;
-                coefficient_med = NO2_COEFF_TEMP_MED;
-                coefficient_high = NO2_COEFF_TEMP_HIGH;
-                sensor_sensitivity = NO2_SENSITIVITY;
-                break;   
-            case 3: 
-                coefficient_low = NO_COEFF_TEMP_LOW;
-                coefficient_med = NO_COEFF_TEMP_MED;
-                coefficient_high = NO_COEFF_TEMP_HIGH;
-                sensor_sensitivity = NO_SENSITIVITY;
-                break; 
-            case 4: 
-                coefficient_low = O3_COEFF_TEMP_LOW;
-                coefficient_med = O3_COEFF_TEMP_MED;
-                coefficient_high = O3_COEFF_TEMP_HIGH;
-                sensor_sensitivity = O3_SENSITIVITY;
-                break;
-            case 5: 
-                coefficient_low = SO2_COEFF_TEMP_LOW;
-                coefficient_med = SO2_COEFF_TEMP_MED;
-                coefficient_high = SO2_COEFF_TEMP_HIGH;
-                sensor_sensitivity = SO2_SENSITIVITY;
-                break;
-        }
         
-        if(sensor_temperature <= 15){
+        coefficient_low = CO_COEFF_TEMP_LOW;
+        coefficient_med = CO_COEFF_TEMP_MED;
+        coefficient_high = CO_COEFF_TEMP_HIGH;
+        sensor_sensitivity = CO_SENSITIVITY;
+              
+        if(debugging_enabled){
+            Serial.printf("CO Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
+        }
+        if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 25){
+        else if(sensor_temperature <= 30){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 25){
+        else if(sensor_temperature > 30){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -2084,7 +2052,14 @@ float readAlpha2(float sensor_temperature, int species){
 
       digitalWrite(lmp91000_2_en, HIGH);  //disable
 
+    if(debugging_enabled){
+          Serial.print("CO measurements:  \n\r");
+          Serial.printf("A0_gas: %d\n\r", A0_gas);
+          Serial.printf("A1_aux: %d\n\r", A1_aux);
+          Serial.printf("A2_temp: %d\n\r", A2_temperature);
+          Serial.printf("half_vref: %d\n\r", half_Vref);
 
+      }
       /*Serial.print("CO:  ");
       Serial.print(volt0_gas);
       Serial.print(", ");
@@ -2118,7 +2093,7 @@ float read_sensor_temperature(void)
                 Serial.println("Couldn't communicate with LMP91000_2 for temperature setting");
     }else{
           
-          
+         
           digitalWrite(lmp91000_2_en, HIGH);  //disable
     }
 
@@ -2141,16 +2116,7 @@ float read_sensor_temperature(void)
                 Serial.println("Couldn't communicate with LMP91000_2 for temperature setting");
     }else{
           
-          if(debugging_enabled)
-                Serial.println("Setup LMP91000 to output temperature");
-          /*Serial.print("STATUS: ");
-          Serial.println(lmp91000.read(LMP91000_STATUS_REG),HEX);
-          Serial.print("TIACN: ");
-          Serial.println(lmp91000.read(LMP91000_TIACN_REG),HEX);
-          Serial.print("REFCN: ");
-          Serial.println(lmp91000.read(LMP91000_REFCN_REG),HEX);
-          Serial.print("MODECN: ");
-          Serial.println(lmp91000.read(LMP91000_MODECN_REG),HEX);*/
+         
           digitalWrite(lmp91000_2_en, HIGH);  //disable
     }
     return sensor_temperature;
@@ -2929,14 +2895,25 @@ void serialMenu(){
 
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
     }else if(incomingByte == 'D'){
-        
-        //select socket A species
-        Serial.println("Socket A is configured for NO2");
-
+        if(temperature_correction_enabled){
+            Serial.println("Temperature correction for EC sensors already enabled.");
+            Serial.println("Press E to disable if necessary.");
+        }else{
+            temperature_correction_enabled = 1;
+            EEPROM.put(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
+            Serial.println("Temperature correction for EC sensors is now enabled.");
+        }
+       
     }else if(incomingByte == 'E'){
        
-        //select socket B species
-        Serial.println("Socket B is configured for CO");
+        if(!temperature_correction_enabled){
+            Serial.println("Temperature correction for EC sensors already disabled.");
+            Serial.println("Press D to enable if necessary.");
+        }else{
+            temperature_correction_enabled = 0;
+            EEPROM.put(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
+            Serial.println("Temperature correction for EC sensors is now disabled.");
+        }
 
     }
     else if(incomingByte == 'G'){      //enable analog reading of ozone and disable esp reading of ozone
@@ -4009,8 +3986,8 @@ void outputSerialMenuOptions(void){
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
     Serial.println("C:  Change temperature units to Celcius");
-    Serial.println("D:  Select species for Sensor socket A (closest to inlet)");
-    Serial.println("E:  Select species for Sensor socket B (closest to outlet fan)");
+    Serial.println("D:  Enable Temperature Correction for EC's");
+    Serial.println("E:  Disable Temperature Correction for EC's");
     Serial.println("F:  Change temperature units to Farenheit");
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone");
