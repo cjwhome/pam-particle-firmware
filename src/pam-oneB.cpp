@@ -107,6 +107,7 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
+String buildAverageCloudString();
 #line 47 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
@@ -186,6 +187,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 //#define MEASUREMENTS_TO_AVERAGE 1       //change to 30 for 3 minute uploads
 
+// The amount of measurements we skip right after we send an upload
+#define NUMBER_OF_MEASUREMENTS_SKIP 5
 
 
 //ble data output
@@ -246,6 +249,19 @@ int co2_en = C5;        //enables the CO2 sensor power
 int plantower_select = D3;
 time_t buttonOffTime = NULL;
 const int DEBOUNCE_DELAY = 50;
+
+//used for averaging
+float CO_sum = 0;
+float CO2_sum = 0;
+float NO2_sum = 0;
+float pressure_sum = 0;
+float humidity_sum = 0;
+float PM1_sum = 0;
+float PM25_sum = 0;
+float PM10_sum = 0;
+
+int measurement_count = 0;
+int number_of_measurements_skip = NUMBER_OF_MEASUREMENTS_SKIP;
 
 //manually control connection to cellular network
 SYSTEM_MODE(MANUAL);
@@ -315,15 +331,6 @@ int sd_enabled = 0;  // sd_enabled in memory is defaulted to zero. Since this is
 char geolocation_latitude[12] = "999.9999999";
 char geolocation_longitude[13] = "99.9999999";
 char geolocation_accuracy[6] = "255.0";
-
-//used for averaging
-float CO_sum = 0;
-float CO2_sum = 0;
-float O3_sum = 0;
-
-float PM25_sum = 0;
-float PM10_sum = 0;
-int measurement_count = 0;
 
 //calibration parameters
 float CO2_slope;
@@ -500,64 +507,131 @@ void dateTime(uint16_t* date, uint16_t* time) {
   // return time using FAT_TIME macro to format fields
   *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
 }
+
 //todo: average everything except ozone
 void outputToCloud(String data) {
-    CO_sum += CO_float;
-    CO2_sum += CO2_float;
-    O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
+    String webhook_data = " ";
+    if (measurement_count >= number_of_measurements_skip)
+    {
+        CO_sum += CO_float;
+        CO2_sum += CO2_float;
+        PM1_sum += PM01Value;
+        PM25_sum += corrected_PM_25;
+        PM10_sum += PM10Value;
+        pressure_sum += bme.pressure / 100.0;
+        humidity_sum += readHumidity();
+
+        if (NO2_enabled)
+        {
+            NO2_sum += NO2_float;
+        }
+
+        // if (sd.begin(CS)){
+        //     log_file.open("average test", O_CREAT | O_APPEND | O_WRITE);
+        //     log_file.print("This is the count: ");
+        //     log_file.println(measurement_count);
+        //     log_file.print("This is the Co_float value: ");
+        //     log_file.println(CO_float);
+        //     log_file.print("This is the CO_sum: ");
+        //     log_file.println(CO_sum);
+
+        //     log_file.close();
+        // }
+        // else
+        // {
+        //     Serial.println("Unable to write to log file");
+        // }
+    }
     measurement_count++;
 
-    if(measurement_count == measurements_to_average){
-        CO_sum /= measurements_to_average;
-        CO2_sum /= measurements_to_average;
-        //O3_sum /= measurements_to_average;
+    if (measurement_count == measurements_to_average)
+    {
+        int fixed_count = measurement_count-number_of_measurements_skip;
+        CO_sum /= fixed_count;
+        CO2_sum /= fixed_count;
+        PM1_sum /= fixed_count;
+        PM25_sum /= fixed_count;
+        PM10_sum /= fixed_count;
+        pressure_sum /= fixed_count;
+        humidity_sum /= fixed_count;
 
-        measurement_count = 0;
+        if (NO2_enabled)
+        {
+            NO2_sum /= fixed_count;
+        }
 
-        if(Particle.connected() && serial_cellular_enabled){
+        // if (sd.begin(CS)){
+        //     log_file.open("average test", O_CREAT | O_APPEND | O_WRITE);
+        //     log_file.println("-----------------------------------------");
+        //     log_file.print("This is the Co_sum value: ");
+        //     log_file.println(CO_sum);
+
+        //     log_file.close();
+        // }
+        // else
+        // {
+        //     Serial.println("Unable to write to log file");
+        // }
+
+        if(Particle.connected() && serial_cellular_enabled)
+        {
+            String webhook_data = buildAverageCloudString();
+
             if (measurements_to_average <= 20)
             {
-                if (accumulated_data.length()+data.length() >= 500)
+                if (accumulated_data.length()+webhook_data.length() >= 500)
                 {
-                    if (sensible_iot_en == 1)
-                    {
-                        accumulated_data += "2";
-                    }
-                    else
-                    {
-                        accumulated_data += "0";
-                    }
                     Particle.publish("uploadCellular", accumulated_data, PRIVATE);
                     Particle.process();
-                    accumulated_data = data;
+                    accumulated_data = webhook_data; // This removes the byte letting us know if we send to both sensible and us or not.
                 }
                 else
                 {
                     if (accumulated_data == "")
                     {
-                        accumulated_data = data;
+                        accumulated_data = webhook_data;
                     }
-                    accumulated_data += "," + data;
+                    accumulated_data += "," + webhook_data;
                 }
             }
             else
             {
-                if (sensible_iot_en == 1)
-                {
-                    data += '2';
-                }
-                else
-                {
-                    data += "0";
-                }
+                
                 Particle.publish("uploadCellular", data, PRIVATE);
                 Particle.process();
             }
-            CO_sum = 0;
-            CO2_sum = 0;
-            O3_sum = 0;
+        }
+        else
+        {
+            if(serial_cellular_enabled == 0)
+            {
+                if(debugging_enabled)
+                {
+                    Serial.println("Cellular is disabled.");
+                    writeLogFile("Cellular is disabled.");
+                }
+            }
+            else
+            {
+                status_word.status_int &= 0xFFFD;   //clear the connected bit
+                if(debugging_enabled)
+                {
+                    Serial.println("Couldn't connect to particle.");
+                    writeLogFile("Couldn't connect to particle.");
+                }
+            }
         }
     }
+    CO_sum = 0;
+    CO2_sum = 0;
+    NO2_sum = 0;
+    PM1_sum = 0;
+    PM25_sum = 0;
+    PM10_sum = 0;
+    pressure_sum = 0;
+    humidity_sum = 0;
+
+    measurement_count = 0;
 }
 
 //send memory address and value separated by a comma
@@ -2100,7 +2174,7 @@ void outputDataToESP(void){
     }
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
     csv_output_string += String(PM01Value) + ",";
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25);
     csv_output_string += String(corrected_PM_25, 0) + ",";
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
     csv_output_string += String(PM10Value) + ",";
@@ -3819,6 +3893,78 @@ void checkButtonPush()
             calibrateCO2("1");
         }
     }
+}
+
+String buildAverageCloudString()
+{
+    String cloud_output_string = "";    //create a clean string
+    cloud_output_string += '^';         //start delimeter
+    cloud_output_string += String(1) + ";";           //header
+    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_sum, 3);
+    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_sum, 0);
+    if (NO2_enabled)
+    {
+        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
+    }
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM1_sum);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM25_sum, 0);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10_sum);
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(pressure_sum, 1);
+    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(humidity_sum, 1);
+    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
+    cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
+
+    if(gps.get_latitude() != 0){
+        if(gps.get_nsIndicator() == 0){
+            cloud_output_string += "-";
+        }
+        cloud_output_string += String(gps.get_latitude());
+    }else{
+        cloud_output_string += String(geolocation_latitude);
+    }
+
+    cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
+
+    if(gps.get_longitude() != 0){
+        if(gps.get_ewIndicator() == 0x01){
+            cloud_output_string += "-";
+        }
+        cloud_output_string += String(gps.get_longitude());
+    }else{
+        cloud_output_string += String(geolocation_longitude);
+    }
+
+    cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
+    if (gps.get_longitude() != 0) {
+        cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
+    } else {
+        cloud_output_string += String(geolocation_accuracy);
+    }
+    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
+    cloud_output_string += '&';
+    if(debugging_enabled){
+        Serial.println("Line to write to cloud:");
+        Serial.println(cloud_output_string);
+    }
+    if(esp_wifi_connection_status){
+        if(debugging_enabled){
+            Serial.println("Sending data to esp to upload via wifi...");
+            writeLogFile("Sending data to esp to upload via wifi");
+        }
+        Serial1.println(cloud_output_string);
+    }
+
+    if (sensible_iot_en == 1)
+    {
+        cloud_output_string += '2';
+    }
+    else
+    {
+        cloud_output_string += "0";
+    }
+    
+    return cloud_output_string;
 }
 
 void outputSerialMenuOptions(void){
