@@ -113,7 +113,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
 #define SD_CARD_EN_MEM_ADDRESS 148
 #define UPDATE_MEM_ADDRESS 152
-#define MAX_MEM_ADDRESS 152
+#define AVERAGING_ON_MEM_ADDRESS 156
+#define MAX_MEM_ADDRESS 156
 
 
 //max and min values
@@ -262,6 +263,7 @@ float NO2_slope = 0;
 int NO2_zero = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 int sd_enabled = 0;  // sd_enabled in memory is defaulted to zero. Since this is the case, zero means we are using the sd card, and 1 means we are not.
+int averaging_enabled = 0; // The default being zero is avergaing is off.
 
 char geolocation_latitude[12] = "999.9999999";
 char geolocation_longitude[13] = "99.9999999";
@@ -305,6 +307,7 @@ int PM01Value=0;
 int PM2_5Value=0;
 int PM10Value=0;
 float corrected_PM_25 = 0;
+float corrected_PM_1 = 0;
 #define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
 char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
 char incomingByte;  //serial connection from user
@@ -383,6 +386,7 @@ int calibrateCO2(String nothing);
 
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
+void outputToCloudAveraging(void);
 void echoGps();
 void readOzone(void);
 float readCO(void);
@@ -443,14 +447,14 @@ void dateTime(uint16_t* date, uint16_t* time) {
   *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
 }
 
-//todo: average everything except ozone
-void outputToCloud(String data) {
-    String webhook_data = " ";
+void outputToCloudAveraging()
+{
+    String finalData = "";
     if (measurement_count >= number_of_measurements_skip)
     {
         CO_sum += CO_float;
         CO2_sum += CO2_float;
-        PM1_sum += PM01Value;
+        PM1_sum += corrected_PM_1;
         PM25_sum += corrected_PM_25;
         PM10_sum += PM10Value;
         pressure_sum += bme.pressure / 100.0;
@@ -460,25 +464,8 @@ void outputToCloud(String data) {
         {
             NO2_sum += NO2_float;
         }
-
-        // if (sd.begin(CS)){
-        //     log_file.open("average test", O_CREAT | O_APPEND | O_WRITE);
-        //     log_file.print("This is the count: ");
-        //     log_file.println(measurement_count);
-        //     log_file.print("This is the Co_float value: ");
-        //     log_file.println(CO_float);
-        //     log_file.print("This is the CO_sum: ");
-        //     log_file.println(CO_sum);
-
-        //     log_file.close();
-        // }
-        // else
-        // {
-        //     Serial.println("Unable to write to log file");
-        // }
     }
     measurement_count++;
-
     if (measurement_count == measurements_to_average)
     {
         int fixed_count = measurement_count-number_of_measurements_skip;
@@ -494,79 +481,97 @@ void outputToCloud(String data) {
         {
             NO2_sum /= fixed_count;
         }
+        finalData = buildAverageCloudString();
+        CO_sum = 0;
+        CO2_sum = 0;
+        NO2_sum = 0;
+        PM1_sum = 0;
+        PM25_sum = 0;
+        PM10_sum = 0;
+        pressure_sum = 0;
+        humidity_sum = 0;
 
-        // if (sd.begin(CS)){
-        //     log_file.open("average test", O_CREAT | O_APPEND | O_WRITE);
-        //     log_file.println("-----------------------------------------");
-        //     log_file.print("This is the Co_sum value: ");
-        //     log_file.println(CO_sum);
+        measurement_count = 0;
 
-        //     log_file.close();
-        // }
-        // else
-        // {
-        //     Serial.println("Unable to write to log file");
-        // }
+        Particle.publish("uploadCellular", finalData, PRIVATE);
+        Particle.process();
+    }
+}
 
-        if(Particle.connected() && serial_cellular_enabled)
+
+void outputToCloud(String data) 
+{
+    String finalData = "";
+    if (averaging_enabled == 1)
+    {
+        outputToCloudAveraging();
+    }
+    else
+    {
+        if (measurement_count == measurements_to_average)
         {
-            String webhook_data = buildAverageCloudString();
-
-            if (measurements_to_average <= 20)
+            measurement_count = 0;
+            if(Particle.connected() && serial_cellular_enabled)
             {
-                if (accumulated_data.length()+webhook_data.length() >= 500)
+                if (measurements_to_average <= 20)
                 {
-                    Particle.publish("uploadCellular", accumulated_data, PRIVATE);
-                    Particle.process();
-                    accumulated_data = webhook_data; // This removes the byte letting us know if we send to both sensible and us or not.
+                    if (accumulated_data.length()+data.length() >= 500)
+                    {
+                        finalData = accumulated_data;
+                        accumulated_data = data; 
+                    }
+                    else
+                    {
+                        if (accumulated_data == "")
+                        {
+                            accumulated_data = data;
+                        }
+                        accumulated_data += "," + data;
+                    }
                 }
                 else
                 {
-                    if (accumulated_data == "")
+                    finalData = data;
+                }
+                if (finalData != "")// This is a check to see if we are either above the measurements to average threshold of putting together uploads, or if that bulk upload is ready to be sent up.
+                {
+                    if (sensible_iot_en == 1)
                     {
-                        accumulated_data = webhook_data;
+                        finalData += '2';
                     }
-                    accumulated_data += "," + webhook_data;
+                    else
+                    { 
+                        finalData += "0";
+                    }
+
                 }
             }
             else
             {
-                
-                Particle.publish("uploadCellular", data, PRIVATE);
-                Particle.process();
+                if(serial_cellular_enabled == 0)
+                {
+                    if(debugging_enabled)
+                    {
+                        Serial.println("Cellular is disabled.");
+                        writeLogFile("Cellular is disabled.");
+                    }
+                }
+                else
+                {
+                    status_word.status_int &= 0xFFFD;   //clear the connected bit
+                    if(debugging_enabled)
+                    {
+                        Serial.println("Couldn't connect to particle.");
+                        writeLogFile("Couldn't connect to particle.");
+                    }
+                }
             }
         }
         else
         {
-            if(serial_cellular_enabled == 0)
-            {
-                if(debugging_enabled)
-                {
-                    Serial.println("Cellular is disabled.");
-                    writeLogFile("Cellular is disabled.");
-                }
-            }
-            else
-            {
-                status_word.status_int &= 0xFFFD;   //clear the connected bit
-                if(debugging_enabled)
-                {
-                    Serial.println("Couldn't connect to particle.");
-                    writeLogFile("Couldn't connect to particle.");
-                }
-            }
+            measurement_count++;
         }
     }
-    CO_sum = 0;
-    CO2_sum = 0;
-    NO2_sum = 0;
-    PM1_sum = 0;
-    PM25_sum = 0;
-    PM10_sum = 0;
-    pressure_sum = 0;
-    humidity_sum = 0;
-
-    measurement_count = 0;
 }
 
 //send memory address and value separated by a comma
@@ -674,6 +679,12 @@ void readStoredVars(void){
     {
         EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 0);
         sd_enabled = 0;
+    }
+    EEPROM.get(AVERAGING_ON_MEM_ADDRESS, averaging_enabled);
+    if (averaging_enabled != 0 || averaging_enabled != 1)
+    {
+        EEPROM.put(AVERAGING_ON_MEM_ADDRESS, 0);
+        averaging_enabled = 0;
     }
 
     if(sensible_iot_en){
@@ -1280,6 +1291,10 @@ void loop() {
     corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
     corrected_PM_25 = corrected_PM_25 + PM_25_zero;
     corrected_PM_25 = corrected_PM_25 * PM_25_slope;
+
+    corrected_PM_1 = PM01Value / pm_25_correction_factor;
+    corrected_PM_1 = corrected_PM_1 + PM_1_zero;
+    corrected_PM_1 = corrected_PM_1 * PM_1_slope;
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -2107,9 +2122,9 @@ void outputDataToESP(void){
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
-    csv_output_string += String(PM01Value) + ",";
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25);
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(corrected_PM_1, 0);
+    csv_output_string += String(corrected_PM_1, 0) + ",";
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
     csv_output_string += String(corrected_PM_25, 0) + ",";
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
     csv_output_string += String(PM10Value) + ",";
@@ -2166,25 +2181,8 @@ void outputDataToESP(void){
     }
 
     //csv_output_string += String(status_word.status_int) + ",";
-    int zone;
-    EEPROM.get(TIME_ZONE_MEM_ADDRESS, zone);
-    int newHour = Time.hour();
-    newHour = newHour+zone;
 
-    int day = Time.day();
-    int year = Time.year();
-    int minute = Time.minute();
-    int second = Time.second();
-    int month = Time.month();
-        if (newHour < 0)
-    {
-        newHour = newHour+24;
-    }
-    if (newHour > 24)
-    {
-        newHour = newHour-24;
-    }
-    csv_output_string += String(day)+"/"+String(month)+"/"+String(year)+","+String(newHour)+":"+String(minute)+":"+String(second);
+    csv_output_string += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
     //csv_output_string += String(Time.format(local_time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
@@ -2276,7 +2274,7 @@ void outputDataToESP(void){
             floatBytes.myFloat = fuel.getSoC();
         }else if(i == 3){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-            floatBytes.myFloat = PM01Value;
+            floatBytes.myFloat = corrected_PM_1;
         }else if(i == 4){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
             floatBytes.myFloat = corrected_PM_25;
