@@ -3879,7 +3879,7 @@ int setUploadSpeed(String uploadSpeed)
     Serial.println(newAverage);
 
     measurements_to_average = newAverage;
-    measurement_count == 0;
+    measurement_count = 0;
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
     restart = true;
     return newAverage;
