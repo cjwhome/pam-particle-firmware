@@ -306,6 +306,7 @@ int PM01Value=0;
 int PM2_5Value=0;
 int PM10Value=0;
 float corrected_PM_25 = 0;
+float corrected_PM_1 = 0;
 #define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
 char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
 char incomingByte;  //serial connection from user
@@ -454,7 +455,7 @@ void outputToCloud(){
     {
         CO_sum += CO_float;
         CO2_sum += CO2_float;
-        PM1_sum += PM01Value;
+        PM1_sum += corrected_PM_1;
         PM25_sum += corrected_PM_25;
         PM10_sum += PM10Value;
         pressure_sum += bme.pressure / 100.0;
@@ -1207,6 +1208,10 @@ void loop()
     corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
     corrected_PM_25 = corrected_PM_25 + PM_25_zero;
     corrected_PM_25 = corrected_PM_25 * PM_25_slope;
+
+    corrected_PM_1 = PM01Value / pm_25_correction_factor;
+    corrected_PM_1 = corrected_PM_1 + PM_25_zero;
+    corrected_PM_1 = corrected_PM_1 * PM_25_slope;
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -2051,7 +2056,7 @@ void outputDataToESP(void){
         writer.name("NO2").value(String(NO2_float, 3));
     }
     writer.name("o3").value(String(O3_float, 3));
-    writer.name("PM1_0").value(String(PM01Value));
+    writer.name("PM1_0").value(String(corrected_PM_1, 0));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
     writer.name("Temp").value(String(O3_CellTemp, 1));
     writer.name("Press").value(String(bme.pressure / 100.0, 1));
@@ -2095,7 +2100,7 @@ void outputDataToESP(void){
     //     csv_output_string += String(air_quality_score, 1) + ",";
     // }
    
-    csv_output_string += String(PM01Value) + ",";
+    csv_output_string += String(corrected_PM_1) + ",";
     
     csv_output_string += String(corrected_PM_25, 0) + ",";
     
@@ -2245,7 +2250,7 @@ void outputDataToESP(void){
             floatBytes.myFloat = fuel.getSoC();
         }else if(i == 3){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-            floatBytes.myFloat = PM01Value;
+            floatBytes.myFloat = corrected_PM_1;
         }else if(i == 4){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
             floatBytes.myFloat = corrected_PM_25;
@@ -2488,8 +2493,6 @@ void outputParticles(){
             pressure_correction /= SEALEVELPRESSURE_HPA;
             CO2_float *= pressure_correction;
         }
-        pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-        corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
 
         byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
 
@@ -2527,7 +2530,7 @@ void outputParticles(){
                 floatBytes.myFloat = fuel.getSoC();
             }else if(i == 1){
                 ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-                floatBytes.myFloat = PM01Value;
+                floatBytes.myFloat = corrected_PM_1;
             }else if(i == 2){
                 ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
                 floatBytes.myFloat = corrected_PM_25;
