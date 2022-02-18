@@ -264,6 +264,8 @@ int measurement_count = 0;
 int ozone_measurement_count = 0;
 int number_of_measurements_skip;
 
+String ozoneChangeCheck = "";
+
 
 //calibration parameters
 float CO2_slope;
@@ -409,6 +411,18 @@ void writeRegister(uint8_t reg, uint8_t value) {
     Wire3.write(value);
     Wire3.endTransmission(true);
 
+}
+
+float rounding(float number)
+{
+
+    String theNumber = String(number);
+    int index = theNumber.indexOf('.');
+    if (theNumber[index+1] >= 5)
+    {
+        number = number+1;
+    }
+    return number;
 }
 
 String buildHeaderString()
@@ -904,30 +918,6 @@ void setup()
     //set the Timeout to 1500ms, longer than the data transmission periodic time of the sensor
     Serial4.setTimeout(5000);
 
-    // Setup the PMIC manually (resets the BQ24195 charge controller)
-    // REG00 Input Source Control Register  (disabled)
-    /*writeRegister(0, 0b00110000);  //0x30
-
-    // REG01 Power-On Configuration Register (charge battery, 3.5 V)
-    writeRegister(1, 0b00011011);   //0x1B
-
-    // REG02 Charge Current Control Register (1024 + 512 mA)
-    writeRegister(2, 0b01100000);   //0x60
-
-    // REG03 Pre-Charge/Termination Current Control Register (128mA pre charge, 128mA termination current)
-    writeRegister(3, 0b00010001);   //0x11
-
-    // REG04 Charge Voltage Control Register Format
-    writeRegister(4, 0b10110010);   //0xB2
-
-    // REG05 Charge Termination/Timer Control Register
-    writeRegister(5, 0b10011010);   //0x9A
-    // REG06 Thermal Regulation Control Register
-    writeRegister(6, 0b00000011);   //0x03
-    // REG07 Misc Operation Control Register Format
-    writeRegister(7, 0b01001011);   //0x4B*/
-
-
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
     //initialize main serial port for debug output
@@ -1208,6 +1198,7 @@ void loop()
     readPlantower();
         // This line will always grab the Ozone data from the 108. I am doing this because this is for the AQLite, which will always have a 108.
     getEspOzoneData();
+
 
     pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
     if(debugging_enabled){
@@ -2060,7 +2051,7 @@ void outputDataToESP(void){
         writer.name("NO2").value(String(NO2_float, 3));
     }
     writer.name("o3").value(String(O3_float, 3));
-    writer.name("PM1_0").value(String(PM01Value, 0));
+    writer.name("PM1_0").value(String(PM01Value));
     writer.name("PM2_5").value(String(corrected_PM_25, 0)); 
     writer.name("Temp").value(String(O3_CellTemp, 1));
     writer.name("Press").value(String(bme.pressure / 100.0, 1));
@@ -2104,11 +2095,11 @@ void outputDataToESP(void){
     //     csv_output_string += String(air_quality_score, 1) + ",";
     // }
    
-    csv_output_string += String(PM01Value, 0) + ",";
+    csv_output_string += String(PM01Value) + ",";
     
     csv_output_string += String(corrected_PM_25, 0) + ",";
     
-    csv_output_string += String(PM10Value, 0) + ",";
+    csv_output_string += String(PM10Value) + ",";
     
     csv_output_string += String(O3_CellTemp, 1) + ",";
     
@@ -2378,8 +2369,7 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
-void getEspOzoneData(void){
-    float ozone_value = 0.0;
+void getEspOzoneData(void) {
     String getOzoneData = "Z&";
     String recievedData = "";
     bool timeOut = false;
@@ -2407,6 +2397,12 @@ void getEspOzoneData(void){
     char incomingByte = NULL;
 
     recievedData = Serial1.readString();
+    if (recievedData == ozoneChangeCheck) // This is so we don't average Multiples of the same points.
+    {
+        return ;
+    }
+    Serial.println("Updating ozone data with new ozone");
+    ozoneChangeCheck = recievedData;
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
     if(debugging_enabled)
     {
@@ -2427,12 +2423,14 @@ void getEspOzoneData(void){
         switch(i)
         { 
             case 0:
+
                 O3_float = nextData.toFloat();
                 ozone_measurement_count += 1;
                 // I would normally do this averaging with the other varibales, but this is the only way to make sure we are only suming ozone when we get the new measurement
                 O3_sum += O3_float;
                 break;
             case 1:
+
                 O3_CellTemp = nextData.toFloat();
                 O3_celltemp_sum += O3_CellTemp;
                 break;
@@ -3923,6 +3921,7 @@ int setEEPROMAddress(String data)
     Serial.println(memAddress);
     EEPROM.put(memAddress, eepromValue);
     restart = true;
+    return 1;
 }
 
 int setSerialNumber(String serialNumber)
@@ -3947,9 +3946,9 @@ String buildAverageCloudString()
     {
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
     }
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM1_sum);
-    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM25_sum, 0);
-    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10_sum);
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(rounding(PM1_sum), 0);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(rounding(PM25_sum), 0);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(rounding(PM10_sum), 0);
     cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(O3_CellTemp, 1);
     cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(bme.pressure / 100.0, 1);
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(readHumidity(), 1);
