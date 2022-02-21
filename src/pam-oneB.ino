@@ -34,7 +34,7 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(15205);
-PRODUCT_VERSION(4);
+PRODUCT_VERSION(5);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
