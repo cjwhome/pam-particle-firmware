@@ -102,11 +102,10 @@ int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 #line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15205);
-PRODUCT_VERSION(4);
+PRODUCT_VERSION(5);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 13
-#define AQLITE_VERSION 3
+#define AQLITE_VERSION 5
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -517,9 +516,11 @@ String buildHeaderString()
     Particle.publish("testJson", data, PRIVATE);
 }*/
 //todo: average everything except ozone
-void outputToCloud(){
+void outputToCloud()
+{
     String webhook_data = " ";
-    if (measurement_count >= number_of_measurements_skip)
+    measurement_count++;
+    if (measurement_count > number_of_measurements_skip)
     {
         CO_sum += CO_float;
         CO2_sum += CO2_float;
@@ -551,7 +552,6 @@ void outputToCloud(){
         // }
 
     }
-    measurement_count++;
 
     if(measurement_count == measurements_to_average)
     {
@@ -599,7 +599,7 @@ void outputToCloud(){
                 webhook_data += "0";
             }
             status_word.status_int |= 0x0002;
-            Particle.publish("AQLite Upload Dev", webhook_data, PRIVATE);
+            Particle.publish("AQLite_Upload_Dev", webhook_data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             Particle.publish("AQLite Upload", webhook_data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
@@ -908,7 +908,7 @@ void setup()
     Serial.println("Starting the initialization");
     status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
-    status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
+    status_word.status_int |= (AQLITE_VERSION << 8) & 0xF00;
     //status_word.status_int |= 0x6500;
 
     String init_log; //intialization error log
@@ -2442,17 +2442,19 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
-void getEspOzoneData(void) {
+void getEspOzoneData(void) 
+{
     String getOzoneData = "Z&";
     String recievedData = "";
     bool timeOut = false;
     double counterIndex = 0;
     //if esp doesn't answer, keep going
     Serial1.setTimeout(500);
-    if(debugging_enabled){
+    if(debugging_enabled)
+    {
         Serial.println("Getting ozone data from esp");
         writeLogFile("Getting ozone data from esp");
-      }
+    }
     Serial1.print(getOzoneData);
     while(!Serial1.available() && timeOut == false){
       //delay(1);
@@ -3947,7 +3949,7 @@ int setUploadSpeed(String uploadSpeed)
     Serial.println(newAverage);
 
     measurements_to_average = newAverage;
-    measurement_count == 0;
+    measurement_count = 0;
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
     restart = true;
     return newAverage;
