@@ -697,6 +697,7 @@ void setup()
     Particle.function("RebootADevice", rebootDevice);
     Particle.function("diagnostics", sendDiagnostics);
     Particle.function("setSetting", setSetting);
+    Particle.function("sendSerialMessage", sendSerialMessage);
     Particle.function("getSerialNumber", setSerialNumber);
     Particle.function("geteepromdata", remoteReadStoredVars);
     Particle.function("setEEPROM (value,address)", setEEPROMAddress);
@@ -879,6 +880,7 @@ void loop()
         if(debugging_enabled)
             Serial.println("recieved Data: ");
         String receivedData = serBuf.readStringUntil('\n');
+        Serial.println(receivedData);
         if(debugging_enabled){
             Serial.println(receivedData);
             Serial.println(receivedData.length());
@@ -2159,6 +2161,23 @@ int setSetting(String information)
     }
     String command = "S,"+deviceName+","+settingMarker+","+value;
     command += checksumMaker(command)+'\n';
+    serBuf.print(command);
+    return 1;
+}
+
+int sendSerialMessage(String information) // This function lets you call a device directly and send it a serial command. Need to send exactly what you want the device to receive.
+{
+    // Example would be Ozone,The message to send to Ozone
+    String deviceName = information.substring(0, information.indexOf(','));
+    information = information.substring(information.indexOf(',')+1, information.length());
+    String theMessage = information.substring(0, information.indexOf(','));
+    if (deviceName == "" || theMessage == "")
+    {
+        Serial.println("The right information was not sent over cellular. Try again");
+        return 0;
+    }
+    String command = "M,"+deviceName+","+theMessage;
+    Serial.println(command);
     serBuf.print(command);
     return 1;
 }
