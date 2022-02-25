@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 1 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -108,12 +108,12 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 47 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 47 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 24
+#define BUILD_VERSION 25
 
 
 //define constants
@@ -1312,6 +1312,7 @@ void loop() {
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
         Serial.printf("PM2.5 value befor correction: %d\n", PM2_5Value);
     }
+    pm_25_correction_factor = 1;        //this is to remove the correction factor!!!!
     corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
     corrected_PM_25 = corrected_PM_25 + PM_25_zero;
     corrected_PM_25 = corrected_PM_25 * PM_25_slope;
@@ -2481,6 +2482,7 @@ void outputDataToESP(void){
 
 //ask the ESP if it has a wifi connection
 void getEspWifiStatus(void){
+    Serial.println("Getting Wifi Status from ESP");
     ESP_connected = "Not Connected. Run one more time.";
     //command to ask esp for wifi status
     String doYouHaveWifi = "!&";
@@ -2499,7 +2501,7 @@ void getEspWifiStatus(void){
         Serial.print("ESP Wifi connection status is: ");
 
       }
-    //Serial.println(yes_or_no);
+    Serial.println(yes_or_no);
     if(yes_or_no == 'y'){
         if(debugging_enabled){
             Serial.println("Connected!");
@@ -3009,16 +3011,7 @@ void serialMenu(){
         }
 
     }else if(incomingByte == 'U'){
-        if(!CO_socket){
-            Serial.println("Now reading CO from U20-Alpha2");
-            CO_socket = 1;
-            EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
-
-        }else{
-            Serial.println("Now reading CO from U19-Alpha1");
-            CO_socket = 0;
-            EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
-        }
+        getEspWifiStatus();
     }else if(incomingByte == 'V'){
         Serial.println("Reseting the CO2 sensor");
         calibrateCO2("1");
@@ -4003,7 +3996,7 @@ void outputSerialMenuOptions(void){
     Serial.println("R:  Disable ABC logic for CO2 sensor");
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
-    
+    Serial.println("U   Get wifi status from ESP");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
 
