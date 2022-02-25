@@ -180,7 +180,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define SD_CARD_EN_MEM_ADDRESS 148
 #define UPDATE_MEM_ADDRESS 152
 #define AVERAGING_ON_MEM_ADDRESS 156
-#define MAX_MEM_ADDRESS 156
+#define CORE_ID 160
+#define WIFI_ENABLED 164
+#define MAX_MEM_ADDRESS 164
 
 
 //max and min values
@@ -297,6 +299,7 @@ int log_file_started = 0;
 //wifi
 String ssid; //wifi network name
 String password; //wifi network password
+int wifi_enabled = 0;
 
 //global variables
 int counter = 0;
@@ -396,7 +399,7 @@ char gps_status = 0;
 bool calibratingCO2 = false;
 String accumulated_data = "";
 String ESP_connected = "";
-
+char coreId[25] = "";
 
 /*
 The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
@@ -467,6 +470,7 @@ void dateTime(uint16_t* date, uint16_t* time);
 void checkButtonPush();
 String buildHeaderString();
 void checkESPWorking();
+void sendESPWifiString(String finalData);
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -516,7 +520,7 @@ void dateTime(uint16_t* date, uint16_t* time) {
 void outputToCloudAveraging()
 {
     String finalData = "";
-    if (measurement_count >= number_of_measurements_skip)
+    if (measurement_count > number_of_measurements_skip)
     {
         CO_sum += CO_float;
         CO2_sum += CO2_float;
@@ -531,7 +535,6 @@ void outputToCloudAveraging()
             NO2_sum += NO2_float;
         }
     }
-    measurement_count++;
     if (measurement_count == measurements_to_average)
     {
         int fixed_count = measurement_count-number_of_measurements_skip;
@@ -558,15 +561,23 @@ void outputToCloudAveraging()
         humidity_sum = 0;
 
         measurement_count = 0;
+        if (wifi_enabled == 0)
+        {
+            Particle.publish("uploadCellular", finalData, PRIVATE);
+            Particle.process();
+        }
+        else
+        {
+            sendESPWifiString(finalData);
+        }
 
-        Particle.publish("uploadCellular", finalData, PRIVATE);
-        Particle.process();
     }
 }
 
 
 void outputToCloud(String data) 
 {
+    measurement_count++;
     String finalData = "";
     if (averaging_enabled == 1)
     {
@@ -577,67 +588,61 @@ void outputToCloud(String data)
         if (measurement_count == measurements_to_average)
         {
             measurement_count = 0;
-            if(Particle.connected() && serial_cellular_enabled)
+            if (measurements_to_average <= 20 && wifi_enabled == 0)
             {
-                if (measurements_to_average <= 20)
+                if (accumulated_data.length()+data.length() >= 500)
                 {
-                    if (accumulated_data.length()+data.length() >= 500)
-                    {
-                        finalData = accumulated_data;
-                        accumulated_data = data; 
-                    }
-                    else
-                    {
-                        if (accumulated_data == "")
-                        {
-                            accumulated_data = data;
-                        }
-                        accumulated_data += "," + data;
-                    }
+                    finalData = accumulated_data;
+                    accumulated_data = data; 
                 }
                 else
                 {
-                    finalData = data;
-                }
-                if (finalData != "")// This is a check to see if we are either above the measurements to average threshold of putting together uploads, or if that bulk upload is ready to be sent up.
-                {
-                    if (sensible_iot_en == 1)
+                    if (accumulated_data == "")
                     {
-                        finalData += '2';
+                        accumulated_data = data;
                     }
-                    else
-                    { 
-                        finalData += "0";
-                    }
-
+                    accumulated_data += "," + data;
                 }
             }
             else
             {
-                if(serial_cellular_enabled == 0)
+                finalData = data;
+            }
+            if (finalData != "")// This is a check to see if we are either above the measurements to average threshold of putting together uploads, or if that bulk upload is ready to be sent up.
+            {
+                if (sensible_iot_en == 1)
                 {
-                    if(debugging_enabled)
-                    {
-                        Serial.println("Cellular is disabled.");
-                        writeLogFile("Cellular is disabled.");
-                    }
+                    finalData += '2';
+                }
+                else
+                { 
+                    finalData += "0";
+                }
+                if (wifi_enabled == 0 && Particle.connected() && serial_cellular_enabled)
+                {
+                    Particle.publish("uploadCellular", finalData, PRIVATE);
+                    Particle.process();
                 }
                 else
                 {
-                    status_word.status_int &= 0xFFFD;   //clear the connected bit
-                    if(debugging_enabled)
-                    {
-                        Serial.println("Couldn't connect to particle.");
-                        writeLogFile("Couldn't connect to particle.");
-                    }
+                    sendESPWifiString(finalData);
                 }
+
             }
-        }
-        else
-        {
-            measurement_count++;
+            measurement_count = 0;
         }
     }
+}
+
+void sendESPWifiString(String finalData)
+{
+    int index = finalData.indexOf('&');
+    finalData[index] = '!';
+    // String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), "%yyyy-%m-%dT%H:%M:%SZ"))+"\"}";
+    String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
+    wifiString = "!"+wifiString+"&";
+    Serial.println(wifiString);
+    Serial1.print(wifiString);
 }
 
 //send memory address and value separated by a comma
@@ -781,6 +786,15 @@ void readStoredVars(void){
     if(!PM_10_slope)
     {
         PM_10_slope = 1;
+    }
+
+    EEPROM.get(CORE_ID, coreId);
+    EEPROM.get(WIFI_ENABLED, wifi_enabled);
+    if (wifi_enabled != 0 && wifi_enabled != 1)
+    {
+        Serial.println("wifi wasn't set");
+        wifi_enabled = 0;
+        EEPROM.put(WIFI_ENABLED, wifi_enabled);
     }
 }
 
@@ -1023,8 +1037,7 @@ void setup()
     pinMode(co2_en, OUTPUT);
     pinMode(plantower_select, OUTPUT);
 
-    //read all stored variables (calibration parameters)
-    readStoredVars();
+
 
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
@@ -1106,6 +1119,9 @@ void setup()
 
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
+
+    //read all stored variables (calibration parameters)
+    readStoredVars();
 
     if (sd_enabled == 0)
     {
@@ -2466,10 +2482,12 @@ void getEspWifiStatus(void){
 }
 //send wifi information to the ESP
 void sendWifiInfo(void){
-    String wifiCredentials = "@!" + String(ssid) + "," + String(password) + "&";
-    Serial.println("Sending new wifi credentials to ESP");
-    Serial1.println(wifiCredentials);
-    Serial.println("Success!");
+    //String wifiCredentials = "@" + String(ssid) + "," + String(password) + "&";
+    String wifiCredentials = "@"+String(ssid) + "," + String(password)+"&";
+    Serial.println("Sending new wifi credentials to ESP: ");
+    Serial.println(wifiCredentials);
+    
+    Serial1.print(wifiCredentials);
 }
 
 //ask the ESP if it has a wifi connection
@@ -2956,22 +2974,55 @@ void serialMenu(){
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
         }
 
-    }else if(incomingByte == 'U'){
-        if(!CO_socket){
-            Serial.println("Now reading CO from U20-Alpha2");
-            CO_socket = 1;
-            EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
-
-        }else{
-            Serial.println("Now reading CO from U19-Alpha1");
-            CO_socket = 0;
-            EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
+    }
+    else if(incomingByte == 'U')
+    {
+        Serial.print("This is the current coreId: ");
+        Serial.println(coreId);
+        Serial.println("Enter new coreId now.");
+        Serial.setTimeout(50000);
+        String userInput = Serial.readStringUntil('\r');
+        Serial.print("This is the userInput: ");
+        Serial.println(userInput);
+        if (userInput.length() != 24)
+        {
+            Serial.println("You did not give a valid coreId. coreId's are 24 characters long. This is what you gave: ");
+            Serial.println(userInput);
         }
-    }else if(incomingByte == 'V'){
+        else
+        {
+            char buf[25];
+            userInput.toCharArray(buf, 25);
+
+            EEPROM.put(CORE_ID, buf);
+            EEPROM.get(CORE_ID, coreId);
+
+            Serial.println("This is the new coreId: ");
+            Serial.println(coreId);
+        }
+    }
+    else if(incomingByte == 'V'){
         Serial.println("Reseting the CO2 sensor");
         calibrateCO2("1");
 
-    }else if(incomingByte == '1'){
+    }
+    else if (incomingByte == 'W')
+    {
+        if (wifi_enabled == 0)
+        {
+            Serial.println("Enabling wifi uploads...");
+            EEPROM.put(WIFI_ENABLED, 1);
+            wifi_enabled = 1;
+        }
+        else
+        {
+            Serial.println("Disabling wifi uploads... ");
+            EEPROM.put(WIFI_ENABLED, 0);
+            wifi_enabled = 0;
+
+        }
+    }
+    else if(incomingByte == '1'){
         serialGetNO2Slope();
     }else if(incomingByte == '2'){
         serialGetNO2Zero();
@@ -4023,8 +4074,9 @@ void outputSerialMenuOptions(void){
     Serial.println("R:  Disable ABC logic for CO2 sensor");
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
-    
+    Serial.println("U:  Set coreId");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
+    Serial.println("W:  Enable/ Disable wifi (This will turn off cellular uploads)");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
 
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
