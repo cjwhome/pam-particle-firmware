@@ -181,8 +181,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define UPDATE_MEM_ADDRESS 152
 #define AVERAGING_ON_MEM_ADDRESS 156
 #define CORE_ID 160
-#define WIFI_ENABLED 164
-#define MAX_MEM_ADDRESS 164
+#define WIFI_ENABLED 184
+#define MAX_MEM_ADDRESS 184
 
 
 //max and min values
@@ -2428,12 +2428,12 @@ void outputDataToESP(void){
     }
 
     //send start delimeter to ESP
-    Serial1.print("$");
+    //Serial1.print("$");
     //send the packaged data with # delimeters in between packets
-    Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
+    //Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
 
     //send ending delimeter
-    Serial1.print("&");
+    //Serial1.print("&");
 
     /*Serial.println("Successfully output BLE string to ESP");
     for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
