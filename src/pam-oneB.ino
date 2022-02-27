@@ -2210,6 +2210,13 @@ void outputDataToESP(void){
     
     outputToCloud(cloud_output_string);
     
+    if(esp_wifi_connection_status){
+        if(debugging_enabled){
+            Serial.println("Sending data to esp to upload via wifi...");
+            writeLogFile("Sending data to esp to upload via wifi");
+          }
+        Serial1.println(cloud_output_string);
+    }
     Serial.println(csv_output_string);
 
     if (sd_enabled == 0)
@@ -2273,9 +2280,6 @@ void outputDataToESP(void){
         9-O3_float
         10-fuel.getSoC()
         11-sound_average
-
-
-
         */
         if(i == 0){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
@@ -2359,8 +2363,7 @@ void outputDataToESP(void){
 
     }
 
-
-    delay(500);
+    //send start delimeter to ESP
     Serial1.print("$");
     //send the packaged data with # delimeters in between packets
     Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
@@ -2377,7 +2380,6 @@ void outputDataToESP(void){
     Serial.println("End of array");*/
 
 }
-
 //ask the ESP if it has a wifi connection
 // void getEspWifiStatus(void){
 //     ESP_connected = "Not Connected. Run one more time.";
