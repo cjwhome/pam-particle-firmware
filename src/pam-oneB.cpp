@@ -44,7 +44,7 @@
 #include "inttypes.h"
 #include "Particle.h"
 #include "PowerCheck.h"
-//#include "Serial1/Serial1.h"
+// #include "Serial1/Serial1.h"
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
@@ -69,9 +69,7 @@ float readCO2(void);
 float readAlpha1(void);
 float readAlpha2(void);
 void outputDataToESP(void);
-void getEspWifiStatus(void);
 void sendWifiInfo(void);
-void checkESPWorking(void);
 void readPlantower(void);
 char checkValue(char *thebuf, char leng);
 int transmitPM01(char *thebuf);
@@ -181,7 +179,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define UPDATE_MEM_ADDRESS 152
 #define AVERAGING_ON_MEM_ADDRESS 156
 #define CORE_ID 160
-#define WIFI_ENABLED 184
+#define WIFI_ENABLED 192
 #define MAX_MEM_ADDRESS 184
 
 
@@ -399,7 +397,7 @@ char gps_status = 0;
 bool calibratingCO2 = false;
 String accumulated_data = "";
 String ESP_connected = "";
-char coreId[25] = "";
+String coreId = "";
 
 /*
 The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
@@ -643,6 +641,7 @@ void sendESPWifiString(String finalData)
     wifiString = "!"+wifiString+"&";
     Serial.println(wifiString);
     Serial1.print(wifiString);
+    delay(1000);
 }
 
 //send memory address and value separated by a comma
@@ -788,7 +787,15 @@ void readStoredVars(void){
         PM_10_slope = 1;
     }
 
-    EEPROM.get(CORE_ID, coreId);
+    for (int i = 0; i < 8; i++)
+    {
+        char tempId[4];
+
+        EEPROM.get(CORE_ID+(i*4), tempId);
+        coreId += String(tempId);
+    }
+    Serial.println("This is the coreId: ");
+    Serial.println(coreId);
     EEPROM.get(WIFI_ENABLED, wifi_enabled);
     if (wifi_enabled != 0 && wifi_enabled != 1)
     {
@@ -1332,9 +1339,9 @@ void loop() {
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
       }
     }
-    if(hih8120_enabled){
-        readHIH8120();
-    }
+    // if(hih8120_enabled){
+    //     readHIH8120();
+    // }
     readGpsStream();
 
 
@@ -1358,9 +1365,9 @@ void loop() {
         CO2_float *= pressure_correction;
     }
 
-    if(ozone_enabled){
-        readOzone();
-    }
+    // if(ozone_enabled){
+    //     readOzone();
+    // }
 
     //read PM values and apply calibration factors
     readPlantower();
@@ -1447,7 +1454,7 @@ void loop() {
             t6713.readStatus(1);
         }
     }
-    checkESPWorking();
+    // checkESPWorking();
     if (restart == true)
     {
         System.reset();
@@ -2105,23 +2112,19 @@ float readAlpha2(void){
       return alpha2_ppmraw;
 }
 
-void readOzone(void){
-    int tempValue = 0;
-    if(ozone_analog_enabled){
-        tempValue = analogRead(A0);  // read the analogPin for ozone voltage
-        if(debugging_enabled){
-            Serial.print("Ozone Raw analog in:");
-            Serial.println(tempValue);
+// void readOzone(void){
+//     int tempValue = 0;
+//     tempValue = analogRead(A0);  // read the analogPin for ozone voltage
+//     if(debugging_enabled){
+//         Serial.print("Ozone Raw analog in:");
+//         Serial.println(tempValue);
 
-        }
-        O3_float = tempValue;
-        O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-        O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
-        O3_float += ozone_offset;
-    }else{
-        O3_float = getEspOzoneData();
-    }
-}
+//     }
+//     O3_float = tempValue;
+//     O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
+//     O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
+//     O3_float += ozone_offset;
+// }
 
 
 void writeLogFile(String data){
@@ -2271,13 +2274,6 @@ void outputDataToESP(void){
     
     outputToCloud(cloud_output_string);
     
-    if(esp_wifi_connection_status){
-        if(debugging_enabled){
-            Serial.println("Sending data to esp to upload via wifi...");
-            writeLogFile("Sending data to esp to upload via wifi");
-          }
-        Serial1.println(cloud_output_string);
-    }
     Serial.println(csv_output_string);
 
     if (sd_enabled == 0)
@@ -2427,13 +2423,14 @@ void outputDataToESP(void){
 
     }
 
-    //send start delimeter to ESP
-    //Serial1.print("$");
+
+    delay(500);
+    Serial1.print("$");
     //send the packaged data with # delimeters in between packets
-    //Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
+    Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
 
     //send ending delimeter
-    //Serial1.print("&");
+    Serial1.print("&");
 
     /*Serial.println("Successfully output BLE string to ESP");
     for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
@@ -2446,40 +2443,40 @@ void outputDataToESP(void){
 }
 
 //ask the ESP if it has a wifi connection
-void getEspWifiStatus(void){
-    ESP_connected = "Not Connected. Run one more time.";
-    //command to ask esp for wifi status
-    String doYouHaveWifi = "!&";
-    char yes_or_no = ' ';
-    //if esp doesn't answer, keep going
+// void getEspWifiStatus(void){
+//     ESP_connected = "Not Connected. Run one more time.";
+//     //command to ask esp for wifi status
+//     String doYouHaveWifi = "!&";
+//     char yes_or_no = ' ';
+//     //if esp doesn't answer, keep going
 
 
-    Serial1.print(doYouHaveWifi);
-    Serial1.setTimeout(5000);
-    while(!Serial1.available());
+//     Serial1.print(doYouHaveWifi);
+//     Serial1.setTimeout(5000);
+//     while(!Serial1.available());
 
-    //delay(1000);
-    yes_or_no = Serial1.read();
-    ESP_connected = "Working";
-    if(debugging_enabled){
-        Serial.print("ESP Wifi connection status is: ");
+//     //delay(1000);
+//     yes_or_no = Serial1.read();
+//     ESP_connected = "Working";
+//     if(debugging_enabled){
+//         Serial.print("ESP Wifi connection status is: ");
 
-      }
-    //Serial.println(yes_or_no);
-    if(yes_or_no == 'y'){
-        if(debugging_enabled){
-            Serial.println("Connected!");
-            writeLogFile("ESP wifi connected");
-          }
-        esp_wifi_connection_status = 1;
-    }else{
-        if(debugging_enabled){
-            Serial.println("No Connection");
-            writeLogFile("ESP wifi not connected");
-          }
-        esp_wifi_connection_status = 0;
-    }
-}
+//       }
+//     //Serial.println(yes_or_no);
+//     if(yes_or_no == 'y'){
+//         if(debugging_enabled){
+//             Serial.println("Connected!");
+//             writeLogFile("ESP wifi connected");
+//           }
+//         esp_wifi_connection_status = 1;
+//     }else{
+//         if(debugging_enabled){
+//             Serial.println("No Connection");
+//             writeLogFile("ESP wifi not connected");
+//           }
+//         esp_wifi_connection_status = 0;
+//     }
+// }
 //send wifi information to the ESP
 void sendWifiInfo(void){
     //String wifiCredentials = "@" + String(ssid) + "," + String(password) + "&";
@@ -2491,126 +2488,126 @@ void sendWifiInfo(void){
 }
 
 //ask the ESP if it has a wifi connection
-void checkESPWorking(void){
-    ESP_connected = "Not Connected. Run one more time.";
-    //command to ask esp for wifi status
-    String doYouHaveWifi = "!&";
-    char yes_or_no = ' ';
-    int counterIndex = 0;
-    bool timeOut = false;
-    //if esp doesn't answer, keep going
+// void checkESPWorking(void){
+//     ESP_connected = "Not Connected. Run one more time.";
+//     //command to ask esp for wifi status
+//     String doYouHaveWifi = "!&";
+//     char yes_or_no = ' ';
+//     int counterIndex = 0;
+//     bool timeOut = false;
+//     //if esp doesn't answer, keep going
 
-    Serial1.setTimeout(50);
+//     Serial1.setTimeout(50);
 
-    while(!Serial1.available() && timeOut == false){
-      counterIndex++;
-      if(counterIndex > MAX_COUNTER_INDEX){
-        timeOut = true;
-      }
-    }
-    while (Serial1.available())
-    {
-        char clear_serial = Serial1.read();
-    }
-    if (timeOut == false)
-    {
-        ESP_connected = "Working";
-    }
+//     while(!Serial1.available() && timeOut == false){
+//       counterIndex++;
+//       if(counterIndex > MAX_COUNTER_INDEX){
+//         timeOut = true;
+//       }
+//     }
+//     while (Serial1.available())
+//     {
+//         char clear_serial = Serial1.read();
+//     }
+//     if (timeOut == false)
+//     {
+//         ESP_connected = "Working";
+//     }
 
-}
+// }
 
-float getEspOzoneData(void){
-    float ozone_value = 0.0;
-    String getOzoneData = "Z&";
-    String recievedData = " ";
-    bool timeOut = false;
-    double counterIndex = 0;
-    //if esp doesn't answer, keep going
-    Serial1.setTimeout(3000);
-    if(debugging_enabled){
-        Serial.println("Getting ozone data from esp");
-        writeLogFile("Getting ozone data from esp");
-      }
-    Serial1.print(getOzoneData);
-    while(!Serial1.available() && timeOut == false){
-      //delay(1);
-      counterIndex++;
-      if(counterIndex > MAX_COUNTER_INDEX){
-        if(debugging_enabled){
-          Serial.printf("Unable to get ozone data from ESP, counter index: %1.1f\n\r", counterIndex);
-        }
-        timeOut = true;
-      }
-    }
+// float getEspOzoneData(void){
+//     float ozone_value = 0.0;
+//     String getOzoneData = "Z&";
+//     String recievedData = " ";
+//     bool timeOut = false;
+//     double counterIndex = 0;
+//     //if esp doesn't answer, keep going
+//     Serial1.setTimeout(3000);
+//     if(debugging_enabled){
+//         Serial.println("Getting ozone data from esp");
+//         writeLogFile("Getting ozone data from esp");
+//       }
+//     Serial1.print(getOzoneData);
+//     while(!Serial1.available() && timeOut == false){
+//       //delay(1);
+//       counterIndex++;
+//       if(counterIndex > MAX_COUNTER_INDEX){
+//         if(debugging_enabled){
+//           Serial.printf("Unable to get ozone data from ESP, counter index: %1.1f\n\r", counterIndex);
+//         }
+//         timeOut = true;
+//       }
+//     }
 
 
-    delay(10);
+//     delay(10);
 
-    recievedData = Serial1.readString();
-    //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
-    if(debugging_enabled)
-    {
-        Serial.print("RECIEVED DATA FROM ESP: ");
-        Serial.println(recievedData);
-        writeLogFile("Recieved data from ESP");
-    }
-    //parse data if not null
-    int comma_count = 0;
-    int from_index = 0;
-    int index_of_comma = 0;
-    bool still_searching_for_commas = true;
-    String stringArray[NUMBER_OF_FEILDS];
+//     recievedData = Serial1.readString();
+//     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
+//     if(debugging_enabled)
+//     {
+//         Serial.print("RECIEVED DATA FROM ESP: ");
+//         Serial.println(recievedData);
+//         writeLogFile("Recieved data from ESP");
+//     }
+//     //parse data if not null
+//     int comma_count = 0;
+//     int from_index = 0;
+//     int index_of_comma = 0;
+//     bool still_searching_for_commas = true;
+//     String stringArray[NUMBER_OF_FEILDS];
 
-    while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
-        //Serial.printf("From index: %d\n\r", from_index);
+//     while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
+//         //Serial.printf("From index: %d\n\r", from_index);
 
-        index_of_comma = recievedData.indexOf(',', from_index);
-        if(debugging_enabled){
-          Serial.print("comma index: ");
-          Serial.println(index_of_comma);
-          //writeLogFile("got a comma");
+//         index_of_comma = recievedData.indexOf(',', from_index);
+//         if(debugging_enabled){
+//           Serial.print("comma index: ");
+//           Serial.println(index_of_comma);
+//           //writeLogFile("got a comma");
 
-        }
+//         }
 
-        //if the index of the comma is not zero, then there is data.
-        if(index_of_comma > 0){
-            stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
-            if(debugging_enabled){
-                Serial.printf("String[%d]:", comma_count);
-                Serial.println(stringArray[comma_count]);
-                //writeLogFile(stringArray[comma_count]);
-            }
-            comma_count++;
-            from_index = index_of_comma;
-            from_index += 1;
-        }else{
-            int index_of_cr = recievedData.indexOf('\r', from_index);
-            if(index_of_cr > 0){
-                stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
-                if(debugging_enabled){
-                    Serial.printf("String[%d]:", comma_count);
-                    Serial.println(stringArray[comma_count]);
-                }
-            }
-            still_searching_for_commas = false;
-        }
-    }
-    if(comma_count == NUMBER_OF_FIELDS_LOGGING){
-        ozone_value = stringArray[1].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 1 due to logging");
-            //writeLogFile("using string array index 1 due to logging");
-          }
-    }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
-        ozone_value = stringArray[0].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 0, not logging");
-            //writeLogFile("using string array index 0, not logging");
-          }
-    }
-    return ozone_value;
-    //parseOzoneString(recievedData);
-}
+//         //if the index of the comma is not zero, then there is data.
+//         if(index_of_comma > 0){
+//             stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
+//             if(debugging_enabled){
+//                 Serial.printf("String[%d]:", comma_count);
+//                 Serial.println(stringArray[comma_count]);
+//                 //writeLogFile(stringArray[comma_count]);
+//             }
+//             comma_count++;
+//             from_index = index_of_comma;
+//             from_index += 1;
+//         }else{
+//             int index_of_cr = recievedData.indexOf('\r', from_index);
+//             if(index_of_cr > 0){
+//                 stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
+//                 if(debugging_enabled){
+//                     Serial.printf("String[%d]:", comma_count);
+//                     Serial.println(stringArray[comma_count]);
+//                 }
+//             }
+//             still_searching_for_commas = false;
+//         }
+//     }
+//     if(comma_count == NUMBER_OF_FIELDS_LOGGING){
+//         ozone_value = stringArray[1].toFloat();
+//         if(debugging_enabled){
+//             Serial.println("using string array index 1 due to logging");
+//             //writeLogFile("using string array index 1 due to logging");
+//           }
+//     }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
+//         ozone_value = stringArray[0].toFloat();
+//         if(debugging_enabled){
+//             Serial.println("using string array index 0, not logging");
+//             //writeLogFile("using string array index 0, not logging");
+//           }
+//     }
+//     return ozone_value;
+//     //parseOzoneString(recievedData);
+// }
 
 void readHIH8120(void){
     hih.start();
@@ -2991,11 +2988,24 @@ void serialMenu(){
         }
         else
         {
-            char buf[25];
-            userInput.toCharArray(buf, 25);
+            coreId = userInput;
+            for (int i = 0; i < 8; i++)
+            {
+                char buf[4];
+                String cutUp = userInput.substring(0, 3);
+                Serial.println("This is cutup: ");
+                Serial.println(cutUp);
+                cutUp.toCharArray(buf, 4);
+                Serial.println("This is the buf: ");
+                Serial.println(buf);
+                EEPROM.put(CORE_ID+(i*4), buf);
+                userInput = userInput.substring(3, userInput.length());
+            }
+            // char buf[25];
+            // userInput.toCharArray(buf, 25);
 
-            EEPROM.put(CORE_ID, buf);
-            EEPROM.get(CORE_ID, coreId);
+            // EEPROM.put(CORE_ID, buf);
+            // EEPROM.get(CORE_ID, coreId);
 
             Serial.println("This is the new coreId: ");
             Serial.println(coreId);
@@ -3997,13 +4007,13 @@ String buildAverageCloudString()
         Serial.println("Line to write to cloud:");
         Serial.println(cloud_output_string);
     }
-    if(esp_wifi_connection_status){
-        if(debugging_enabled){
-            Serial.println("Sending data to esp to upload via wifi...");
-            writeLogFile("Sending data to esp to upload via wifi");
-        }
-        Serial1.println(cloud_output_string);
-    }
+    // if(esp_wifi_connection_status){
+    //     if(debugging_enabled){
+    //         Serial.println("Sending data to esp to upload via wifi...");
+    //         writeLogFile("Sending data to esp to upload via wifi");
+    //     }
+    //     Serial1.println(cloud_output_string);
+    // }
 
     if (sensible_iot_en == 1)
     {
