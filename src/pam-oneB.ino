@@ -571,13 +571,17 @@ void outputToCloud(String data)
 void sendESPWifiString(String finalData)
 {
     int index = finalData.indexOf('&');
-    finalData[index] = '!';
+    finalData[index] = '#';
     // String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), "%yyyy-%m-%dT%H:%M:%SZ"))+"\"}";
     String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
-    wifiString = "!"+wifiString+"&";
+    wifiString ="!"+wifiString+"&";
+    Serial.println("Outputting test string");
     Serial.println(wifiString);
-    Serial1.print(wifiString);
     delay(1000);
+    Serial1.print("!^1;Z1083M2.863C519r0R0q0t-40.0P846.2h0.0O0.0x80.3a999.9999999o99.9999999c255.0Y1646068309!2&");
+    //delay(10);
+    //Serial1.print(wifiString);
+
 }
 
 //send memory address and value separated by a comma
