@@ -363,6 +363,7 @@ time_t pushed_time = NULL;
 
 int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
 bool restart = false;
+bool sendBLE = true;
 
 //serial menu variables
 int addr;
@@ -640,8 +641,10 @@ void sendESPWifiString(String finalData)
     String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
     wifiString ="!"+wifiString+"&";
     Serial.println(wifiString);
+    sendBLE = false;
+    delay(500);
     Serial1.print(wifiString);
-    delay(1000);
+    delay(1500);
 
 }
 
@@ -2428,13 +2431,16 @@ void outputDataToESP(void){
 
     }
 
-    //send start delimeter to ESP
-    Serial1.print("$");
-    //send the packaged data with # delimeters in between packets
-    Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
+    if (measurement_count != measurements_to_average-1 || measurement_count == 0)
+    {
+        //send start delimeter to ESP
+        Serial1.print("$");
+        //send the packaged data with # delimeters in between packets
+        Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
 
-    //send ending delimeter
-    Serial1.print("&");
+        //send ending delimeter
+        Serial1.print("&");
+    }
 
     /*Serial.println("Successfully output BLE string to ESP");
     for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
