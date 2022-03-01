@@ -69,7 +69,7 @@ float readCO2(void);
 float readAlpha1(void);
 float readAlpha2(void);
 void outputDataToESP(void);
-void sendWifiInfo(void);
+void getESPWifi(void);
 void readPlantower(void);
 char checkValue(char *thebuf, char leng);
 int transmitPM01(char *thebuf);
@@ -470,6 +470,7 @@ void checkButtonPush();
 String buildHeaderString();
 void checkESPWorking();
 void sendESPWifiString(String finalData);
+bool  sendWifiInfo(void);
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -639,7 +640,7 @@ void sendESPWifiString(String finalData)
     finalData[index] = '#';
     // String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), "%yyyy-%m-%dT%H:%M:%SZ"))+"\"}";
     String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
-    wifiString ="!"+wifiString+"&";
+    wifiString ="!!"+wifiString+"&";
     Serial.println(wifiString);
     sendBLE = false;
     delay(500);
@@ -2486,44 +2487,64 @@ void outputDataToESP(void){
 //         esp_wifi_connection_status = 0;
 //     }
 // }
+
 //send wifi information to the ESP
-void sendWifiInfo(void){
+bool  sendWifiInfo(void){
     //String wifiCredentials = "@" + String(ssid) + "," + String(password) + "&";
-    String wifiCredentials = "@"+String(ssid) + "," + String(password)+"&";
+    String wifiCredentials = "!@"+String(ssid) + "," + String(password)+"&";
     Serial.println("Sending new wifi credentials to ESP: ");
     Serial.println(wifiCredentials);
     
     Serial1.print(wifiCredentials);
+    delay(200);
+    Serial1.setTimeout(500000);
+    String response = Serial1.readStringUntil('\r');
+    Serial.println("Trying to connect to the network. Please give up to 1 minute...");
+    Serial1.flush();
+    if (response == "not connected" || response.length() < 2)
+    {
+        Serial.println("Did not connect to the wifi. Doing a system restart now...");
+        delay(500);
+        System.reset();
+        return 0;
+    }
+    else
+    {
+        Serial.println("Conected to the wifi. This is your local IP: ");
+        Serial.println(response);
+        Serial.println("Doing a system restart now...");
+        delay(500);
+        System.reset();
+        return 1;
+    }
 }
 
 //ask the ESP if it has a wifi connection
-// void checkESPWorking(void){
-//     ESP_connected = "Not Connected. Run one more time.";
-//     //command to ask esp for wifi status
-//     String doYouHaveWifi = "!&";
-//     char yes_or_no = ' ';
-//     int counterIndex = 0;
-//     bool timeOut = false;
-//     //if esp doesn't answer, keep going
+void getESPWifi(void){
+    
+    delay(200);
+    String wifiStatus = "";
+    Serial.println("Checking your wifi status. This may take a minute.....");
+    while (wifiStatus != "Starting network check now")
+    {
+        Serial1.print("!$&");
+        Serial1.setTimeout(500);
 
-//     Serial1.setTimeout(50);
-
-//     while(!Serial1.available() && timeOut == false){
-//       counterIndex++;
-//       if(counterIndex > MAX_COUNTER_INDEX){
-//         timeOut = true;
-//       }
-//     }
-//     while (Serial1.available())
-//     {
-//         char clear_serial = Serial1.read();
-//     }
-//     if (timeOut == false)
-//     {
-//         ESP_connected = "Working";
-//     }
-
-// }
+        String wifiStatus = Serial1.readStringUntil('\r');
+    }
+    
+    Serial1.setTimeout(50000);
+    wifiStatus = Serial1.readStringUntil('\r');
+    if (wifiStatus.length() < 2 || wifiStatus == "not connected")
+    {
+        Serial.println("You are not connected wifi");
+    }
+    else
+    {
+        Serial.println("You are connected to wifi. This is your local IP address...");
+        Serial.println(wifiStatus);
+    }
+}
 
 // float getEspOzoneData(void){
 //     float ozone_value = 0.0;
@@ -3041,6 +3062,10 @@ void serialMenu(){
 
         }
     }
+    else if (incomingByte == 'Y')
+    {
+        getESPWifi();
+    }
     else if(incomingByte == '1'){
         serialGetNO2Slope();
     }else if(incomingByte == '2'){
@@ -3295,43 +3320,79 @@ void serialIncreaseChargeCurrent(void){
     Serial.printf("new charge current of %d mA\n\r", total_current);
 }
 
-void serialGetWifiCredentials(void){
-    Serial.print("Current stored ssid: ");
-    Serial.println(ssid);
-    Serial.print("Current stored password: ");
-    Serial.println(password);
-    Serial.println("Please enter password in order to make changes.\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    if(tempString.equals("bould")){
-        Serial.println("Password correct!");
-        Serial.println("Enter new ssid:");
-        Serial.setTimeout(50000);
-        String tempSsid = Serial.readStringUntil('\r');
-        Serial.print("Your new ssid will be: ");
-        Serial.println(tempSsid);
-        Serial.println("Is this okay?(y or n)");
-        String ok = Serial.readStringUntil('\r');
-        if(ok.equals("y")){
-            Serial.println("Saving new ssid");
-            ssid = tempSsid;
-            Serial.println("Enter new password");
-            String tempPassword = Serial.readStringUntil('\r');
-            Serial.print("Your new password will be: ");
-            Serial.println(tempPassword);
-            String ok = Serial.readStringUntil('\r');
-            if(ok.equals("y")){
-                Serial.println("Saving new password");
-                password = tempPassword;
-                sendWifiInfo();
-            }else{
-                Serial.println("okay, no problem\n\r");
-            }
-        }else{
-            Serial.println("okay, no problem\n\r");
-            return;
+void serialGetWifiCredentials(void)
+{
+    Serial.println("You would like to pick a wifi network. One second while we scan for available networks...");
+    delay(200);
+    String individual = "";
+    String availableNetworks = "";
+    Serial.println("Inside while");
+    bool notDone = true;
+    time_t nowTime = Time.now();
+    while (notDone)
+    {    
+        Serial1.print("!#&"); // the first character denotes a wifi action. The second character denotes getting a list of all available networks
+        delay(200);
+        individual = Serial1.readString();
+        if (individual != "&" && individual != "")
+        {
+            availableNetworks += individual;
+        }
+        if (individual.length() > 2 && individual[individual.length()-1] == '&')
+        {
+            notDone = false;
         }
     }
+
+    if (availableNetworks == "no networks found")
+    {
+        Serial.println("There are no available networks in your area");
+        return ;
+    }
+
+    Serial.println("This is a list of the available networks: ");
+    Serial.println(availableNetworks);
+    availableNetworks = availableNetworks.substring(0, availableNetworks.length()-1);
+    Serial.println("Please enter the number of the netowrk you would like to connect to: ");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    notDone = true;
+    int i = 0;
+    while(notDone && availableNetworks.length() > 2)
+    {
+        int placeHolder = tempString.toInt();
+        if (i+1 == tempString.toInt())
+        {
+            notDone = false;
+            tempString = availableNetworks.substring(availableNetworks.indexOf(':')+2, availableNetworks.indexOf('\n\r'));
+        }
+        else
+        {
+            availableNetworks = availableNetworks.substring(availableNetworks.indexOf('\n\r')+2, availableNetworks.length());
+        }
+        i++;
+    }
+    Serial.println("You have chosen network: ");
+    Serial.println(tempString);
+
+    Serial.println("Enter the password");
+    String tempPassword = Serial.readStringUntil('\r');
+    Serial.print("Your new password will be: ");
+    Serial.println(tempPassword);
+    Serial.println("Is this correct?(y or n)");
+    String ok = Serial.readStringUntil('\r');
+    if(ok.equals("y")){
+        Serial.println("Saving new password");
+        ssid = tempString;
+        password = tempPassword;
+        sendWifiInfo();
+    }
+    else
+    {
+        Serial.println("Leaving network settings now. Restart to retry.");
+    }
+
+    return ;
 }
 void serialSetSensibleIotEnable(void){
     Serial.println("Please enter password in order to enable data push to Sensible Iot");
@@ -4096,6 +4157,7 @@ void outputSerialMenuOptions(void){
     Serial.println("U:  Set coreId");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("W:  Enable/ Disable wifi (This will turn off cellular uploads)");
+    Serial.println("Y:  Check wifi status");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
 
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
