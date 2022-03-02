@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -69,6 +69,9 @@ float readCO2(void);
 float readAlpha1(void);
 float readAlpha2(void);
 void outputDataToESP(void);
+long getWifiUploadStatus(void);
+long getWifiStatus(void);
+void getWifiIP(void);
 void getESPWifi(void);
 void readPlantower(void);
 char checkValue(char *thebuf, char leng);
@@ -107,7 +110,7 @@ void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
-#line 47 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 47 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
@@ -393,6 +396,8 @@ union{
     char byte[2];
 }status_word;
 
+long wifi_status = 0;           //0=not connected, 1=connected, 2=connecting
+long upload_status = 0;         //0=last reading not uploaded, 1=last reading uploaded
 char cellular_status = 0;
 char gps_status = 0;
 bool calibratingCO2 = false;
@@ -503,7 +508,12 @@ String buildHeaderString()
     {
         header += "O3(ozone),";
     }
-    header += "Batt(%),Latitude,Longitude,Date/Time";
+    header += "Batt(%),Latitude,Longitude,";
+    if (wifi_enabled == 1)
+    {
+        header += "UploadStatus,WifiConnStatus,";
+    }
+    header += "Date/Time";
     return header;
 }
 
@@ -641,7 +651,7 @@ void sendESPWifiString(String finalData)
     // String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), "%yyyy-%m-%dT%H:%M:%SZ"))+"\"}";
     String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
     wifiString ="!!"+wifiString+"&";
-    Serial.println(wifiString);
+    //Serial.println(wifiString);
     sendBLE = false;
     delay(500);
     Serial1.print(wifiString);
@@ -1283,7 +1293,7 @@ void setup()
             file_started = 1;
         }
     }
-    resetESP();
+    //resetESP();
 
     Serial.println("ESP reset!");
 
@@ -1358,7 +1368,8 @@ void loop() {
     }
 
     CO2_float = readCO2();
-
+    
+    //getWifiStatus();
     //correct for altitude
     float pressure_correction = bme.pressure/100;
     if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
@@ -1390,7 +1401,9 @@ void loop() {
     corrected_PM_1 = corrected_PM_1 + PM_1_zero;
     corrected_PM_1 = corrected_PM_1 * PM_1_slope;
 
-    //getEspWifiStatus();
+    delay(1000);
+    upload_status = getWifiUploadStatus();
+    wifi_status = getWifiStatus();
     outputDataToESP();
 
     sample_counter = ++sample_counter;
@@ -1734,21 +1747,44 @@ void enableContinuousGPS()
 
     sendPacket(packet, sizeof(packet));
 }
-
+/*
+UBX_SYNCH_1:B5
+UBX_SYNCH_2:62
+cls:02
+id:41
+len LSB:08
+len MSB: 00
+payload[0]:00
+payload[1]:00
+payload[2]:00
+payload[3]:00
+payload[4]:02
+payload[5]:00
+payload[6]:00
+payload[7]:00
+ChecksumA:4D
+ChecksumB:3B
+*/
 void enableLowPowerGPS()
 {
     // CFG-MSG packet.
     byte packet[] = {
         0xB5, // sync char 1
         0x62, // sync char 2
-        0x06, // class
-        0x11, // id
-        0x02, // length
+        0x02, // class
+        0x41, // id
+        0x08, // length
         0x00, // length
-        0x01, // payload
-        0x00, // payload
-        0x1A, // CK_A
-        0x83, // CK_B
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x02,
+        0x00,
+        0x00,
+        0x00,
+        0x4D,
+        0x3B
     };
 
     sendPacket(packet, sizeof(packet));
@@ -2271,7 +2307,8 @@ void outputDataToESP(void){
     }
 
     //csv_output_string += String(status_word.status_int) + ",";
-
+    csv_output_string += String(upload_status) + ',';
+    csv_output_string += String(wifi_status) + ',';
     csv_output_string += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
     //csv_output_string += String(Time.format(local_time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
@@ -2488,6 +2525,58 @@ void outputDataToESP(void){
 //     }
 // }
 
+long getWifiUploadStatus(void)
+{
+    long status;
+    //Serial.println("Getting Wifi Upload status...");
+    Serial1.print('!');
+    Serial1.print('^');
+    Serial1.print('&');
+    delay(300);
+    Serial1.setTimeout(1000);
+    String response = Serial1.readStringUntil('&');
+    String substring = response.substring(2);
+    status = substring.toInt();
+    if(debugging_enabled)
+    {
+        Serial.println("Upload response:");
+        Serial.println(status);
+    }
+    return status;
+}
+
+long getWifiStatus(void)
+{
+    long status = 0;
+    //Serial.println("Getting Wifi connection status...");
+    Serial1.print('!');
+    Serial1.print('*');
+    Serial1.print('&');
+    delay(300);
+    Serial1.setTimeout(1000);
+    String response = Serial1.readStringUntil('&');
+    String substring = response.substring(2);
+    status = substring.toInt();
+    if(debugging_enabled)
+    {
+        Serial.println("Wifi Connection:");
+        Serial.println(status);
+    }
+    return status;
+}
+
+void getWifiIP(void)
+{
+    //Serial.println("Getting Wifi IP...");
+    Serial1.print('!');
+    Serial1.print('$');
+    Serial1.print('&');
+    delay(200);
+    Serial1.setTimeout(1000);
+    String response = Serial1.readStringUntil('&');
+    Serial.println("IPAddress:");
+    Serial.println(response.substring(2));
+}
 //send wifi information to the ESP
 bool  sendWifiInfo(void){
     //String wifiCredentials = "@" + String(ssid) + "," + String(password) + "&";
@@ -2522,16 +2611,9 @@ bool  sendWifiInfo(void){
 //ask the ESP if it has a wifi connection
 void getESPWifi(void){
     
-    delay(200);
     String wifiStatus = "";
+    Serial1.print("!$&");
     Serial.println("Checking your wifi status. This may take a minute.....");
-    while (wifiStatus != "Starting network check now")
-    {
-        Serial1.print("!$&");
-        Serial1.setTimeout(500);
-
-        String wifiStatus = Serial1.readStringUntil('\r');
-    }
     
     Serial1.setTimeout(50000);
     wifiStatus = Serial1.readStringUntil('\r');
@@ -3064,7 +3146,8 @@ void serialMenu(){
     }
     else if (incomingByte == 'Y')
     {
-        getESPWifi();
+        //getESPWifi();
+        getWifiIP();
     }
     else if(incomingByte == '1'){
         serialGetNO2Slope();
@@ -3326,7 +3409,7 @@ void serialGetWifiCredentials(void)
     delay(200);
     String individual = "";
     String availableNetworks = "";
-    Serial.println("Inside while");
+   // Serial.println("Inside while");
     bool notDone = true;
     time_t nowTime = Time.now();
     while (notDone)
@@ -3350,10 +3433,10 @@ void serialGetWifiCredentials(void)
         return ;
     }
 
-    Serial.println("This is a list of the available networks: ");
+    Serial.println("Available networks: ");
     Serial.println(availableNetworks);
     availableNetworks = availableNetworks.substring(0, availableNetworks.length()-1);
-    Serial.println("Please enter the number of the netowrk you would like to connect to: ");
+    Serial.println("Please enter the number of the network you would like to connect to: ");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     notDone = true;
