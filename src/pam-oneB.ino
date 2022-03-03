@@ -45,10 +45,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(7);
+PRODUCT_VERSION(8);
 
 #define APP_VERSION 8
-#define BUILD_VERSION 0
+#define BUILD_VERSION 1
 
 
 //define constants
@@ -116,8 +116,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define TEMP_CORRECTION_EN_ADDRESS 156
 #define AVERAGING_ON_MEM_ADDRESS 160
 #define CORE_ID 164
-#define WIFI_ENABLED 168
-#define MAX_MEM_ADDRESS 168
+#define WIFI_ENABLED 196
+#define MAX_MEM_ADDRESS 196
 
 
 
@@ -2009,6 +2009,7 @@ float readAlpha1(float sensor_temperature, int species){
         coefficient_low = NO2_COEFF_TEMP_LOW;
         coefficient_med = NO2_COEFF_TEMP_MED;
         coefficient_high = NO2_COEFF_TEMP_HIGH;
+        sensor_sensitivity = NO2_SENSITIVITY;
 
         if(debugging_enabled){
             Serial.printf("NO2 Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);

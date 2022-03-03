@@ -111,10 +111,10 @@ int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
 #line 47 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 PRODUCT_ID(2735);
-PRODUCT_VERSION(7);
+PRODUCT_VERSION(8);
 
 #define APP_VERSION 8
-#define BUILD_VERSION 0
+#define BUILD_VERSION 1
 
 
 //define constants
@@ -182,8 +182,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define TEMP_CORRECTION_EN_ADDRESS 156
 #define AVERAGING_ON_MEM_ADDRESS 160
 #define CORE_ID 164
-#define WIFI_ENABLED 168
-#define MAX_MEM_ADDRESS 168
+#define WIFI_ENABLED 196
+#define MAX_MEM_ADDRESS 196
 
 
 
