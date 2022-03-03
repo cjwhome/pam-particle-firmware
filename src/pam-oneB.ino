@@ -1851,10 +1851,10 @@ float readAlpha1(float sensor_temperature, int species){
         if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 30){
+        else if(sensor_temperature <= 35){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 30){
+        else if(sensor_temperature > 35){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha1_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -1975,10 +1975,10 @@ float readAlpha2(float sensor_temperature, int species){
         if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 30){
+        else if(sensor_temperature <= 35){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 30){
+        else if(sensor_temperature > 35){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm

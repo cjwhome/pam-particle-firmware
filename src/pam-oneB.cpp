@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 1 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -108,7 +108,7 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 47 "c:/particleProjects/pam-one-testing-backup/src/pam-oneB.ino"
+#line 47 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
@@ -1916,10 +1916,10 @@ float readAlpha1(float sensor_temperature, int species){
         if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 30){
+        else if(sensor_temperature <= 35){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 30){
+        else if(sensor_temperature > 35){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha1_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -2040,10 +2040,10 @@ float readAlpha2(float sensor_temperature, int species){
         if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 30){
+        else if(sensor_temperature <= 35){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 30){
+        else if(sensor_temperature > 35){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
