@@ -687,6 +687,8 @@ void sendESPWifiString(String finalData)
     }
     if (notDone == true)
     {
+        wifi_status = 0;
+        wifi_code = 0;
         return ;
     }
     else
