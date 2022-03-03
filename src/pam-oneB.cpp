@@ -2075,6 +2075,7 @@ float readAlpha1(float sensor_temperature, int species){
         coefficient_low = NO2_COEFF_TEMP_LOW;
         coefficient_med = NO2_COEFF_TEMP_MED;
         coefficient_high = NO2_COEFF_TEMP_HIGH;
+        sensor_sensitivity = NO2_SENSITIVITY;
 
         if(debugging_enabled){
             Serial.printf("NO2 Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
