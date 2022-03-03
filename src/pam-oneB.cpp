@@ -50,6 +50,7 @@
 #include "CellularHelper.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
+String checksumMaker(String data);
 void outputToCloudAveraging();
 void outputToCloud(String data);
 void check_wifi_file(void);
@@ -298,6 +299,8 @@ int log_file_started = 0;
 String ssid; //wifi network name
 String password; //wifi network password
 int wifi_enabled = 0;
+int wifi_status = 0;
+int wifi_code = 0;
 
 //global variables
 int counter = 0;
@@ -491,6 +494,19 @@ void writeRegister(uint8_t reg, uint8_t value) {
     Wire3.endTransmission(true);
 }
 
+String checksumMaker(String data)
+{
+    String checksumString = "";
+    int checksum = 0;
+    for (int i = 0; i < data.length(); i++)
+    {
+        checksum ^= data[i];
+    }
+    checksumString += '*';
+    checksumString += checksum;
+    return checksumString;
+}
+
 String buildHeaderString()
 {
     String header = "DEV,CO(ppm),CO2(ppm),";
@@ -503,7 +519,12 @@ String buildHeaderString()
     {
         header += "O3(ozone),";
     }
-    header += "Batt(%),Latitude,Longitude,Date/Time";
+    header += "Batt(%),";
+    if (wifi_enabled)
+    {
+        header += "wifi_status,wifi_code,";
+    }
+    header += "Latitude,Longitude,Date/Time";
     return header;
 }
 
@@ -640,12 +661,33 @@ void sendESPWifiString(String finalData)
     finalData[index] = '#';
     // String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), "%yyyy-%m-%dT%H:%M:%SZ"))+"\"}";
     String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
-    wifiString ="!!"+wifiString+"&";
-    Serial.println(wifiString);
+    wifiString ="!!"+wifiString;
+    String checkSum = checksumMaker(wifiString);
+    wifiString += checkSum;
     sendBLE = false;
-    delay(500);
+    delay(2000);
     Serial1.print(wifiString);
-    delay(1500);
+    bool notDone = true;
+    String wifiStuff = "";
+    time_t timer = Time.now()+1000;
+    while (notDone && timer > Time.now())
+    {
+        if (Serial1.available())
+        {
+            char inchar = (char)Serial1.read();
+            if (inchar == '&')
+            {
+                notDone = false;
+            }
+            else
+            {
+                wifiStuff += inchar;
+            }
+        }
+    }
+    index = wifiStuff.indexOf(',');
+    wifi_status = wifiStuff.substring(0, index).toInt();
+    wifi_code = wifiStuff.substring(index+1, wifiStuff.length()).toInt();
 
 }
 
@@ -2230,6 +2272,11 @@ void outputDataToESP(void){
     }
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     csv_output_string += String(fuel.getSoC(), 1) + ",";
+    if (wifi_enabled)
+    {
+        csv_output_string += String(wifi_status)+ ",";
+        csv_output_string += String (wifi_code)+ ",";
+    }
     //cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
 
     //csv_output_string += String(sound_average, 0) + ",";
@@ -2314,8 +2361,8 @@ void outputDataToESP(void){
     //Each "section" in the array is separated by a #
     //we are using binary for the ble packets so we can compress the data into 19 bytes for the small payload
 
-    byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
-
+    byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE] = {0, };     //19 bytes per data line and 12 species to output
+    memset(ble_output_array, 0, sizeof(byte));
 
     for(int i=0; i<NUMBER_OF_SPECIES; i++){
 
@@ -2434,13 +2481,10 @@ void outputDataToESP(void){
 
     if (measurement_count != measurements_to_average-1 || measurement_count == 0)
     {
-        //send start delimeter to ESP
         Serial1.print("$");
-        //send the packaged data with # delimeters in between packets
         Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
-
-        //send ending delimeter
         Serial1.print("&");
+        delay(200);
     }
 
     /*Serial.println("Successfully output BLE string to ESP");
@@ -2489,9 +2533,10 @@ void outputDataToESP(void){
 // }
 
 //send wifi information to the ESP
-bool  sendWifiInfo(void){
-    //String wifiCredentials = "@" + String(ssid) + "," + String(password) + "&";
-    String wifiCredentials = "!@"+String(ssid) + "," + String(password)+"&";
+bool  sendWifiInfo(void)
+{
+    String wifiCredentials = "!@"+String(ssid) + "," + String(password);
+    wifiCredentials += checksumMaker(wifiCredentials);
     Serial.println("Sending new wifi credentials to ESP: ");
     Serial.println(wifiCredentials);
     
@@ -2504,17 +2549,12 @@ bool  sendWifiInfo(void){
     if (response == "not connected" || response.length() < 2)
     {
         Serial.println("Did not connect to the wifi. Doing a system restart now...");
-        delay(500);
-        System.reset();
         return 0;
     }
     else
     {
         Serial.println("Conected to the wifi. This is your local IP: ");
         Serial.println(response);
-        Serial.println("Doing a system restart now...");
-        delay(500);
-        System.reset();
         return 1;
     }
 }
@@ -2522,16 +2562,9 @@ bool  sendWifiInfo(void){
 //ask the ESP if it has a wifi connection
 void getESPWifi(void){
     
-    delay(200);
     String wifiStatus = "";
+    Serial1.print("!$&");
     Serial.println("Checking your wifi status. This may take a minute.....");
-    while (wifiStatus != "Starting network check now")
-    {
-        Serial1.print("!$&");
-        Serial1.setTimeout(500);
-
-        String wifiStatus = Serial1.readStringUntil('\r');
-    }
     
     Serial1.setTimeout(50000);
     wifiStatus = Serial1.readStringUntil('\r');
@@ -3323,37 +3356,38 @@ void serialIncreaseChargeCurrent(void){
 void serialGetWifiCredentials(void)
 {
     Serial.println("You would like to pick a wifi network. One second while we scan for available networks...");
-    delay(200);
-    String individual = "";
-    String availableNetworks = "";
-    Serial.println("Inside while");
+
+    String availableNetworks = "!#";
+    availableNetworks += checksumMaker(availableNetworks);
+    Serial1.println(availableNetworks);
     bool notDone = true;
-    time_t nowTime = Time.now();
+    int count = 0;
+    char char_array[500];
+    availableNetworks = "";
+
     while (notDone)
-    {    
-        Serial1.print("!#&"); // the first character denotes a wifi action. The second character denotes getting a list of all available networks
-        delay(200);
-        individual = Serial1.readString();
-        if (individual != "&" && individual != "")
+    {
+        if (Serial1.available())
         {
-            availableNetworks += individual;
-        }
-        if (individual.length() > 2 && individual[individual.length()-1] == '&')
-        {
-            notDone = false;
+            char inchar = (char)Serial1.read();
+            availableNetworks += String(inchar);
+            count++;
+            if (inchar == '&')
+                notDone = false;
         }
     }
 
-    if (availableNetworks == "no networks found")
+    if (availableNetworks == "no networks found&")
     {
         Serial.println("There are no available networks in your area");
         return ;
     }
 
     Serial.println("This is a list of the available networks: ");
-    Serial.println(availableNetworks);
     availableNetworks = availableNetworks.substring(0, availableNetworks.length()-1);
-    Serial.println("Please enter the number of the netowrk you would like to connect to: ");
+    Serial.println(availableNetworks);
+
+    Serial.println("Please enter the number of the network you would like to connect to: ");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     notDone = true;
@@ -3368,6 +3402,10 @@ void serialGetWifiCredentials(void)
         }
         else
         {
+            if (availableNetworks.substring(0, availableNetworks.indexOf('\n\r')+2).length() < 3)
+            {
+                availableNetworks = availableNetworks.substring(availableNetworks.indexOf('\n\r')+2, availableNetworks.length());
+            }
             availableNetworks = availableNetworks.substring(availableNetworks.indexOf('\n\r')+2, availableNetworks.length());
         }
         i++;
