@@ -600,7 +600,7 @@ void sendESPWifiString(String finalData)
     String checkSum = checksumMaker(wifiString);
     wifiString += checkSum;
     sendBLE = false;
-    delay(2000);
+    delay(4000);
     Serial1.print(wifiString);
     bool notDone = true;
     String wifiStuff = "";
@@ -620,9 +620,17 @@ void sendESPWifiString(String finalData)
             }
         }
     }
-    index = wifiStuff.indexOf(',');
-    wifi_status = wifiStuff.substring(0, index).toInt();
-    wifi_code = wifiStuff.substring(index+1, wifiStuff.length()).toInt();
+    if (notDone == true)
+    {
+        return ;
+    }
+    else
+    {
+        index = wifiStuff.indexOf(',');
+        wifi_status = wifiStuff.substring(0, index).toInt();
+        wifi_code = wifiStuff.substring(index+1, wifiStuff.length()).toInt();
+    }
+
 
 }
 
