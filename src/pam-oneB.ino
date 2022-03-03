@@ -39,7 +39,7 @@
 #include "inttypes.h"
 #include "Particle.h"
 #include "PowerCheck.h"
-//#include "Serial1/Serial1.h"
+// #include "Serial1/Serial1.h"
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
@@ -47,8 +47,8 @@
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
-#define APP_VERSION 7
-#define BUILD_VERSION 24
+#define APP_VERSION 8
+#define BUILD_VERSION 0
 
 
 //define constants
@@ -114,7 +114,11 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define SD_CARD_EN_MEM_ADDRESS 148
 #define UPDATE_MEM_ADDRESS 152
 #define TEMP_CORRECTION_EN_ADDRESS 156
-#define MAX_MEM_ADDRESS 156
+#define AVERAGING_ON_MEM_ADDRESS 160
+#define CORE_ID 164
+#define WIFI_ENABLED 168
+#define MAX_MEM_ADDRESS 168
+
 
 
 //max and min values
@@ -123,6 +127,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 
 //#define MEASUREMENTS_TO_AVERAGE 1       //change to 30 for 3 minute uploads
 
+// The amount of measurements we skip right after we send an upload
+#define NUMBER_OF_MEASUREMENTS_SKIP 5
 
 
 //ble data output
@@ -220,6 +226,19 @@ int plantower_select = D3;
 time_t buttonOffTime = NULL;
 const int DEBOUNCE_DELAY = 50;
 
+//used for averaging
+float CO_sum = 0;
+float CO2_sum = 0;
+float NO2_sum = 0;
+float pressure_sum = 0;
+float humidity_sum = 0;
+float PM1_sum = 0;
+float PM25_sum = 0;
+float PM10_sum = 0;
+
+int measurement_count = 0;
+int number_of_measurements_skip = NUMBER_OF_MEASUREMENTS_SKIP;
+
 //manually control connection to cellular network
 SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
@@ -252,6 +271,9 @@ int log_file_started = 0;
 //wifi
 String ssid; //wifi network name
 String password; //wifi network password
+int wifi_enabled = 0;
+int wifi_status = 0;
+int wifi_code = 0;
 
 //global variables
 int counter = 0;
@@ -285,19 +307,11 @@ int NO2_zero = 0;
 int ozone_analog_enabled = 0;           //read ozone through analog or from ESP
 int sd_enabled = 0;  // sd_enabled in memory is defaulted to zero. Since this is the case, zero means we are using the sd card, and 1 means we are not.
 int temperature_correction_enabled = 0;
+int averaging_enabled = 0; // The default being zero is avergaing is off.
 
 char geolocation_latitude[12] = "999.9999999";
 char geolocation_longitude[13] = "99.9999999";
 char geolocation_accuracy[6] = "255.0";
-
-//used for averaging
-float CO_sum = 0;
-float CO2_sum = 0;
-float O3_sum = 0;
-
-float PM25_sum = 0;
-float PM10_sum = 0;
-int measurement_count = 0;
 
 //calibration parameters
 float CO2_slope;
@@ -325,6 +339,8 @@ bool pressed_button = false;
 time_t pushed_time = NULL;
 
 int sleepInterval = 60;  // This is used below for sleep times and is equal to 60 seconds of time.
+bool restart = false;
+bool sendBLE = true;
 
 //serial menu variables
 int addr;
@@ -336,6 +352,7 @@ int PM01Value=0;
 int PM2_5Value=0;
 int PM10Value=0;
 float corrected_PM_25 = 0;
+float corrected_PM_1 = 0;
 #define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
 char buf[LENG]; //Serial buffer sent from PMS1003 Particulate Matter sensor
 char incomingByte;  //serial connection from user
@@ -358,7 +375,7 @@ char gps_status = 0;
 bool calibratingCO2 = false;
 String accumulated_data = "";
 String ESP_connected = "";
-
+String coreId = "";
 
 /*
 The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
@@ -414,6 +431,7 @@ int calibrateCO2(String nothing);
 
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
+void outputToCloudAveraging(void);
 void echoGps();
 void readOzone(void);
 float readCO(void);
@@ -428,6 +446,8 @@ void dateTime(uint16_t* date, uint16_t* time);
 void checkButtonPush();
 String buildHeaderString();
 void checkESPWorking();
+void sendESPWifiString(String finalData);
+bool  sendWifiInfo(void);
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -448,6 +468,19 @@ void writeRegister(uint8_t reg, uint8_t value) {
     Wire3.endTransmission(true);
 }
 
+String checksumMaker(String data)
+{
+    String checksumString = "";
+    int checksum = 0;
+    for (int i = 0; i < data.length(); i++)
+    {
+        checksum ^= data[i];
+    }
+    checksumString += '*';
+    checksumString += checksum;
+    return checksumString;
+}
+
 String buildHeaderString()
 {
     String header = "DEV,CO(ppm),CO2(ppm),";
@@ -460,7 +493,12 @@ String buildHeaderString()
     {
         header += "O3(ozone),";
     }
-    header += "Batt(%),Latitude,Longitude,Date/Time";
+    header += "Batt(%),";
+    if (wifi_enabled)
+    {
+        header += "wifi_status,wifi_code,";
+    }
+    header += "Latitude,Longitude,Date/Time";
     return header;
 }
 
@@ -473,36 +511,84 @@ void dateTime(uint16_t* date, uint16_t* time) {
   // return time using FAT_TIME macro to format fields
   *time = FAT_TIME(Time.hour(), Time.minute(), Time.second());
 }
-//todo: average everything except ozone
-void outputToCloud(String data) {
-    CO_sum += CO_float;
-    CO2_sum += CO2_float;
-    O3_sum = O3_float;      //do not average ozone because it is averaged on the ozone monitor
-    measurement_count++;
 
-    if(measurement_count == measurements_to_average){
-        CO_sum /= measurements_to_average;
-        CO2_sum /= measurements_to_average;
-        //O3_sum /= measurements_to_average;
+void outputToCloudAveraging()
+{
+    String finalData = "";
+    if (measurement_count > number_of_measurements_skip)
+    {
+        CO_sum += CO_float;
+        CO2_sum += CO2_float;
+        PM1_sum += corrected_PM_1;
+        PM25_sum += corrected_PM_25;
+        PM10_sum += PM10Value;
+        pressure_sum += bme.pressure / 100.0;
+        humidity_sum += readHumidity();
+
+        if (NO2_enabled)
+        {
+            NO2_sum += NO2_float;
+        }
+    }
+    if (measurement_count == measurements_to_average)
+    {
+        int fixed_count = measurement_count-number_of_measurements_skip;
+        CO_sum /= fixed_count;
+        CO2_sum /= fixed_count;
+        PM1_sum /= fixed_count;
+        PM25_sum /= fixed_count;
+        PM10_sum /= fixed_count;
+        pressure_sum /= fixed_count;
+        humidity_sum /= fixed_count;
+
+        if (NO2_enabled)
+        {
+            NO2_sum /= fixed_count;
+        }
+        finalData = buildAverageCloudString();
+        CO_sum = 0;
+        CO2_sum = 0;
+        NO2_sum = 0;
+        PM1_sum = 0;
+        PM25_sum = 0;
+        PM10_sum = 0;
+        pressure_sum = 0;
+        humidity_sum = 0;
 
         measurement_count = 0;
+        if (wifi_enabled == 0)
+        {
+            Particle.publish("uploadCellular", finalData, PRIVATE);
+            Particle.process();
+        }
+        else
+        {
+            sendESPWifiString(finalData);
+        }
 
-        if(Particle.connected() && serial_cellular_enabled){
-            if (measurements_to_average <= 20)
+    }
+}
+
+
+void outputToCloud(String data) 
+{
+    measurement_count++;
+    String finalData = "";
+    if (averaging_enabled == 1)
+    {
+        outputToCloudAveraging();
+    }
+    else
+    {
+        if (measurement_count == measurements_to_average)
+        {
+            measurement_count = 0;
+            if (measurements_to_average <= 20 && wifi_enabled == 0)
             {
                 if (accumulated_data.length()+data.length() >= 500)
                 {
-                    if (sensible_iot_en == 1)
-                    {
-                        accumulated_data += "2";
-                    }
-                    else
-                    {
-                        accumulated_data += "0";
-                    }
-                    Particle.publish("uploadCellular", accumulated_data, PRIVATE);
-                    Particle.process();
-                    accumulated_data = data;
+                    finalData = accumulated_data;
+                    accumulated_data = data; 
                 }
                 else
                 {
@@ -515,22 +601,78 @@ void outputToCloud(String data) {
             }
             else
             {
+                finalData = data;
+            }
+            if (finalData != "")// This is a check to see if we are either above the measurements to average threshold of putting together uploads, or if that bulk upload is ready to be sent up.
+            {
                 if (sensible_iot_en == 1)
                 {
-                    data += '2';
+                    finalData += '2';
+                }
+                else
+                { 
+                    finalData += "0";
+                }
+                if (wifi_enabled == 0 && Particle.connected() && serial_cellular_enabled)
+                {
+                    Particle.publish("uploadCellular", finalData, PRIVATE);
+                    Particle.process();
                 }
                 else
                 {
-                    data += "0";
+                    sendESPWifiString(finalData);
                 }
-                Particle.publish("uploadCellular", data, PRIVATE);
-                Particle.process();
+
             }
-            CO_sum = 0;
-            CO2_sum = 0;
-            O3_sum = 0;
+            measurement_count = 0;
         }
     }
+}
+
+void sendESPWifiString(String finalData)
+{
+    int index = finalData.indexOf('&');
+    finalData[index] = '#';
+    // String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), "%yyyy-%m-%dT%H:%M:%SZ"))+"\"}";
+    String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
+    wifiString ="!!"+wifiString;
+    String checkSum = checksumMaker(wifiString);
+    wifiString += checkSum;
+    sendBLE = false;
+    delay(4000);
+    Serial1.print(wifiString);
+    bool notDone = true;
+    String wifiStuff = "";
+    time_t timer = Time.now()+2500;
+    while (notDone && timer > Time.now())
+    {
+        if (Serial1.available())
+        {
+            char inchar = (char)Serial1.read();
+            if (inchar == '&')
+            {
+                notDone = false;
+            }
+            else
+            {
+                wifiStuff += inchar;
+            }
+        }
+    }
+    if (notDone == true)
+    {
+        wifi_status = 0;
+        wifi_code = 0;
+        return ;
+    }
+    else
+    {
+        index = wifiStuff.indexOf(',');
+        wifi_status = wifiStuff.substring(0, index).toInt();
+        wifi_code = wifiStuff.substring(index+1, wifiStuff.length()).toInt();
+    }
+
+
 }
 
 //send memory address and value separated by a comma
@@ -640,6 +782,12 @@ void readStoredVars(void){
         EEPROM.put(SD_CARD_EN_MEM_ADDRESS, 0);
         sd_enabled = 0;
     }
+    EEPROM.get(AVERAGING_ON_MEM_ADDRESS, averaging_enabled);
+    if (averaging_enabled != 0 || averaging_enabled != 1)
+    {
+        EEPROM.put(AVERAGING_ON_MEM_ADDRESS, 0);
+        averaging_enabled = 0;
+    }
 
     if(sensible_iot_en){
         Time.zone(0);       //use UTC if using sensible iot upload
@@ -669,6 +817,23 @@ void readStoredVars(void){
     if(!PM_10_slope)
     {
         PM_10_slope = 1;
+    }
+
+    for (int i = 0; i < 8; i++)
+    {
+        char tempId[4];
+
+        EEPROM.get(CORE_ID+(i*4), tempId);
+        coreId += String(tempId);
+    }
+    Serial.println("This is the coreId: ");
+    Serial.println(coreId);
+    EEPROM.get(WIFI_ENABLED, wifi_enabled);
+    if (wifi_enabled != 0 && wifi_enabled != 1)
+    {
+        Serial.println("wifi wasn't set");
+        wifi_enabled = 0;
+        EEPROM.put(WIFI_ENABLED, wifi_enabled);
     }
 }
 
@@ -912,8 +1077,7 @@ void setup()
     pinMode(co2_en, OUTPUT);
     pinMode(plantower_select, OUTPUT);
 
-    //read all stored variables (calibration parameters)
-    readStoredVars();
+
 
     pmic.begin();
     pmic.setChargeVoltage(4208);      //  Set Li-Po charge termination voltage to 4.21V,
@@ -995,6 +1159,9 @@ void setup()
 
     //delay for 5 seconds to give time to programmer person for connecting to serial port for debugging
     delay(10000);
+
+    //read all stored variables (calibration parameters)
+    readStoredVars();
 
     if (sd_enabled == 0)
     {
@@ -1209,9 +1376,9 @@ void loop() {
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
       }
     }
-    if(hih8120_enabled){
-        readHIH8120();
-    }
+    // if(hih8120_enabled){
+    //     readHIH8120();
+    // }
     readGpsStream();
 
 
@@ -1235,14 +1402,15 @@ void loop() {
         CO2_float *= pressure_correction;
     }
 
-    if(ozone_enabled){
-        readOzone();
-    }
+    // if(ozone_enabled){
+    //     readOzone();
+    // }
 
     //read PM values and apply calibration factors
     readPlantower();
 
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+    //pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+    pm_25_correction_factor = 1;
     if(debugging_enabled){
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
         Serial.printf("PM2.5 value befor correction: %d\n", PM2_5Value);
@@ -1250,6 +1418,10 @@ void loop() {
     corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
     corrected_PM_25 = corrected_PM_25 + PM_25_zero;
     corrected_PM_25 = corrected_PM_25 * PM_25_slope;
+
+    corrected_PM_1 = PM01Value / pm_25_correction_factor;
+    corrected_PM_1 = corrected_PM_1 + PM_1_zero;
+    corrected_PM_1 = corrected_PM_1 * PM_1_slope;
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -1320,7 +1492,11 @@ void loop() {
             t6713.readStatus(1);
         }
     }
-    checkESPWorking();
+    // checkESPWorking();
+    if (restart == true)
+    {
+        System.reset();
+    }
 }
 
 
@@ -1645,16 +1821,6 @@ float readTemperature(void){
     float temperature = 0;
     if(hih8120_enabled){
         temperature = hih.temperature();
-        
-    }else if(new_temperature_sensor_enabled){
-        
-        temperature = analogRead(A1);
-
-
-        temperature *= VOLTS_PER_UNIT;
-
-        temperature -= TMP36_OFFSET;
-        temperature /= TMP36_VPDC;
     }else{
         
         temperature = bme.temperature;
@@ -2057,23 +2223,7 @@ float read_sensor_temperature(void)
     return sensor_temperature;
 }
 
-void readOzone(void){
-    int tempValue = 0;
-    if(ozone_analog_enabled){
-        tempValue = analogRead(A0);  // read the analogPin for ozone voltage
-        if(debugging_enabled){
-            Serial.print("Ozone Raw analog in:");
-            Serial.println(tempValue);
 
-        }
-        O3_float = tempValue;
-        O3_float *= VOLTS_PER_UNIT;           //convert digital reading to voltage
-        O3_float /= VOLTS_PER_PPB;            //convert voltage to ppb of ozone
-        O3_float += ozone_offset;
-    }else{
-        O3_float = getEspOzoneData();
-    }
-}
 
 
 void writeLogFile(String data){
@@ -2156,8 +2306,8 @@ void outputDataToESP(void){
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
     }
-    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM01Value);
-    csv_output_string += String(PM01Value) + ",";
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(corrected_PM_1, 0);
+    csv_output_string += String(corrected_PM_1, 0) + ",";
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
     csv_output_string += String(corrected_PM_25, 0) + ",";
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10Value);
@@ -2174,6 +2324,11 @@ void outputDataToESP(void){
     }
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
     csv_output_string += String(fuel.getSoC(), 1) + ",";
+    if (wifi_enabled)
+    {
+        csv_output_string += String(wifi_status)+ ",";
+        csv_output_string += String (wifi_code)+ ",";
+    }
     //cloud_output_string += String(SOUND_PACKET_CONSTANT) + String(sound_average, 0);
 
     //csv_output_string += String(sound_average, 0) + ",";
@@ -2215,25 +2370,8 @@ void outputDataToESP(void){
     }
 
     //csv_output_string += String(status_word.status_int) + ",";
-    int zone;
-    EEPROM.get(TIME_ZONE_MEM_ADDRESS, zone);
-    int newHour = Time.hour();
-    newHour = newHour+zone;
 
-    int day = Time.day();
-    int year = Time.year();
-    int minute = Time.minute();
-    int second = Time.second();
-    int month = Time.month();
-        if (newHour < 0)
-    {
-        newHour = newHour+24;
-    }
-    if (newHour > 24)
-    {
-        newHour = newHour-24;
-    }
-    csv_output_string += String(day)+"/"+String(month)+"/"+String(year)+","+String(newHour)+":"+String(minute)+":"+String(second);
+    csv_output_string += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
     //csv_output_string += String(Time.format(local_time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
@@ -2275,8 +2413,8 @@ void outputDataToESP(void){
     //Each "section" in the array is separated by a #
     //we are using binary for the ble packets so we can compress the data into 19 bytes for the small payload
 
-    byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
-
+    byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE] = {0, };     //19 bytes per data line and 12 species to output
+    memset(ble_output_array, 0, sizeof(byte));
 
     for(int i=0; i<NUMBER_OF_SPECIES; i++){
 
@@ -2310,9 +2448,6 @@ void outputDataToESP(void){
         9-O3_float
         10-fuel.getSoC()
         11-sound_average
-
-
-
         */
         if(i == 0){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
@@ -2325,7 +2460,7 @@ void outputDataToESP(void){
             floatBytes.myFloat = fuel.getSoC();
         }else if(i == 3){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-            floatBytes.myFloat = PM01Value;
+            floatBytes.myFloat = corrected_PM_1;
         }else if(i == 4){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
             floatBytes.myFloat = corrected_PM_25;
@@ -2396,13 +2531,13 @@ void outputDataToESP(void){
 
     }
 
-    //send start delimeter to ESP
-    Serial1.print("$");
-    //send the packaged data with # delimeters in between packets
-    Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
-
-    //send ending delimeter
-    Serial1.print("&");
+    if (measurement_count != measurements_to_average-1 || measurement_count == 0)
+    {
+        Serial1.print("$");
+        Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
+        Serial1.print("&");
+        delay(200);
+    }
 
     /*Serial.println("Successfully output BLE string to ESP");
     for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
@@ -2413,171 +2548,181 @@ void outputDataToESP(void){
     Serial.println("End of array");*/
 
 }
-
 //ask the ESP if it has a wifi connection
-void getEspWifiStatus(void){
-    ESP_connected = "Not Connected. Run one more time.";
-    //command to ask esp for wifi status
-    String doYouHaveWifi = "!&";
-    char yes_or_no = ' ';
-    //if esp doesn't answer, keep going
+// void getEspWifiStatus(void){
+//     ESP_connected = "Not Connected. Run one more time.";
+//     //command to ask esp for wifi status
+//     String doYouHaveWifi = "!&";
+//     char yes_or_no = ' ';
+//     //if esp doesn't answer, keep going
 
 
-    Serial1.print(doYouHaveWifi);
-    Serial1.setTimeout(5000);
-    while(!Serial1.available());
+//     Serial1.print(doYouHaveWifi);
+//     Serial1.setTimeout(5000);
+//     while(!Serial1.available());
 
-    //delay(1000);
-    yes_or_no = Serial1.read();
-    ESP_connected = "Working";
-    if(debugging_enabled){
-        Serial.print("ESP Wifi connection status is: ");
+//     //delay(1000);
+//     yes_or_no = Serial1.read();
+//     ESP_connected = "Working";
+//     if(debugging_enabled){
+//         Serial.print("ESP Wifi connection status is: ");
 
-      }
-    //Serial.println(yes_or_no);
-    if(yes_or_no == 'y'){
-        if(debugging_enabled){
-            Serial.println("Connected!");
-            writeLogFile("ESP wifi connected");
-          }
-        esp_wifi_connection_status = 1;
-    }else{
-        if(debugging_enabled){
-            Serial.println("No Connection");
-            writeLogFile("ESP wifi not connected");
-          }
-        esp_wifi_connection_status = 0;
-    }
-}
+//       }
+//     //Serial.println(yes_or_no);
+//     if(yes_or_no == 'y'){
+//         if(debugging_enabled){
+//             Serial.println("Connected!");
+//             writeLogFile("ESP wifi connected");
+//           }
+//         esp_wifi_connection_status = 1;
+//     }else{
+//         if(debugging_enabled){
+//             Serial.println("No Connection");
+//             writeLogFile("ESP wifi not connected");
+//           }
+//         esp_wifi_connection_status = 0;
+//     }
+// }
+
 //send wifi information to the ESP
-void sendWifiInfo(void){
-    String wifiCredentials = "@!" + String(ssid) + "," + String(password) + "&";
-    Serial.println("Sending new wifi credentials to ESP");
-    Serial1.println(wifiCredentials);
-    Serial.println("Success!");
+bool  sendWifiInfo(void)
+{
+    String wifiCredentials = "!@"+String(ssid) + "," + String(password);
+    wifiCredentials += checksumMaker(wifiCredentials);
+    Serial.println("Sending new wifi credentials to ESP: ");
+    Serial.println(wifiCredentials);
+    
+    Serial1.print(wifiCredentials);
+    delay(200);
+    Serial1.setTimeout(500000);
+    String response = Serial1.readStringUntil('\r');
+    Serial.println("Trying to connect to the network. Please give up to 1 minute...");
+    Serial1.flush();
+    if (response == "not connected" || response.length() < 2)
+    {
+        Serial.println("Did not connect to the wifi. Doing a system restart now...");
+        return 0;
+    }
+    else
+    {
+        Serial.println("Conected to the wifi. This is your local IP: ");
+        Serial.println(response);
+        return 1;
+    }
 }
 
 //ask the ESP if it has a wifi connection
-void checkESPWorking(void){
-    ESP_connected = "Not Connected. Run one more time.";
-    //command to ask esp for wifi status
-    String doYouHaveWifi = "!&";
-    char yes_or_no = ' ';
-    int counterIndex = 0;
-    bool timeOut = false;
-    //if esp doesn't answer, keep going
-
-    Serial1.setTimeout(50);
-
-    while(!Serial1.available() && timeOut == false){
-      counterIndex++;
-      if(counterIndex > MAX_COUNTER_INDEX){
-        timeOut = true;
-      }
-    }
-    while (Serial1.available())
+void getESPWifi(void){
+    
+    String wifiStatus = "";
+    Serial1.print("!$&");
+    Serial.println("Checking your wifi status. This may take a minute.....");
+    
+    Serial1.setTimeout(50000);
+    wifiStatus = Serial1.readStringUntil('\r');
+    if (wifiStatus.length() < 2 || wifiStatus == "not connected")
     {
-        char clear_serial = Serial1.read();
+        Serial.println("You are not connected wifi");
     }
-    if (timeOut == false)
+    else
     {
-        ESP_connected = "Working";
+        Serial.println("You are connected to wifi. This is your local IP address...");
+        Serial.println(wifiStatus);
     }
-
 }
 
-float getEspOzoneData(void){
-    float ozone_value = 0.0;
-    String getOzoneData = "Z&";
-    String recievedData = " ";
-    bool timeOut = false;
-    double counterIndex = 0;
-    //if esp doesn't answer, keep going
-    Serial1.setTimeout(3000);
-    if(debugging_enabled){
-        Serial.println("Getting ozone data from esp");
-        writeLogFile("Getting ozone data from esp");
-      }
-    Serial1.print(getOzoneData);
-    while(!Serial1.available() && timeOut == false){
-      //delay(1);
-      counterIndex++;
-      if(counterIndex > MAX_COUNTER_INDEX){
-        if(debugging_enabled){
-          Serial.printf("Unable to get ozone data from ESP, counter index: %1.1f\n\r", counterIndex);
-        }
-        timeOut = true;
-      }
-    }
+// float getEspOzoneData(void){
+//     float ozone_value = 0.0;
+//     String getOzoneData = "Z&";
+//     String recievedData = " ";
+//     bool timeOut = false;
+//     double counterIndex = 0;
+//     //if esp doesn't answer, keep going
+//     Serial1.setTimeout(3000);
+//     if(debugging_enabled){
+//         Serial.println("Getting ozone data from esp");
+//         writeLogFile("Getting ozone data from esp");
+//       }
+//     Serial1.print(getOzoneData);
+//     while(!Serial1.available() && timeOut == false){
+//       //delay(1);
+//       counterIndex++;
+//       if(counterIndex > MAX_COUNTER_INDEX){
+//         if(debugging_enabled){
+//           Serial.printf("Unable to get ozone data from ESP, counter index: %1.1f\n\r", counterIndex);
+//         }
+//         timeOut = true;
+//       }
+//     }
 
 
-    delay(10);
+//     delay(10);
 
-    recievedData = Serial1.readString();
-    //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
-    if(debugging_enabled)
-    {
-        Serial.print("RECIEVED DATA FROM ESP: ");
-        Serial.println(recievedData);
-        writeLogFile("Recieved data from ESP");
-    }
-    //parse data if not null
-    int comma_count = 0;
-    int from_index = 0;
-    int index_of_comma = 0;
-    bool still_searching_for_commas = true;
-    String stringArray[NUMBER_OF_FEILDS];
+//     recievedData = Serial1.readString();
+//     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
+//     if(debugging_enabled)
+//     {
+//         Serial.print("RECIEVED DATA FROM ESP: ");
+//         Serial.println(recievedData);
+//         writeLogFile("Recieved data from ESP");
+//     }
+//     //parse data if not null
+//     int comma_count = 0;
+//     int from_index = 0;
+//     int index_of_comma = 0;
+//     bool still_searching_for_commas = true;
+//     String stringArray[NUMBER_OF_FEILDS];
 
-    while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
-        //Serial.printf("From index: %d\n\r", from_index);
+//     while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
+//         //Serial.printf("From index: %d\n\r", from_index);
 
-        index_of_comma = recievedData.indexOf(',', from_index);
-        if(debugging_enabled){
-          Serial.print("comma index: ");
-          Serial.println(index_of_comma);
-          //writeLogFile("got a comma");
+//         index_of_comma = recievedData.indexOf(',', from_index);
+//         if(debugging_enabled){
+//           Serial.print("comma index: ");
+//           Serial.println(index_of_comma);
+//           //writeLogFile("got a comma");
 
-        }
+//         }
 
-        //if the index of the comma is not zero, then there is data.
-        if(index_of_comma > 0){
-            stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
-            if(debugging_enabled){
-                Serial.printf("String[%d]:", comma_count);
-                Serial.println(stringArray[comma_count]);
-                //writeLogFile(stringArray[comma_count]);
-            }
-            comma_count++;
-            from_index = index_of_comma;
-            from_index += 1;
-        }else{
-            int index_of_cr = recievedData.indexOf('\r', from_index);
-            if(index_of_cr > 0){
-                stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
-                if(debugging_enabled){
-                    Serial.printf("String[%d]:", comma_count);
-                    Serial.println(stringArray[comma_count]);
-                }
-            }
-            still_searching_for_commas = false;
-        }
-    }
-    if(comma_count == NUMBER_OF_FIELDS_LOGGING){
-        ozone_value = stringArray[1].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 1 due to logging");
-            //writeLogFile("using string array index 1 due to logging");
-          }
-    }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
-        ozone_value = stringArray[0].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 0, not logging");
-            //writeLogFile("using string array index 0, not logging");
-          }
-    }
-    return ozone_value;
-    //parseOzoneString(recievedData);
-}
+//         //if the index of the comma is not zero, then there is data.
+//         if(index_of_comma > 0){
+//             stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
+//             if(debugging_enabled){
+//                 Serial.printf("String[%d]:", comma_count);
+//                 Serial.println(stringArray[comma_count]);
+//                 //writeLogFile(stringArray[comma_count]);
+//             }
+//             comma_count++;
+//             from_index = index_of_comma;
+//             from_index += 1;
+//         }else{
+//             int index_of_cr = recievedData.indexOf('\r', from_index);
+//             if(index_of_cr > 0){
+//                 stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
+//                 if(debugging_enabled){
+//                     Serial.printf("String[%d]:", comma_count);
+//                     Serial.println(stringArray[comma_count]);
+//                 }
+//             }
+//             still_searching_for_commas = false;
+//         }
+//     }
+//     if(comma_count == NUMBER_OF_FIELDS_LOGGING){
+//         ozone_value = stringArray[1].toFloat();
+//         if(debugging_enabled){
+//             Serial.println("using string array index 1 due to logging");
+//             //writeLogFile("using string array index 1 due to logging");
+//           }
+//     }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
+//         ozone_value = stringArray[0].toFloat();
+//         if(debugging_enabled){
+//             Serial.println("using string array index 0, not logging");
+//             //writeLogFile("using string array index 0, not logging");
+//           }
+//     }
+//     return ozone_value;
+//     //parseOzoneString(recievedData);
+// }
 
 void readHIH8120(void){
     hih.start();
@@ -2943,22 +3088,72 @@ void serialMenu(){
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
         }
 
-    }else if(incomingByte == 'U'){
-        if(!CO_socket){
-            Serial.println("Now reading CO from U20-Alpha2");
-            CO_socket = 1;
-            EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
-
-        }else{
-            Serial.println("Now reading CO from U19-Alpha1");
-            CO_socket = 0;
-            EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
+    }
+    else if(incomingByte == 'U')
+    {
+        Serial.print("This is the current coreId: ");
+        Serial.println(coreId);
+        Serial.println("Enter new coreId now.");
+        Serial.setTimeout(50000);
+        String userInput = Serial.readStringUntil('\r');
+        Serial.print("This is the userInput: ");
+        Serial.println(userInput);
+        if (userInput.length() != 24)
+        {
+            Serial.println("You did not give a valid coreId. coreId's are 24 characters long. This is what you gave: ");
+            Serial.println(userInput);
         }
-    }else if(incomingByte == 'V'){
+        else
+        {
+            coreId = userInput;
+            for (int i = 0; i < 8; i++)
+            {
+                char buf[4];
+                String cutUp = userInput.substring(0, 3);
+                Serial.println("This is cutup: ");
+                Serial.println(cutUp);
+                cutUp.toCharArray(buf, 4);
+                Serial.println("This is the buf: ");
+                Serial.println(buf);
+                EEPROM.put(CORE_ID+(i*4), buf);
+                userInput = userInput.substring(3, userInput.length());
+            }
+            // char buf[25];
+            // userInput.toCharArray(buf, 25);
+
+            // EEPROM.put(CORE_ID, buf);
+            // EEPROM.get(CORE_ID, coreId);
+
+            Serial.println("This is the new coreId: ");
+            Serial.println(coreId);
+        }
+    }
+    else if(incomingByte == 'V'){
         Serial.println("Reseting the CO2 sensor");
         calibrateCO2("1");
 
-    }else if(incomingByte == '1'){
+    }
+    else if (incomingByte == 'W')
+    {
+        if (wifi_enabled == 0)
+        {
+            Serial.println("Enabling wifi uploads...");
+            EEPROM.put(WIFI_ENABLED, 1);
+            wifi_enabled = 1;
+        }
+        else
+        {
+            Serial.println("Disabling wifi uploads... ");
+            EEPROM.put(WIFI_ENABLED, 0);
+            wifi_enabled = 0;
+
+        }
+    }
+    else if (incomingByte == 'Y')
+    {
+        getESPWifi();
+    }
+    else if(incomingByte == '1'){
         serialGetNO2Slope();
     }else if(incomingByte == '2'){
         serialGetNO2Zero();
@@ -3212,43 +3407,85 @@ void serialIncreaseChargeCurrent(void){
     Serial.printf("new charge current of %d mA\n\r", total_current);
 }
 
-void serialGetWifiCredentials(void){
-    Serial.print("Current stored ssid: ");
-    Serial.println(ssid);
-    Serial.print("Current stored password: ");
-    Serial.println(password);
-    Serial.println("Please enter password in order to make changes.\n\r");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    if(tempString.equals("bould")){
-        Serial.println("Password correct!");
-        Serial.println("Enter new ssid:");
-        Serial.setTimeout(50000);
-        String tempSsid = Serial.readStringUntil('\r');
-        Serial.print("Your new ssid will be: ");
-        Serial.println(tempSsid);
-        Serial.println("Is this okay?(y or n)");
-        String ok = Serial.readStringUntil('\r');
-        if(ok.equals("y")){
-            Serial.println("Saving new ssid");
-            ssid = tempSsid;
-            Serial.println("Enter new password");
-            String tempPassword = Serial.readStringUntil('\r');
-            Serial.print("Your new password will be: ");
-            Serial.println(tempPassword);
-            String ok = Serial.readStringUntil('\r');
-            if(ok.equals("y")){
-                Serial.println("Saving new password");
-                password = tempPassword;
-                sendWifiInfo();
-            }else{
-                Serial.println("okay, no problem\n\r");
-            }
-        }else{
-            Serial.println("okay, no problem\n\r");
-            return;
+void serialGetWifiCredentials(void)
+{
+    Serial.println("You would like to pick a wifi network. One second while we scan for available networks...");
+
+    String availableNetworks = "!#";
+    availableNetworks += checksumMaker(availableNetworks);
+    delay(4000); // This is to make sure it clears out the serial line
+    Serial1.println(availableNetworks);
+    bool notDone = true;
+    int count = 0;
+    char char_array[500];
+    availableNetworks = "";
+
+    while (notDone)
+    {
+        if (Serial1.available())
+        {
+            char inchar = (char)Serial1.read();
+            availableNetworks += String(inchar);
+            count++;
+            if (inchar == '&')
+                notDone = false;
         }
     }
+
+    if (availableNetworks == "no networks found&")
+    {
+        Serial.println("There are no available networks in your area");
+        return ;
+    }
+
+    Serial.println("This is a list of the available networks: ");
+    availableNetworks = availableNetworks.substring(0, availableNetworks.length()-1);
+    Serial.println(availableNetworks);
+
+    Serial.println("Please enter the number of the network you would like to connect to: ");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    notDone = true;
+    int i = 0;
+    while (availableNetworks[0] != '1')
+    {
+        availableNetworks = availableNetworks.substring(1, availableNetworks.length());
+    }
+    while(notDone && availableNetworks.length() > 2)
+    {
+        int placeHolder = tempString.toInt();
+        if (i+1 == tempString.toInt())
+        {
+            notDone = false;
+            tempString = availableNetworks.substring(availableNetworks.indexOf(':')+2, availableNetworks.indexOf('\n\r'));
+        }
+        else
+        {
+            availableNetworks = availableNetworks.substring(availableNetworks.indexOf('\n\r')+2, availableNetworks.length());
+        }
+        i++;
+    }
+    Serial.println("You have chosen network: ");
+    Serial.println(tempString);
+
+    Serial.println("Enter the password");
+    String tempPassword = Serial.readStringUntil('\r');
+    Serial.print("Your new password will be: ");
+    Serial.println(tempPassword);
+    Serial.println("Is this correct?(y or n)");
+    String ok = Serial.readStringUntil('\r');
+    if(ok.equals("y")){
+        Serial.println("Saving new password");
+        ssid = tempString;
+        password = tempPassword;
+        sendWifiInfo();
+    }
+    else
+    {
+        Serial.println("Leaving network settings now. Restart to retry.");
+    }
+
+    return ;
 }
 void serialSetSensibleIotEnable(void){
     Serial.println("Please enter password in order to enable data push to Sensible Iot");
@@ -3799,7 +4036,7 @@ int setUploadSpeed(String uploadSpeed)
     measurements_to_average = newAverage;
     measurement_count = 0;
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
-    System.reset();
+    restart = true;
     return 1;
 }
 
@@ -3822,7 +4059,7 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
         digitalWrite(power_led_en, LOW);    // Sets the LED off
         delay(250);
     }
-    System.reset();
+    restart = true;
     return 1;
     // Add a check in the middle to see if you press the button more. If so, turn off and on.
 }
@@ -3846,7 +4083,7 @@ int setEEPROMAddress(String data)
     Serial.print("This is the mem address: ");
     Serial.println(memAddress);
     EEPROM.put(memAddress, eepromValue);
-    System.reset();
+    restart = 1;
     return 1;
 }
 
@@ -3879,6 +4116,78 @@ void checkButtonPush()
             calibrateCO2("1");
         }
     }
+}
+
+String buildAverageCloudString()
+{
+    String cloud_output_string = "";    //create a clean string
+    cloud_output_string += '^';         //start delimeter
+    cloud_output_string += String(1) + ";";           //header
+    cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
+    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_sum, 3);
+    cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_sum, 0);
+    if (NO2_enabled)
+    {
+        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
+    }
+    cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM1_sum);
+    cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM25_sum, 0);
+    cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10_sum);
+    cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(pressure_sum, 1);
+    cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(humidity_sum, 1);
+    cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);
+    cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
+
+    if(gps.get_latitude() != 0){
+        if(gps.get_nsIndicator() == 0){
+            cloud_output_string += "-";
+        }
+        cloud_output_string += String(gps.get_latitude());
+    }else{
+        cloud_output_string += String(geolocation_latitude);
+    }
+
+    cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
+
+    if(gps.get_longitude() != 0){
+        if(gps.get_ewIndicator() == 0x01){
+            cloud_output_string += "-";
+        }
+        cloud_output_string += String(gps.get_longitude());
+    }else{
+        cloud_output_string += String(geolocation_longitude);
+    }
+
+    cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
+    if (gps.get_longitude() != 0) {
+        cloud_output_string += String(gps.get_horizontalDillution() / 10.0);
+    } else {
+        cloud_output_string += String(geolocation_accuracy);
+    }
+    cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
+    cloud_output_string += '&';
+    if(debugging_enabled){
+        Serial.println("Line to write to cloud:");
+        Serial.println(cloud_output_string);
+    }
+    // if(esp_wifi_connection_status){
+    //     if(debugging_enabled){
+    //         Serial.println("Sending data to esp to upload via wifi...");
+    //         writeLogFile("Sending data to esp to upload via wifi");
+    //     }
+    //     Serial1.println(cloud_output_string);
+    // }
+
+    if (sensible_iot_en == 1)
+    {
+        cloud_output_string += '2';
+    }
+    else
+    {
+        cloud_output_string += "0";
+    }
+    
+    return cloud_output_string;
 }
 
 void outputSerialMenuOptions(void){
@@ -3938,8 +4247,10 @@ void outputSerialMenuOptions(void){
     Serial.println("R:  Disable ABC logic for CO2 sensor");
     Serial.println("S:  Enable ABC logic for CO2 sensor");
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
-    
+    Serial.println("U:  Set coreId");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
+    Serial.println("W:  Enable/ Disable wifi (This will turn off cellular uploads)");
+    Serial.println("Y:  Check wifi status");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
 
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
