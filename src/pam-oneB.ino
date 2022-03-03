@@ -604,7 +604,7 @@ void sendESPWifiString(String finalData)
     Serial1.print(wifiString);
     bool notDone = true;
     String wifiStuff = "";
-    time_t timer = Time.now()+1000;
+    time_t timer = Time.now()+2500;
     while (notDone && timer > Time.now())
     {
         if (Serial1.available())
@@ -3294,6 +3294,7 @@ void serialGetWifiCredentials(void)
 
     String availableNetworks = "!#";
     availableNetworks += checksumMaker(availableNetworks);
+    delay(4000); // This is to make sure it clears out the serial line
     Serial1.println(availableNetworks);
     bool notDone = true;
     int count = 0;
@@ -3327,6 +3328,10 @@ void serialGetWifiCredentials(void)
     String tempString = Serial.readStringUntil('\r');
     notDone = true;
     int i = 0;
+    while (availableNetworks[0] != '1')
+    {
+        availableNetworks = availableNetworks.substring(1, availableNetworks.length());
+    }
     while(notDone && availableNetworks.length() > 2)
     {
         int placeHolder = tempString.toInt();
@@ -3337,10 +3342,6 @@ void serialGetWifiCredentials(void)
         }
         else
         {
-            if (availableNetworks.substring(0, availableNetworks.indexOf('\n\r')+2).length() < 3)
-            {
-                availableNetworks = availableNetworks.substring(availableNetworks.indexOf('\n\r')+2, availableNetworks.length());
-            }
             availableNetworks = availableNetworks.substring(availableNetworks.indexOf('\n\r')+2, availableNetworks.length());
         }
         i++;
