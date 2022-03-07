@@ -179,11 +179,10 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
 #define SD_CARD_EN_MEM_ADDRESS 148
 #define UPDATE_MEM_ADDRESS 152
-#define TEMP_CORRECTION_EN_ADDRESS 156
-#define AVERAGING_ON_MEM_ADDRESS 160
-#define CORE_ID 164
-#define WIFI_ENABLED 196
-#define MAX_MEM_ADDRESS 196
+#define AVERAGING_ON_MEM_ADDRESS 156
+#define CORE_ID 160
+#define WIFI_ENABLED 192
+#define TEMP_CORRECTION_EN_ADDRESS 196
 
 
 
