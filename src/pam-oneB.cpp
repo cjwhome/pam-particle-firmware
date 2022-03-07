@@ -55,8 +55,8 @@ float readTemperature(void);
 float readHumidity(void);
 float readNO2(void);
 float readCO2(void);
-float readAlpha1(void);
-float readAlpha2(void);
+float readAlpha1(float sensor_temperature, int species);
+float readAlpha2(float sensor_temperature, int species);
 void outputDataToESP(void);
 void getEspWifiStatus(void);
 void sendWifiInfo(void);
@@ -102,7 +102,7 @@ int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 #line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15205);
-PRODUCT_VERSION(4);
+PRODUCT_VERSION(6);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 13
@@ -172,7 +172,13 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
 #define NUMBER_OF_MEASUREMENTS_SKIP 148
-#define MAX_MEM_ADDRESS 148
+#define UPDATE_MEM_ADDRESS 152
+#define AVERAGING_ON_MEM_ADDRESS 156
+// Dont move this in memory
+#define CORE_ID 160
+#define WIFI_ENABLED 192
+#define TEMP_CORRECTION_EN_ADDRESS 196
+#define MAX_MEM_ADDRESS 196
 
 
 //max and min values
@@ -227,6 +233,42 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define NUMBER_OF_FEILDS 7
 #define NUMBER_OF_FIELDS_LOGGING 7
 
+//used for temperature corrections for Alphasense
+#define CO_COEFF_TEMP_LOW 1.00
+#define CO_COEFF_TEMP_MED -1.00
+#define CO_COEFF_TEMP_HIGH -0.76
+#define CO_SENSITIVITY 0.358
+#define CO_SENSOR 1
+
+#define NO2_COEFF_TEMP_LOW 1.09
+#define NO2_COEFF_TEMP_MED 1.35
+#define NO2_COEFF_TEMP_HIGH 3.00
+#define NO2_SENSITIVITY -0.358
+#define NO2_SENSOR 2
+
+#define NO_COEFF_TEMP_LOW 1.48
+#define NO_COEFF_TEMP_MED 2.02
+#define NO_COEFF_TEMP_HIGH 1.72
+#define NO_SENSITIVITY 0.450
+#define NO_SENSOR 3
+
+#define O3_COEFF_TEMP_LOW 0.75
+#define O3_COEFF_TEMP_MED 1.28
+#define O3_COEFF_TEMP_HIGH 1.36
+#define O3_SENSITIVITY -0.450
+#define O3_SENSOR 4
+
+#define SO2_COEFF_TEMP_LOW 1.15
+#define SO2_COEFF_TEMP_MED 1.82
+#define SO2_COEFF_TEMP_HIGH 3.93
+#define SO2_SENSITIVITY 0.450
+#define SO2_SENSOR 5
+
+float coefficient_low;
+float coefficient_med;
+float coefficient_high;
+float sensor_sensitivity;
+
 
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
 int lmp91000_2_en = B2;
@@ -239,7 +281,7 @@ int blower_en = D2;
 int co2_en = C5;        //enables the CO2 sensor power
 int plantower_select = D3;
 
-
+bool temperature_correction_enabled;
 
 
 //manually control connection to cellular network
@@ -459,6 +501,7 @@ int remoteWriteStoredVars(String addressAndValue);
 int remoteReadStoredVars(String mem_address);
 void writeDefaultSettings(void);
 void readHIH8120(void);
+float read_sensor_temperature(void);
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -743,7 +786,7 @@ void readStoredVars(void){
     EEPROM.get(CO_SOCKET_MEM_ADDRESS, CO_socket);
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
-
+    EEPROM.get(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
     EEPROM.get(NUMBER_OF_MEASUREMENTS_SKIP, number_of_measurements_skip);
 
     // We don't want this to ever be less than 5.
@@ -905,6 +948,7 @@ void check_wifi_file(void){
 void setup()
 {
     Serial.begin(9600);
+    delay(1000);
     Serial.println("Starting the initialization");
     status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
@@ -1269,7 +1313,8 @@ void loop()
     getEspOzoneData();
 
 
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+    // pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+    pm_25_correction_factor = 1;
     if(debugging_enabled){
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
     }
@@ -1772,10 +1817,16 @@ float readHumidity(void){
 //read Carbon monoxide alphasense sensor
 float readCO(void){
     float float_offset;
-    CO_float = readAlpha2();
-
+    
     float_offset = CO_zero;
     float_offset /= 1000;
+    float sensor_temperature = read_sensor_temperature();
+    if(!temperature_correction_enabled)
+    {
+        sensor_temperature = 25;
+    }
+    //float sensor_temperature = 30;
+    CO_float = readAlpha2(sensor_temperature, CO_SENSOR);
 
     CO_float *= CO_slope;
     CO_float += float_offset;
@@ -1788,7 +1839,13 @@ float readNO2(void){
 
     float_offset = NO2_zero;
     float_offset /= 1000;
-    NO2_float = readAlpha1();
+    float sensor_temperature = read_sensor_temperature();
+    if(!temperature_correction_enabled)
+    {
+        sensor_temperature = 25;
+    }
+     //float sensor_temperature = 30;
+    NO2_float = readAlpha1(sensor_temperature, NO2_SENSOR);
 
     NO2_float *= NO2_slope;
     NO2_float += float_offset;
@@ -1814,7 +1871,52 @@ float readCO2(void){
     
     return CO2_float;
 }
-float readAlpha1(void){
+
+//read the sensor temperature from the LMP91000
+float read_sensor_temperature(void)
+{
+    int32_t temp_int;
+    float sensor_temperature = 0.0;
+
+    Wire.begin();   //this must be done for the LMP91000
+    digitalWrite(lmp91000_2_en, LOW); //enable the chip
+
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_TIA_ON) == 0)
+    {
+        if(debugging_enabled)
+                Serial.println("Couldn't communicate with LMP91000_2 for temperature setting");
+    }else{
+          
+         
+          digitalWrite(lmp91000_2_en, HIGH);  //disable
+    }
+
+    //after setting up to output the temperature, now read it from the ADS
+    temp_int = ads2.readADC_SingleEnded(2); //temperature
+    temp_int = ads2.readADC_SingleEnded(2); //temperature
+    temp_int = ads2.readADC_SingleEnded(2); //temperature
+
+    sensor_temperature = temp_int * ads_bitmv;
+    sensor_temperature = -sensor_temperature*0.12345679 + 191.481;
+    //Serial.print("Sensor temperature:");
+    //Serial.println(sensor_temperature, 2);
+
+
+    //must set it back to normal configuration after reading the temperature
+    digitalWrite(lmp91000_2_en, LOW); //enable the chip
+    if(lmp91000.configure(LMP91000_TIA_GAIN_120K | LMP91000_RLOAD_10OHM, LMP91000_REF_SOURCE_EXT | LMP91000_INT_Z_50PCT | LMP91000_BIAS_SIGN_POS | LMP91000_BIAS_0PCT, LMP91000_FET_SHORT_DISABLED | LMP91000_OP_MODE_AMPEROMETRIC) == 0)
+    {
+        if(debugging_enabled)
+                Serial.println("Couldn't communicate with LMP91000_2 for temperature setting");
+    }else{
+          
+         
+          digitalWrite(lmp91000_2_en, HIGH);  //disable
+    }
+    return sensor_temperature;
+}
+
+float readAlpha1(float sensor_temperature, int species){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -1883,40 +1985,58 @@ float readAlpha1(void){
         for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
           A0_gas += ads1.readADC_SingleEnded(0); //gas
           A1_aux += ads1.readADC_SingleEnded(1); //aux out
-          A2_temperature += ads1.readADC_SingleEnded(2); //temperature
+          //A2_temperature += ads1.readADC_SingleEnded(2); //temperature
           half_Vref += ads1.readADC_SingleEnded(3); //half of Vref
         }
 
         A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
         A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
+        //A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
         half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
-        volt2_temperature = A2_temperature * ads_bitmv;
+        //volt2_temperature = A2_temperature * ads_bitmv;
+        //volt2_temperature = -volt2_temperature*0.12345679 + 191.481;
         volt_half_Vref = half_Vref * ads_bitmv;
 
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
-        //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
-          correctedCurrent = ((sensorCurrent) - (auxCurrent));
+
+       
+        if(debugging_enabled){
+            Serial.print("Sensor1 temperature:");
+            Serial.print(sensor_temperature, 1);
+            Serial.print(", ambient temperature:");
+            Serial.println(readTemperature());
         }
-        else if(readTemperature() <= 25){
-          correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
+       
+        coefficient_low = NO2_COEFF_TEMP_LOW;
+        coefficient_med = NO2_COEFF_TEMP_MED;
+        coefficient_high = NO2_COEFF_TEMP_HIGH;
+        sensor_sensitivity = NO2_SENSITIVITY;
+
+        if(debugging_enabled){
+            Serial.printf("NO2 Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
         }
-        else{
-          correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
+               
+        if(sensor_temperature <= 10){
+          correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        alpha1_ppmraw = (correctedCurrent / -0.358); //sensitivity -.358 nA/ppb - from Alphasense calibration certificate, So -.358 uA/ppm
+        else if(sensor_temperature <= 35){
+          correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
+        }
+        else if(sensor_temperature > 35){
+          correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
+        }
+        alpha1_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha1_ppmRounded = String(alpha1_ppmraw, 2);
       }
 
       digitalWrite(lmp91000_1_en, HIGH);  //disable
 
       if(debugging_enabled){
-          Serial.print("CO measurements:  \n\r");
+          Serial.print("NO2 measurements:  \n\r");
           Serial.printf("A0_gas: %d\n\r", A0_gas);
           Serial.printf("A1_aux: %d\n\r", A1_aux);
           Serial.printf("A2_temp: %d\n\r", A2_temperature);
@@ -1926,7 +2046,7 @@ float readAlpha1(void){
       return alpha1_ppmraw;
 }
 
-float readAlpha2(void){
+float readAlpha2(float sensor_temperature, int species){
     //read from CO sensor
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
@@ -1991,39 +2111,62 @@ float readAlpha2(void){
         for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
           A0_gas += ads2.readADC_SingleEnded(0); //gas
           A1_aux += ads2.readADC_SingleEnded(1); //aux out
-          A2_temperature += ads2.readADC_SingleEnded(2); //temperature
+          //A2_temperature += ads2.readADC_SingleEnded(2); //temperature
           half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
         }
 
         A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
         A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
+        //A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
         half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
-        volt2_temperature = A2_temperature * ads_bitmv;
+        //volt2_temperature = A2_temperature * ads_bitmv;
+        //volt2_temperature = -volt2_temperature*0.12345679 + 191.481;                    //B2*-0.12345679 + 191.481
         volt_half_Vref = half_Vref * ads_bitmv;
 
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
-        //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
-          correctedCurrent = ((sensorCurrent) - (auxCurrent));
+
+        if(debugging_enabled){
+            Serial.print("Sensor2 temperature:");
+            Serial.print(sensor_temperature, 1);
+            Serial.print(", ambient temperature:");
+            Serial.println(readTemperature());
         }
-        else if(readTemperature() <= 25){
-          correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
+        
+        coefficient_low = CO_COEFF_TEMP_LOW;
+        coefficient_med = CO_COEFF_TEMP_MED;
+        coefficient_high = CO_COEFF_TEMP_HIGH;
+        sensor_sensitivity = CO_SENSITIVITY;
+              
+        if(debugging_enabled){
+            Serial.printf("CO Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
         }
-        else if(readTemperature() > 25){
-          correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
+        if(sensor_temperature <= 10){
+          correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        alpha2_ppmraw = (correctedCurrent / 0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        else if(sensor_temperature <= 35){
+          correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
+        }
+        else if(sensor_temperature > 35){
+          correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
+        }
+        alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha2_ppmRounded = String(alpha2_ppmraw, 2);
       }
 
       digitalWrite(lmp91000_2_en, HIGH);  //disable
 
+    if(debugging_enabled){
+          Serial.print("CO measurements:  \n\r");
+          Serial.printf("A0_gas: %d\n\r", A0_gas);
+          Serial.printf("A1_aux: %d\n\r", A1_aux);
+          Serial.printf("A2_temp: %d\n\r", A2_temperature);
+          Serial.printf("half_vref: %d\n\r", half_Vref);
 
+      }
       /*Serial.print("CO:  ");
       Serial.print(volt0_gas);
       Serial.print(", ");
@@ -2888,48 +3031,73 @@ void serialMenu(){
         }
         serial_cellular_enabled = 0;
         EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
-    }else if(incomingByte == 'D'){
-        if(temperature_units == CELCIUS){
-            temperature_units = FARENHEIT;
-
-        }else{
-            Serial.println("Temperature units already set to Fareneit.");
+    }
+    else if(incomingByte == 'D')
+    {
+        if(temperature_correction_enabled)
+        {
+            Serial.println("Disabling the temperature correction for EC sensors...");
+            temperature_correction_enabled = 0;
+            EEPROM.put(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
+        }
+        else
+        {
+            Serial.println("Enabling the temperature correction for EC sensors...");
+            temperature_correction_enabled = 1;
+            EEPROM.put(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
         }
 
-        EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-
-    }else if(incomingByte == 'C'){
-        if(temperature_units == FARENHEIT){
+    }
+    else if(incomingByte == 'C')
+    {
+        if(temperature_units == FARENHEIT)
+        {
+            Serial.println("The temperature Units will now be CELCIUS...");
             temperature_units = CELCIUS;
-
-        }else{
-            Serial.println("Temperature units already set to Celcius.");
         }
-
+        else
+        {
+            Serial.println("The temperature Units will now be FAHRENHEIT...");
+            temperature_units = FARENHEIT;
+        }
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-    }else if(incomingByte == 'F'){
-        if(new_temperature_sensor_enabled == 1){
+    }
+    else if(incomingByte == 'F')
+    {
+        if(new_temperature_sensor_enabled == 1)
+        {
             new_temperature_sensor_enabled = 0;
             Serial.println("Disabling new temperature sensor");
-        }else{
+        }
+        else
+        {
 
             Serial.println("Temperature sensor already disabled");
         }
         EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
 
-    }else if(incomingByte == 'E'){
-        if(new_temperature_sensor_enabled == 1){
+    }
+    else if(incomingByte == 'E')
+    {
+        if(new_temperature_sensor_enabled == 1)
+        {
             Serial.println("Temperature sensor already enabled");
-        }else{
+        }else
+        {
             new_temperature_sensor_enabled = 1;
             Serial.println("Temperatue sensor now enabled");
         }
         EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled );
 
-    }else if(incomingByte == 'G'){      //enable analog reading of ozone and disable esp reading of ozone
-        if(ozone_analog_enabled == 1){
+    }
+    else if(incomingByte == 'G')
+    {      //enable analog reading of ozone and disable esp reading of ozone
+        if(ozone_analog_enabled == 1)
+        {
             Serial.println("Analog reading of ozone already enabled");
-        }else{
+        }
+        else
+        {
             ozone_analog_enabled = 1;
             Serial.println("Analog reading of ozone now enabled");
         }
@@ -3947,7 +4115,7 @@ int setUploadSpeed(String uploadSpeed)
     Serial.println(newAverage);
 
     measurements_to_average = newAverage;
-    measurement_count == 0;
+    measurement_count = 0;
     EEPROM.put(MEASUREMENTS_TO_AVG_MEM_ADDRESS, newAverage);
     restart = true;
     return newAverage;
@@ -4107,8 +4275,8 @@ void outputSerialMenuOptions(void){
     Serial.println("0:  Increase the current input limit by 100 mA");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
-    Serial.println("C:  Change temperature units to Celsius");
-    Serial.println("D:  Change temperature units to Fahrenheit");
+    Serial.println("C:  Change temperature units to Celsius / Fahrenheit");
+    Serial.println("D:  Enable / Disable Temperature Correction for EC's");
     Serial.println("E:  Enable TMP36 temperature sensor and disable BME680 temperature");
     Serial.println("F:  Disable TMP36 temperature sensor and use BME680 temperature");
 
