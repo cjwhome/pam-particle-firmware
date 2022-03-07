@@ -34,6 +34,7 @@
 //#include <Wire.h>
 //#include <SPI.h>
 #include <Adafruit_Sensor.h>
+#include <ArduinoSort.h>
 #include "Adafruit_BME680.h"
 #include "Telaire_T6713.h"
 #include "Adafruit_ADS1X15.h"
@@ -48,6 +49,7 @@
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
+
 
 void writeRegister(uint8_t reg, uint8_t value);
 String checksumMaker(String data);
@@ -109,12 +111,12 @@ void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
-#line 47 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
+#line 49 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(8);
 
 #define APP_VERSION 8
-#define BUILD_VERSION 1
+#define BUILD_VERSION 99
 
 
 //define constants
@@ -131,7 +133,8 @@ PRODUCT_VERSION(8);
 #define TMP36_VPDC 0.01 //10mV per degree C
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
-#define ALPHA_ADC_READ_AMOUNT 10
+#define ALPHA_ADC_READ_AMOUNT 40
+
 //float ads_bitmv = 0.1920;
 
 //enable or disable different parts of the firmware by setting the following values to 1 or 0
@@ -276,6 +279,8 @@ float coefficient_low;
 float coefficient_med;
 float coefficient_high;
 float sensor_sensitivity;
+
+float coSensorCurrent, coAuxCurrent, no2SensorCurrent, no2AuxCurrent, sensorTemperature;
 
 
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
@@ -1371,6 +1376,7 @@ void setup()
     if (sd_enabled == 0)
     {
         String header = buildHeaderString();
+        Serial.print("NO2SensorC,NO2AuxC,COSensorC,COAuxC,SensorT,");
         Serial.println(String(header));
         if (sd.begin(CS)){
             file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
@@ -1442,9 +1448,9 @@ void loop() {
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
       }
     }
-    // if(hih8120_enabled){
-    //     readHIH8120();
-    // }
+     if(hih8120_enabled){
+         readHIH8120();
+     }
     readGpsStream();
 
 
@@ -1979,6 +1985,9 @@ float readCO2(void){
 }
 float readAlpha1(float sensor_temperature, int species){
     //read from CO sensor
+    int32_t A0_gas_array[ALPHA_ADC_READ_AMOUNT];
+    int32_t A1_aux_array[ALPHA_ADC_READ_AMOUNT];
+    int32_t half_Vref_array[ALPHA_ADC_READ_AMOUNT];
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
     int32_t A2_temperature; //temperature
@@ -2044,16 +2053,29 @@ float readAlpha1(float sensor_temperature, int species){
         A2_temperature = 0;
         half_Vref = 0;
         for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
-          A0_gas += ads1.readADC_SingleEnded(0); //gas
-          A1_aux += ads1.readADC_SingleEnded(1); //aux out
+            A0_gas_array[i] = ads1.readADC_SingleEnded(0);
+            A1_aux_array[i] = ads1.readADC_SingleEnded(1);
+            half_Vref_array[i] = ads1.readADC_SingleEnded(3);
+          //A0_gas += ads1.readADC_SingleEnded(0); //gas
+          //A1_aux += ads1.readADC_SingleEnded(1); //aux out
           //A2_temperature += ads1.readADC_SingleEnded(2); //temperature
-          half_Vref += ads1.readADC_SingleEnded(3); //half of Vref
+          //half_Vref += ads1.readADC_SingleEnded(3); //half of Vref
         }
 
-        A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
-        A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        //A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
-        half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
+        //A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
+        //A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
+        //half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
+        int midpoint = ALPHA_ADC_READ_AMOUNT/2;
+        
+        sortArray(A0_gas_array, ALPHA_ADC_READ_AMOUNT);
+        sortArray(A1_aux_array, ALPHA_ADC_READ_AMOUNT);
+        sortArray(half_Vref_array, ALPHA_ADC_READ_AMOUNT);
+
+        A0_gas = A0_gas_array[midpoint];
+        A1_aux = A1_aux_array[midpoint];
+        half_Vref = half_Vref_array[midpoint];
+
+        
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
@@ -2064,7 +2086,11 @@ float readAlpha1(float sensor_temperature, int species){
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
 
-       
+        no2SensorCurrent = sensorCurrent;
+        no2AuxCurrent = auxCurrent;
+        sensorTemperature = sensor_temperature;
+
+        //Serial.printf("%1.5f,%1.5f,%1.1f,", sensorCurrent, auxCurrent, sensor_temperature);
         if(debugging_enabled){
             Serial.print("Sensor1 temperature:");
             Serial.print(sensor_temperature, 1);
@@ -2109,6 +2135,9 @@ float readAlpha1(float sensor_temperature, int species){
 
 float readAlpha2(float sensor_temperature, int species){
     //read from CO sensor
+    int32_t A0_gas_array[ALPHA_ADC_READ_AMOUNT];
+    int32_t A1_aux_array[ALPHA_ADC_READ_AMOUNT];
+    int32_t half_Vref_array[ALPHA_ADC_READ_AMOUNT];
     int32_t A0_gas; //gas
     int32_t A1_aux; //aux out
     int32_t A2_temperature; //temperature
@@ -2170,26 +2199,40 @@ float readAlpha2(float sensor_temperature, int species){
         A2_temperature = 0;
         half_Vref = 0;
         for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
-          A0_gas += ads2.readADC_SingleEnded(0); //gas
-          A1_aux += ads2.readADC_SingleEnded(1); //aux out
-          //A2_temperature += ads2.readADC_SingleEnded(2); //temperature
-          half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
+            A0_gas_array[i] = ads1.readADC_SingleEnded(0);
+            A1_aux_array[i] = ads1.readADC_SingleEnded(1);
+            half_Vref_array[i] = ads1.readADC_SingleEnded(3);
+          //A0_gas += ads2.readADC_SingleEnded(0); //gas
+          //A1_aux += ads2.readADC_SingleEnded(1); //aux out
+         
+          //half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
         }
 
-        A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
-        A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        //A2_temperature = A2_temperature / ALPHA_ADC_READ_AMOUNT;
-        half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
+        //A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
+        //A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
+        //half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
+        int midpoint = ALPHA_ADC_READ_AMOUNT/2;
+        
+        sortArray(A0_gas_array, ALPHA_ADC_READ_AMOUNT);
+        sortArray(A1_aux_array, ALPHA_ADC_READ_AMOUNT);
+        sortArray(half_Vref_array, ALPHA_ADC_READ_AMOUNT);
+
+        A0_gas = A0_gas_array[midpoint];
+        A1_aux = A1_aux_array[midpoint];
+        half_Vref = half_Vref_array[midpoint];
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
-        //volt2_temperature = A2_temperature * ads_bitmv;
-        //volt2_temperature = -volt2_temperature*0.12345679 + 191.481;                    //B2*-0.12345679 + 191.481
+        
         volt_half_Vref = half_Vref * ads_bitmv;
 
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
 
+        coSensorCurrent = sensorCurrent;
+        coAuxCurrent = auxCurrent;
+
+        //Serial.printf("%1.5f,%1.5f,", sensorCurrent, auxCurrent);
         if(debugging_enabled){
             Serial.print("Sensor2 temperature:");
             Serial.print(sensor_temperature, 1);
@@ -2361,6 +2404,13 @@ void outputDataToESP(void){
     cloud_output_string += '^';         //start delimeter
     cloud_output_string += String(1) + ";";           //header
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
+
+    csv_output_string += String(no2SensorCurrent) + ",";
+    csv_output_string += String(no2AuxCurrent) + ",";
+    csv_output_string += String(coSensorCurrent) + ",";
+    csv_output_string += String(coAuxCurrent) + ",";
+    csv_output_string += String(sensorTemperature, 1) + ",";
+    
     csv_output_string += String(DEVICE_id) + ",";
 
 
