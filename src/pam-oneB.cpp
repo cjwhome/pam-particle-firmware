@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -109,7 +109,7 @@ void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
-#line 47 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
+#line 47 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(8);
 
@@ -179,10 +179,11 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
 #define SD_CARD_EN_MEM_ADDRESS 148
 #define UPDATE_MEM_ADDRESS 152
-#define AVERAGING_ON_MEM_ADDRESS 156
-#define CORE_ID 160
-#define WIFI_ENABLED 192
-#define TEMP_CORRECTION_EN_ADDRESS 196
+#define TEMP_CORRECTION_EN_ADDRESS 156
+#define AVERAGING_ON_MEM_ADDRESS 160
+#define CORE_ID 164
+#define WIFI_ENABLED 196
+#define MAX_MEM_ADDRESS 196
 
 
 
@@ -3021,46 +3022,34 @@ void serialMenu(){
         }
         serial_cellular_enabled = 0;
         EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
-    }else if(incomingByte == 'F'){
-        if(temperature_units == CELCIUS){
-            temperature_units = FARENHEIT;
-
-        }else{
-            Serial.println("Temperature units already set to Fareneit.");
-        }
-
-        EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-
-    }else if(incomingByte == 'C'){
-        if(temperature_units == FARENHEIT){
+    }
+    else if(incomingByte == 'C')
+    {
+        if(temperature_units == FARENHEIT)
+        {
             temperature_units = CELCIUS;
-
-        }else{
-            Serial.println("Temperature units already set to Celcius.");
+            Serial.println("Temperature units will be set to CELCIUS...");
         }
-
+        else
+        {
+            temperature_units == FARENHEIT;
+            Serial.println("Temperature units will be set to FARENHEIT...");
+        }
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-    }else if(incomingByte == 'D'){
-        if(temperature_correction_enabled){
-            Serial.println("Temperature correction for EC sensors already enabled.");
-            Serial.println("Press E to disable if necessary.");
-        }else{
-            temperature_correction_enabled = 1;
-            EEPROM.put(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
-            Serial.println("Temperature correction for EC sensors is now enabled.");
-        }
-       
-    }else if(incomingByte == 'E'){
-       
-        if(!temperature_correction_enabled){
-            Serial.println("Temperature correction for EC sensors already disabled.");
-            Serial.println("Press D to enable if necessary.");
-        }else{
+    }
+    else if(incomingByte == 'D')
+    {
+        if(temperature_correction_enabled)
+        {
+            Serial.println("Temperature correction is being disabled...");
             temperature_correction_enabled = 0;
-            EEPROM.put(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
-            Serial.println("Temperature correction for EC sensors is now disabled.");
         }
-
+        else
+        {
+            Serial.println("Temperature correction for EC sensors is being enabled...");
+            temperature_correction_enabled = 1;
+        }
+        EEPROM.put(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
     }
     else if(incomingByte == 'G'){      //enable analog reading of ozone and disable esp reading of ozone
         if(ozone_analog_enabled == 1){
@@ -4295,10 +4284,8 @@ void outputSerialMenuOptions(void){
     Serial.println("0:  Disable SD card");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
-    Serial.println("C:  Change temperature units to Celcius");
-    Serial.println("D:  Enable Temperature Correction for EC's");
-    Serial.println("E:  Disable Temperature Correction for EC's");
-    Serial.println("F:  Change temperature units to Farenheit");
+    Serial.println("C:  Change temperature units to Celcius/ Fahrenheit");
+    Serial.println("D:  Enable / Disable Temperature Correction for EC's");
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone");
     Serial.println("I:  Adjust frequency for uploading through cellular");
