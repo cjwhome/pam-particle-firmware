@@ -1,25 +1,25 @@
-syntax = "proto3";
+// syntax = "proto3";
 
-message Upload {
-    uint32 device_id = 1;
-    float co = 2;
-    float co2 = 3;
-    float no2 = 4;
-    uint32 pm01 = 5;
-    float pm25 = 6;
-    float pm10 = 7;
-    float temp = 8;
-    float press = 9;
-    float hum = 10;
-    float o3 = 11;
-    float batt = 12;
-    GPS_V gps = 13;
-    uint32 epoch = 14;
-    bool sensible = 15;
-}
+// message Upload {
+//     uint32 device_id = 1;
+//     float co = 2;
+//     float co2 = 3;
+//     float no2 = 4;
+//     uint32 pm01 = 5;
+//     float pm25 = 6;
+//     float pm10 = 7;
+//     float temp = 8;
+//     float press = 9;
+//     float hum = 10;
+//     float o3 = 11;
+//     float batt = 12;
+//     GPS_V gps = 13;
+//     uint32 epoch = 14;
+//     bool sensible = 15;
+// }
 
-message GPS_V {
-    double lat = 1;
-    double long_ = 2; // "long" is a reserved keyword in most languages
-    double acc = 3;
-}
+// message GPS_V {
+//     double lat = 1;
+//     double long_ = 2; // "long" is a reserved keyword in most languages
+//     double acc = 3;
+// }

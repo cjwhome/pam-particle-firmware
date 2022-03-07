@@ -48,7 +48,7 @@
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
-#include "CloudHandler.h"
+#include "FinalCloudHandler.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
 void outputToCloud(String data);
@@ -254,7 +254,7 @@ SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
 
 //global objects
-CloudHandler cloud(&Particle);
+FinalCloudHandler cloud(&Particle);
 Adafruit_BME680 bme; // I2C
 Telaire_T6713 t6713;  //CO2 sensor
 LMP91000 lmp91000;
@@ -422,7 +422,7 @@ Bits 1-0: Mask 0b11
 
 
 //function declarations
-Upload buildUpload(void);
+// Upload buildUpload(void);
 void readStoredVars(void);
 void fixStoredVars();
 void checkCalFile(void);
@@ -470,48 +470,48 @@ void sendPacket(byte *packet, byte len);
 void locationCallback(float lat, float lon, float accuracy);
 
 // build Upload object for protobuf
-Upload buildUpload(void) {
-    Upload upload = Upload_init_zero;
+// Upload buildUpload(void) {
+//     Upload upload = Upload_init_zero;
 
-    upload.temp = readTemperature();
-    upload.hum = readHumidity();
-    upload.batt = fuel.getSoC();
-    double latitude = gps.get_latitude();
-    double longitude = gps.get_longitude();
-    double acc = gps.get_horizontalDillution() / 10.0;
+//     upload.temp = readTemperature();
+//     upload.hum = readHumidity();
+//     upload.batt = fuel.getSoC();
+//     double latitude = gps.get_latitude();
+//     double longitude = gps.get_longitude();
+//     double acc = gps.get_horizontalDillution() / 10.0;
 
-    if (latitude != 0 && longitude != 0)
-    {
-        if (gps.get_nsIndicator() != 0)
-            latitude = -1 * latitude;
+//     if (latitude != 0 && longitude != 0)
+//     {
+//         if (gps.get_nsIndicator() != 0)
+//             latitude = -1 * latitude;
 
-        if (gps.get_ewIndicator() == 0x01)
-            longitude = -1 * longitude;
+//         if (gps.get_ewIndicator() == 0x01)
+//             longitude = -1 * longitude;
 
-        upload.gps = CloudHandler::buildGPS(latitude, longitude, acc);
-    }
+//         upload.gps = CloudHandler::buildGPS(latitude, longitude, acc);
+//     }
 
-    upload.device_id = DEVICE_id;
-    upload.co = CO_float;
-    upload.co2 = CO2_float;
-    upload.pm01 = PM01Value;
-    upload.pm25 = corrected_PM_25;
-    upload.pm10 = PM10Value;
-    upload.press = bme.pressure / 100.0;
-    upload.o3 = O3_float;
+//     upload.device_id = DEVICE_id;
+//     upload.co = CO_float;
+//     upload.co2 = CO2_float;
+//     upload.pm01 = PM01Value;
+//     upload.pm25 = corrected_PM_25;
+//     upload.pm10 = PM10Value;
+//     upload.press = bme.pressure / 100.0;
+//     upload.o3 = O3_float;
 
-    if (NO2_enabled)
-        upload.no2 = NO2_float;
+//     if (NO2_enabled)
+//         upload.no2 = NO2_float;
 
-    if (sensible_iot_en == 1)
-        upload.sensible = true;
-    else
-        upload.sensible = false;
+//     if (sensible_iot_en == 1)
+//         upload.sensible = true;
+//     else
+//         upload.sensible = false;
     
-    upload.epoch = Time.now();
+//     upload.epoch = Time.now();
 
-    return upload;
-}
+//     return upload;
+// }
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -2279,34 +2279,17 @@ void outputDataToESP(void){
     }
 
     //csv_output_string += String(status_word.status_int) + ",";
-    int zone;
-    EEPROM.get(TIME_ZONE_MEM_ADDRESS, zone);
-    int newHour = Time.hour();
-    newHour = newHour+zone;
 
-    int day = Time.day();
-    int year = Time.year();
-    int minute = Time.minute();
-    int second = Time.second();
-    int month = Time.month();
-        if (newHour < 0)
-    {
-        newHour = newHour+24;
-    }
-    if (newHour > 24)
-    {
-        newHour = newHour-24;
-    }
-    csv_output_string += String(day)+"/"+String(month)+"/"+String(year)+","+String(newHour)+":"+String(minute)+":"+String(second);
+    csv_output_string += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
     //csv_output_string += String(Time.format(local_time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
     
     // protobuf upload
-    Upload cloudUpload = buildUpload();
-    cloud.publish(cloudUpload);
-    Serial.println(cloud_output_string);
-    Serial.println(cloud_output_string.length());
+    // Upload cloudUpload = buildUpload();
+    // cloud.publish(cloudUpload);
+    // Serial.println(cloud_output_string);
+    // Serial.println(cloud_output_string.length());
 
     // if (Particle.connected() && serial_cellular_enabled) {
     //     Upload cloudUpload = buildUpload();

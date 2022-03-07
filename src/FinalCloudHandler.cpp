@@ -1,11 +1,11 @@
 #include "FinalCloudHandler.h"
 
-CloudHandler::CloudHandler(CloudClass* particle_ptr)
+FinalCloudHandler::FinalCloudHandler(CloudClass* particle_ptr)
 {
     _particle = particle_ptr;
 }
 
-bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, size_t val_len) {
+bool FinalCloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, size_t val_len) {
     if(dest_len < (val_len*2+1)) /* check that dest is large enough */
         return false;
 
@@ -19,39 +19,29 @@ bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, siz
     return true;
 }
 
-bool CloudHandler::publish(Upload &upload)
-{
-    uint8_t buffer[MAX_BUF];
-    char out[MAX_BUF * 2 + 1];
-    String hexString = "";
+// bool FinalCloudHandler::publish(Upload &upload)
+// {
+    // uint8_t buffer[500];
+    // char out[500 * 2 + 1];
+    // String hexString = "";
 
-    MY_pb_ostream_t stream = MY_pb_ostream_from_buffer(buffer, sizeof(buffer));
-    MY_pb_encode(&stream, Upload_fields, &upload);
+    // MY_pb_ostream_t stream = MY_pb_ostream_from_buffer(buffer, sizeof(buffer));
+    // MY_pb_encode(&stream, Upload_fields, &upload);
 
-    // encode binary protobuf to base64 string
-    String encoded = Base64::encodeToString(buffer, sizeof(buffer));
+    // // encode binary protobuf to base64 string
+    // String encoded = Base64::encodeToString(buffer, sizeof(buffer));
 
-    toHex(out, sizeof(out), buffer, stream.bytes_written);
-    for (int i = 0; i < sizeof(buffer); i++) {
-        hexString += out[i];
-    }
+    // toHex(out, sizeof(out), buffer, stream.bytes_written);
+    // for (int i = 0; i < sizeof(buffer); i++) {
+    //     hexString += out[i];
+    // }
 
-    Serial.println(hexString);
-    Serial.println(hexString.length());
+    // Serial.println(hexString);
+    // Serial.println(hexString.length());
 
     // bool published = _particle->publish("uploadCellular", hexString, PRIVATE);
     // _particle->process();
 
     // return published;
-    return true;
-}
-
-GPS_V CloudHandler::buildGPS(double latitude, double longitude, double acc)
-{
-    GPS_V gpsData = GPS_V_init_zero;
-    gpsData.lat = latitude;
-    gpsData.long_ = longitude;
-    gpsData.acc = acc;
-
-    return gpsData;
-}
+    // return true;
+// }

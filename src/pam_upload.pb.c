@@ -6,18 +6,34 @@
 #error Regenerate this file with the current version of nanopb generator.
 #endif
 
+MY_PB_BIND(SystemManifest, SystemManifest, AUTO)
+
+
+MY_PB_BIND(SystemTopology, SystemTopology, AUTO)
+
+
+MY_PB_BIND(SystemSettings, SystemSettings, AUTO)
+
+
+MY_PB_BIND(Calibration, Calibration, AUTO)
+
+
+MY_PB_BIND(SubSystem, SubSystem, AUTO)
+
+
+MY_PB_BIND(Device, Device, AUTO)
+
+
+MY_PB_BIND(Diagnostic, Diagnostic, AUTO)
+
+
 MY_PB_BIND(Upload, Upload, AUTO)
 
 
-MY_PB_BIND(GPS_V, GPS_V, AUTO)
+MY_PB_BIND(DataPoint, DataPoint, AUTO)
 
 
 
-#ifndef MY_PB_CONVERT_DOUBLE_FLOAT
-/* On some platforms (such as AVR), double is really float.
- * To be able to encode/decode double on these platforms, you need.
- * to define MY_PB_CONVERT_DOUBLE_FLOAT in pb.h or compiler command line.
- */
-MY_PB_STATIC_ASSERT(sizeof(double) == 8, DOUBLE_MUST_BE_8_BYTES)
-#endif
+
+
 
