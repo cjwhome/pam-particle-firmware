@@ -301,9 +301,9 @@ uint16_t value;
 char recieveStr[5];
 
 //plantower PMS5003 vars
-int PM01Value=0;
-int PM2_5Value=0;
-int PM10Value=0;
+float PM01Value=0;
+float PM2_5Value=0;
+float PM10Value=0;
 float corrected_PM_25 = 0;
 float corrected_PM_1 = 0;
 #define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
@@ -2100,11 +2100,11 @@ void outputDataToESP(void){
     //     csv_output_string += String(air_quality_score, 1) + ",";
     // }
    
-    csv_output_string += String(corrected_PM_1) + ",";
+    csv_output_string += String(corrected_PM_1, 1) + ",";
     
-    csv_output_string += String(corrected_PM_25, 0) + ",";
+    csv_output_string += String(corrected_PM_25, 1) + ",";
     
-    csv_output_string += String(PM10Value) + ",";
+    csv_output_string += String(PM10Value, 1) + ",";
     
     csv_output_string += String(O3_CellTemp, 1) + ",";
     
@@ -2408,7 +2408,6 @@ void getEspOzoneData(void)
     {
         return ;
     }
-    Serial.println("Updating ozone data with new ozone");
     ozoneChangeCheck = recievedData;
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
     if(debugging_enabled)
@@ -2651,7 +2650,7 @@ char checkValue(char *thebuf, char leng)  {
     }
     return receiveflag;
 }
-int transmitPM01(char *thebuf)  {
+float transmitPM01(char *thebuf)  {
     int PM01Val;
     PM01Val=((thebuf[3]<<8) + thebuf[4]); //count PM1.0 value of the air detector module
     return PM01Val;
@@ -2663,7 +2662,7 @@ float transmitPM2_5(char *thebuf) {
     return PM2_5Val;
 }
 //transmit PM Value to PC
-int transmitPM10(char *thebuf)  {
+float transmitPM10(char *thebuf)  {
     int PM10Val;
     PM10Val=((thebuf[7]<<8) + thebuf[8]); //count PM10 value of the air detector module
     return PM10Val;
