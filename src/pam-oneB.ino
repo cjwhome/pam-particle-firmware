@@ -43,7 +43,8 @@
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
-#include "FinalCloudHandler.h"
+#include "CloudHandler.h"
+#include "../lib/buildProto/buildProto.h"
 
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
@@ -189,7 +190,8 @@ SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
 
 //global objects
-FinalCloudHandler cloud(&Particle);
+CloudHandler cloud(&Particle);
+BuildProto proto();
 Adafruit_BME680 bme; // I2C
 Telaire_T6713 t6713;  //CO2 sensor
 LMP91000 lmp91000;
@@ -403,6 +405,9 @@ void sendPacket(byte *packet, byte len);
 
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
+
+
+
 
 // build Upload object for protobuf
 // Upload buildUpload(void) {

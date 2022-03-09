@@ -1,11 +1,11 @@
-#include "FinalCloudHandler.h"
+#include "CloudHandler.h"
 
-FinalCloudHandler::FinalCloudHandler(CloudClass* particle_ptr)
+CloudHandler::CloudHandler(CloudClass* particle_ptr)
 {
     _particle = particle_ptr;
 }
 
-bool FinalCloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, size_t val_len) {
+bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, size_t val_len) {
     if(dest_len < (val_len*2+1)) /* check that dest is large enough */
         return false;
 
@@ -19,7 +19,7 @@ bool FinalCloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values
     return true;
 }
 
-// bool FinalCloudHandler::publish(Upload &upload)
+// bool CloudHandler::publish(Upload &upload)
 // {
     // uint8_t buffer[500];
     // char out[500 * 2 + 1];

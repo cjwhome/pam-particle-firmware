@@ -48,7 +48,8 @@
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
-#include "FinalCloudHandler.h"
+#include "CloudHandler.h"
+#include "../lib/buildProto/buildProto.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
 void outputToCloud(String data);
@@ -109,7 +110,7 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 48 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 49 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
@@ -254,7 +255,8 @@ SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
 
 //global objects
-FinalCloudHandler cloud(&Particle);
+CloudHandler cloud(&Particle);
+BuildProto proto();
 Adafruit_BME680 bme; // I2C
 Telaire_T6713 t6713;  //CO2 sensor
 LMP91000 lmp91000;
@@ -468,6 +470,9 @@ void sendPacket(byte *packet, byte len);
 
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
+
+
+
 
 // build Upload object for protobuf
 // Upload buildUpload(void) {
