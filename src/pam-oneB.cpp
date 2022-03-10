@@ -133,7 +133,7 @@ PRODUCT_VERSION(8);
 #define TMP36_VPDC 0.01 //10mV per degree C
 
 float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to convert ADC value to voltage
-#define ALPHA_ADC_READ_AMOUNT 40
+#define ALPHA_ADC_READ_AMOUNT 20
 
 //float ads_bitmv = 0.1920;
 
@@ -2053,19 +2053,19 @@ float readAlpha1(float sensor_temperature, int species){
         A2_temperature = 0;
         half_Vref = 0;
         for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
-            A0_gas_array[i] = ads1.readADC_SingleEnded(0);
-            A1_aux_array[i] = ads1.readADC_SingleEnded(1);
-            half_Vref_array[i] = ads1.readADC_SingleEnded(3);
-          //A0_gas += ads1.readADC_SingleEnded(0); //gas
-          //A1_aux += ads1.readADC_SingleEnded(1); //aux out
-          //A2_temperature += ads1.readADC_SingleEnded(2); //temperature
-          //half_Vref += ads1.readADC_SingleEnded(3); //half of Vref
+           // A0_gas_array[i] = ads1.readADC_SingleEnded(0);
+          //  A1_aux_array[i] = ads1.readADC_SingleEnded(1);
+           // half_Vref_array[i] = ads1.readADC_SingleEnded(3);
+          A0_gas += ads1.readADC_SingleEnded(0); //gas
+          A1_aux += ads1.readADC_SingleEnded(1); //aux out
+         // A2_temperature += ads1.readADC_SingleEnded(2); //temperature
+          half_Vref += ads1.readADC_SingleEnded(3); //half of Vref
         }
 
-        //A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
-        //A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        //half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
-        int midpoint = ALPHA_ADC_READ_AMOUNT/2;
+        A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
+        A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
+        half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
+        /*int midpoint = ALPHA_ADC_READ_AMOUNT/2;
         
         sortArray(A0_gas_array, ALPHA_ADC_READ_AMOUNT);
         sortArray(A1_aux_array, ALPHA_ADC_READ_AMOUNT);
@@ -2073,7 +2073,7 @@ float readAlpha1(float sensor_temperature, int species){
 
         A0_gas = A0_gas_array[midpoint];
         A1_aux = A1_aux_array[midpoint];
-        half_Vref = half_Vref_array[midpoint];
+        half_Vref = half_Vref_array[midpoint];*/
 
         
 
@@ -2199,19 +2199,19 @@ float readAlpha2(float sensor_temperature, int species){
         A2_temperature = 0;
         half_Vref = 0;
         for(int i=0; i<ALPHA_ADC_READ_AMOUNT; i++){
-            A0_gas_array[i] = ads1.readADC_SingleEnded(0);
-            A1_aux_array[i] = ads1.readADC_SingleEnded(1);
-            half_Vref_array[i] = ads1.readADC_SingleEnded(3);
-          //A0_gas += ads2.readADC_SingleEnded(0); //gas
-          //A1_aux += ads2.readADC_SingleEnded(1); //aux out
+            //A0_gas_array[i] = ads1.readADC_SingleEnded(0);
+            //A1_aux_array[i] = ads1.readADC_SingleEnded(1);
+            //half_Vref_array[i] = ads1.readADC_SingleEnded(3);
+          A0_gas += ads2.readADC_SingleEnded(0); //gas
+          A1_aux += ads2.readADC_SingleEnded(1); //aux out
          
-          //half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
+          half_Vref += ads2.readADC_SingleEnded(3); //half of Vref
         }
 
-        //A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
-        //A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
-        //half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
-        int midpoint = ALPHA_ADC_READ_AMOUNT/2;
+        A0_gas = A0_gas / ALPHA_ADC_READ_AMOUNT;
+        A1_aux = A1_aux / ALPHA_ADC_READ_AMOUNT;
+        half_Vref = half_Vref / ALPHA_ADC_READ_AMOUNT;
+        /*int midpoint = ALPHA_ADC_READ_AMOUNT/2;
         
         sortArray(A0_gas_array, ALPHA_ADC_READ_AMOUNT);
         sortArray(A1_aux_array, ALPHA_ADC_READ_AMOUNT);
@@ -2219,7 +2219,7 @@ float readAlpha2(float sensor_temperature, int species){
 
         A0_gas = A0_gas_array[midpoint];
         A1_aux = A1_aux_array[midpoint];
-        half_Vref = half_Vref_array[midpoint];
+        half_Vref = half_Vref_array[midpoint];*/
 
         volt0_gas = A0_gas * ads_bitmv;
         volt1_aux = A1_aux * ads_bitmv;
