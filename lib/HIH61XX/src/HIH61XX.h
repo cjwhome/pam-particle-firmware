@@ -1,103 +1,225 @@
-/*
-Spark Core HIH61XX Temperature/Humidity Sensor Library
-By: Geert wille - Appstrakt
-Licence: GPL v2
-*/
-#ifndef HONEYWELL_HIH61XX_H
-#define HONEYWELL_HIH61XX_H
+#ifndef HIH61XX_H
+#define HIH61XX_H
 
-#include "application.h"
+#define HIH61XX_VERSION "3.0.0"
 
-#define HIH61XX_DEFAULT_ADDRESS     0x27
+#define HIH61XX_DEFAULT_ADDRESS 0x27
 
-class HIH61XX {
-    public:
-        enum Error {
-            NoError = 0,
-            ConnectionError = 1,
-            CommunicationError = 2,
-            NotRunningError = 3,
-            CommandModeError = 4,
-            ErrorMask = 15
-        };
-
-        enum Flag {
-            RunningFlag = 128,
-            CommandModeFlag = 64,
-            FlagsMask = ~ErrorMask
-        };
-
-        HIH61XX(uint8_t address = HIH61XX_DEFAULT_ADDRESS);
-
-        uint8_t address() const {
-            return a;
-        }
+#include <AsyncDelay.h>
 
 
-        uint8_t error() const {
-            return f & ErrorMask;
-        }
+template <class T> class HIH61xx {
+  public:
+    enum status_t {
+      statusNormal = 0,    // Defined by HIH61xx device
+      statusStaleData = 1, // Defined by HIH61xx device
+      statusCmdMode = 2,   // Defined by HIH61xx device
+      statusNotUsed = 3,   // Defined by HIH61xx device
+      statusUninitialised = 4,
+      statusTimeout = 5,
+    };
 
-        bool isRunning() const {
-            return f & RunningFlag;
-        }
-        uint8_t flags() const {
-            return f & FlagsMask;
-        }
+    static const uint8_t defaultAddress = HIH61XX_DEFAULT_ADDRESS;
+    static const uint8_t powerUpDelay_ms = 75; // Data sheet indicates 60ms
+    static const uint8_t conversionDelay_ms = 45; // "Typically 36.65ms"
 
-        //  return humidity / temperature
-        float humidity() const {
-            return rawToHumidity(h);
-        }
-        float temperature() const {
-            return rawToTemperature(t);
-        }
-        uint16_t humidity_Raw() const {
-            return h;
-        }
-        uint16_t temperature_Raw() const {
-            return t;
-        }
+    HIH61xx(T &i2c, uint8_t address = defaultAddress);
 
-        //  start/stop the device
-        virtual uint8_t start();
-        virtual uint8_t stop();
+    inline int16_t getAmbientTemp(void) const {
+      return _ambientTemp;
+    }
+    inline uint16_t getRelHumidity(void) const {
+      return _relHumidity;
+    }
+    inline uint8_t getStatus(void) const {
+      return _status;
+    }
 
-        // update humidity / temperature
-        uint8_t update();
+    inline bool isFinished(void) const {
+      return _state == finished;
+    }
 
-        //  convert humidity / temperature
-        static float rawToHumidity(uint16_t raw) {
-            return float(raw) / 16382;
-        }
-        static float rawToTemperature(uint16_t raw) {
-            return (float(raw) / 16382) * 165 - 40;
-        }
+    // start called, results not ready
+    inline bool isSampling(void) const {
+      return !(_state == off || _state == finished);
+    }
 
-        //  use a stream to control the sensor
-        uint8_t commandRequest(Stream & stream);
-    protected:
-        uint8_t setError(uint8_t error) {
-            f = (f & ~ErrorMask) | error;
-            return error;
-        }
+    inline bool isPowerOff(void) const {
+      return (_state == off || _state == finished);
+    }
 
-        virtual uint8_t commandProcess(Stream & stream, uint8_t command);
-        uint8_t commandReply(Stream & stream, uint8_t result) {
-            stream.println(result);
-            return result;
-        }
-        template < typename T > uint8_t commandReply(Stream & stream, uint8_t result,
-            const T & data) {
-            stream.println(data);
-            return result;
-        }
+	inline void setPowerUpErrorHandler(void (*handler)(HIH61xx& hih)) {
+		_powerUpErrorHandler = handler;
+	}
 
-        uint8_t a;
-        uint8_t p;
-        uint8_t f;
-        uint16_t h;
-        uint16_t t;
+	inline void setReadErrorHandler(void (*handler)(HIH61xx& hih)) {
+		_readErrorHandler = handler;
+	}
+
+    void initialise(uint8_t power = 255);
+
+    void start(void); // To include power-up (later), start sampling
+    void process(void); // Call often to process state machine
+    void finish(void); // Force completion and power-down
+
+    bool read(void); // Simple blocking read
+
+
+  private:
+    enum state_t {
+      off,
+      poweringUp, // power applied, waiting for timeout
+      converting, // Conversion started, waiting for completion
+      reading, // Ready to read results
+      poweringDown,
+      finished, // Results read
+    };
+
+    uint8_t _address;
+    uint8_t _powerPin;
+    state_t _state;
+    T &_i2c;
+
+    int16_t _ambientTemp;
+    uint16_t _relHumidity;
+    status_t _status;
+    AsyncDelay _delay;
+
+	void (*_powerUpErrorHandler)(HIH61xx& hih);
+	void (*_readErrorHandler)(HIH61xx& hih);
+
+    void errorDetected(void);
 };
+
+
+template <class T> HIH61xx<T>::HIH61xx(T &i2c, uint8_t address) : _address(address),
+  _powerPin(255),
+  _state(off),
+  _i2c(i2c),
+  _ambientTemp(32767),
+  _relHumidity(65535),
+  _status(statusUninitialised),
+  _powerUpErrorHandler(nullptr),
+  _readErrorHandler(nullptr)
+{
+  ;
+}
+
+
+template <class T> void HIH61xx<T>::initialise(uint8_t powerPin)
+{
+  _powerPin = powerPin;
+  if (_powerPin != 255) {
+    pinMode(_powerPin, OUTPUT);
+    digitalWrite(_powerPin, LOW);
+  }
+  _delay.start(powerUpDelay_ms, AsyncDelay::MILLIS);
+
+  return;
+}
+
+
+template <class T> void HIH61xx<T>::start(void)
+{
+  if (_powerPin != 255) {
+    digitalWrite(_powerPin, HIGH);
+    _delay.start(powerUpDelay_ms, AsyncDelay::MILLIS);
+  }
+  _state = poweringUp;
+}
+
+
+template <class T> void HIH61xx<T>::process(void)
+{
+  switch (_state) {
+    case off:
+      // Stay powered off until told to turn on
+      break;
+
+    case poweringUp:
+      if (_delay.isExpired()) {
+        _i2c.beginTransmission(_address);
+        int errStatus;
+        if ((errStatus = _i2c.endTransmission()) != 0) {
+          errorDetected();
+		  if (_powerUpErrorHandler) {
+			  _powerUpErrorHandler(*this);
+		  }
+        }
+        else {
+          _delay.start(conversionDelay_ms, AsyncDelay::MILLIS);
+          _state = converting;
+        }
+      }
+      break;
+
+    case converting:
+      if (_delay.isExpired()) {
+        _state = reading;
+      }
+      break;
+
+    case reading:
+      {
+        const uint8_t bytesRequested = 4;
+        uint8_t data[bytesRequested];
+        int bytesRead;
+        if ((bytesRead = _i2c.requestFrom(_address, bytesRequested)) != bytesRequested) {
+          errorDetected();
+		  if (_readErrorHandler) {
+			  _readErrorHandler(*this);
+		  }
+          break;
+        }
+        else {
+          for (uint8_t i = 0; i < bytesRequested; ++i)
+            data[i] = _i2c.read();
+        }
+        _status = (status_t)(data[0] >> 6);
+        uint16_t rawHumidity = ((((uint16_t)data[0] & 0x3F) << 8) | (uint16_t)data[1]);
+        uint16_t rawTemp = ((uint16_t)data[2] << 6) | ((uint16_t)data[3] >> 2);
+
+        _relHumidity = (long(rawHumidity) * 10000L) / 16382;
+        _ambientTemp = ((long(rawTemp) * 16500L) / 16382) - 4000;
+      }
+      _state = poweringDown;
+      break;
+
+    case poweringDown:
+      finish(); // Sets state to finished
+      break;
+
+    case finished:
+      // Do nothing, remain in this state
+      break;
+  }
+}
+
+
+template <class T> void HIH61xx<T>::finish(void)
+{
+  //_i2c.stop(); // Release SDA and SCL
+  if (_powerPin != 255)
+    digitalWrite(_powerPin, LOW);
+  _state = finished;
+}
+
+
+template <class T> bool HIH61xx<T>::read(void)
+{
+  start();
+  while (!isFinished())
+    process();
+  return _status == statusNormal;
+}
+
+
+template <class T> void HIH61xx<T>::errorDetected(void)
+{
+  finish();
+  _ambientTemp = 32767;
+  _relHumidity = 65535;
+  _status = statusTimeout;
+}
 
 #endif

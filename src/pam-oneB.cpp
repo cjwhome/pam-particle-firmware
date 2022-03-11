@@ -46,7 +46,7 @@
 #include "PowerCheck.h"
 // #include "Serial1/Serial1.h"
 #include "SdFat.h"
-#include "HIH61XX.h"
+#include "HIH61xx.h"
 #include "CellularHelper.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
@@ -179,10 +179,11 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
 #define SD_CARD_EN_MEM_ADDRESS 148
 #define UPDATE_MEM_ADDRESS 152
-#define AVERAGING_ON_MEM_ADDRESS 156
-#define CORE_ID 160
-#define WIFI_ENABLED 192
-#define TEMP_CORRECTION_EN_ADDRESS 196
+#define TEMP_CORRECTION_EN_ADDRESS 156
+#define AVERAGING_ON_MEM_ADDRESS 160
+#define CORE_ID 164
+#define WIFI_ENABLED 196
+#define MAX_MEM_ADDRESS 196
 
 
 
@@ -297,6 +298,7 @@ float CO2_sum = 0;
 float NO2_sum = 0;
 float pressure_sum = 0;
 float humidity_sum = 0;
+float temperature_sum = 0;
 float PM1_sum = 0;
 float PM25_sum = 0;
 float PM10_sum = 0;
@@ -319,7 +321,8 @@ GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
 //SerialLogHandler logHandler;
-HIH61XX hih(0x27);
+//HIH61xx hih(0x27);
+HIH61xx<TwoWire> hih(Wire);
 unsigned long lastCheck = 0;
 char lastStatus[256];
 
@@ -430,6 +433,9 @@ float hum_score, gas_score;
 float gas_reference = 250000;
 float hum_reference = 40;
 
+int16_t hih_humidity = 0;
+int16_t hih_temperature = 0;
+
 union{
     uint16_t status_int;
     char byte[2];
@@ -442,35 +448,7 @@ String accumulated_data = "";
 String ESP_connected = "";
 String coreId = "";
 
-/*
-The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
 
-Bits 15-12; Mask 0xF000
-	- 4 Bit Revision Number
-	- (Status & 0xF000) >> 12
-
-Bits 11-8; Mask 0x0F00
-	- 4 Bit Build Number
-	- (Status & 0x0F00) >> 8
-
-Bit 3: Mask 0b11100
-	GPS Indicator
-	First Bit (0b10000): Type
-		1: Geolocation
-		0: GPS
-	Last 2 Bits (0b01100): Quality
-		11: Best
-		      …
-		00: Worst
-
-Bits 1-0: Mask 0b11
-	Cellular Indicator
-	0b00: Not Enabled
-	0b01: Enabled, Not Connected
-	0b11: Enabled, Connected
-	0b10: TBD
-
-*/
 
 
 
@@ -523,6 +501,18 @@ void sendPacket(byte *packet, byte len);
 
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
+
+void powerUpErrorHandler(HIH61xx<TwoWire>& hih)
+{
+  Serial.println("Error powering up HIH61xx device");
+  //digitalWrite(clearDebounce, LOW);
+}
+
+
+void readErrorHandler(HIH61xx<TwoWire>& hih)
+{
+  Serial.println("Error reading from HIH61xx device");
+}
 
 //test for setting up PMIC manually
 void writeRegister(uint8_t reg, uint8_t value) {
@@ -589,6 +579,7 @@ void outputToCloudAveraging()
         PM10_sum += PM10Value;
         pressure_sum += bme.pressure / 100.0;
         humidity_sum += readHumidity();
+        temperature_sum += readTemperature();
 
         if (NO2_enabled)
         {
@@ -605,6 +596,7 @@ void outputToCloudAveraging()
         PM10_sum /= fixed_count;
         pressure_sum /= fixed_count;
         humidity_sum /= fixed_count;
+        temperature_sum /= fixed_count;
 
         if (NO2_enabled)
         {
@@ -619,6 +611,7 @@ void outputToCloudAveraging()
         PM10_sum = 0;
         pressure_sum = 0;
         humidity_sum = 0;
+        temperature_sum = 0;
 
         measurement_count = 0;
         if (wifi_enabled == 0)
@@ -1367,6 +1360,16 @@ void setup()
     bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
     bme.setGasHeater(320, 150); // 320*C for 150 ms
 
+    if (hih8120_enabled)
+    {
+        Serial.println("Initializing HIH8120 RH sensor");
+        // Set the handlers *before* calling initialise() in case something goes wrong
+        hih.setPowerUpErrorHandler(powerUpErrorHandler);
+        hih.setReadErrorHandler(readErrorHandler);
+        hih.initialise();
+        Serial.println("HIH8120 initialized");
+    }
+
     if (sd_enabled == 0)
     {
         String header = buildHeaderString();
@@ -1441,9 +1444,13 @@ void loop() {
         Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
       }
     }
-    // if(hih8120_enabled){
-    //     readHIH8120();
-    // }
+    if(hih8120_enabled){
+        if(!hih.isSampling()) 
+        {
+            hih.start();
+        }
+        hih.process();
+    }
     readGpsStream();
 
 
@@ -1474,6 +1481,15 @@ void loop() {
     //read PM values and apply calibration factors
     readPlantower();
 
+    if(hih8120_enabled)
+    {
+        if (hih.isFinished()){
+            Serial.println("Reading t and p");
+            hih_humidity = hih.getRelHumidity();
+            hih_temperature = hih.getAmbientTemp();
+            Serial.printf("RH:%d, Temp:%d,", hih_humidity, hih_temperature);
+        }
+    }
     //pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
     pm_25_correction_factor = 1;
     if(debugging_enabled){
@@ -1885,12 +1901,12 @@ void printPacket(byte *packet, byte len)
 float readTemperature(void){
     float temperature = 0;
     if(hih8120_enabled){
-        temperature = hih.temperature();
+        temperature = hih_temperature;
+        temperature /= 100;
     }else{
-        
         temperature = bme.temperature;
     }
-    //temperature *= 100;
+    //
 
     temperature *= temp_slope;
     temperature += temp_zero;       //user input zero offset
@@ -1902,7 +1918,7 @@ float readTemperature(void){
 float readHumidity(void){
     float humidity;
     if(hih8120_enabled){
-        humidity = hih.humidity();
+        humidity = hih_humidity;
         humidity *= 100;
         
     }else{
@@ -2790,24 +2806,7 @@ void getESPWifi(void){
 //     //parseOzoneString(recievedData);
 // }
 
-void readHIH8120(void){
-    hih.start();
 
-    //  request an update of the humidity and temperature
-    hih.update();
-
-    /*Serial.print("Humidity: ");
-    Serial.print(hih.humidity(), 5);
-    Serial.print(" RH (");
-    Serial.print(hih.humidity_Raw());
-    Serial.println(")");
-
-    Serial.print("Temperature: ");
-    Serial.print(hih.temperature(), 5);
-    Serial.println(" C (");
-    Serial.print(hih.temperature_Raw());
-    Serial.println(")");*/
-}
 //read from plantower pms 5500
 void readPlantower(void){
     if(Serial4.find("B")){    //start to read when detect 0x42
@@ -4199,6 +4198,7 @@ String buildAverageCloudString()
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM1_sum);
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM25_sum, 0);
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10_sum);
+    cloud_output_string += String(TEMPERATURE_PACKET_CONSTANT) + String(temperature_sum, 1);
     cloud_output_string += String(PRESSURE_PACKET_CONSTANT) + String(pressure_sum, 1);
     cloud_output_string += String(HUMIDITY_PACKET_CONSTANT) + String(humidity_sum, 1);
     cloud_output_string += String(BATTERY_PACKET_CONSTANT) + String(fuel.getSoC(), 1);

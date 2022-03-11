@@ -1,13 +1,40 @@
-HIH61XX Library for Spark Core
-===================
-Honeywell HumidIconTM Digital Humidity/Temperature Sensors: HIH6130/6131 and 6120/6121 Series is a digital output-type relative humidity (RH) and temperature sensor combined in the same package. The library uses I2C to connect to the sensor (see the Wire library). ***SPI can also be used, but is not implemented in this library***.
+HIH61xx
+=======
 
-Note
-----
-If you have multiple devices connected to the I2C bus, remember that this device screws up the bus when it is not powered. One solution is to keep the device powered all the time. Another possible solution is to add an analog switch to physically disconnect the GND line or the SDA line to the device.
+HIH61xx is a library for accessing the humidity and temperature data
+from the I2C range of Honeywell HIH61xx humidity sensors (HIH6120-021,
+HIH6121-021, HIH6130-021 and HIH6131-021). Do not confuse these
+sensors with the SPI versions (HIH6130-000 and HIH6131-000).
 
-This library has been tested, but might still contain bugs, so please be careful.
+The sensor can be accessed using either hardware I2C (with the `Wire`
+library) or software I2C (using the `SoftWire` library); examples
+demonstrate both uses. For low-power operation an optional power pin
+can be used to control power to the device. A state machine ensures
+the relevant timing constraints are observed.
 
-About
------
-This project is based on https://code.google.com/p/arduino-hih61xx/ and is part of Tomas's work.
+
+Requirements
+------------
+
+The following libraries are required:
+
+* AsyncDelay: see https://github.com/stevemarple/AsyncDelay
+* SoftWire: see https://github.com/stevemarple/SoftWire
+
+Examples
+--------
+
+The `HIH61xx_Wire_demo` and `HIH61xx_SoftWire_demo` sketches demonstrates the state machine operation.
+
+License
+-------
+
+The HIH61xx library is released under the GNU Lesser General Public
+License, version 2.1. See [LICENSE.txt](LICENSE.txt) for details.
+
+Contributors
+------------
+
+* Steve Marple
+* per1234
+* Giuseppe Pisano
