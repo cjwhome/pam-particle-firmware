@@ -1484,10 +1484,10 @@ void loop() {
     if(hih8120_enabled)
     {
         if (hih.isFinished()){
-            Serial.println("Reading t and p");
+           // Serial.println("Reading t and p");
             hih_humidity = hih.getRelHumidity();
             hih_temperature = hih.getAmbientTemp();
-            Serial.printf("RH:%d, Temp:%d,", hih_humidity, hih_temperature);
+            //Serial.printf("RH:%d, Temp:%d,", hih_humidity, hih_temperature);
         }
     }
     //pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
@@ -1919,7 +1919,7 @@ float readHumidity(void){
     float humidity;
     if(hih8120_enabled){
         humidity = hih_humidity;
-        humidity *= 100;
+        humidity /= 100;
         
     }else{
         humidity = bme.humidity;
