@@ -9,13 +9,13 @@
 MY_PB_BIND(SystemManifest, SystemManifest, 4)
 
 
-MY_PB_BIND(SystemTopology, SystemTopology, 2)
+MY_PB_BIND(SystemTopology, SystemTopology, 4)
 
 
 MY_PB_BIND(SystemSettings, SystemSettings, 2)
 
 
-MY_PB_BIND(Calibration, Calibration, AUTO)
+MY_PB_BIND(CalibrationParam, CalibrationParam, AUTO)
 
 
 MY_PB_BIND(SubSystem, SubSystem, 2)
@@ -31,6 +31,7 @@ MY_PB_BIND(Upload, Upload, 2)
 
 
 MY_PB_BIND(DataPoint, DataPoint, AUTO)
+
 
 
 

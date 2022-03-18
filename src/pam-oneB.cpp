@@ -48,9 +48,11 @@
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
+#include "buildProto.h"
 #include "CloudHandler.h"
-#include "../lib/buildProto/buildProto.h"
 
+
+void buildManifest();
 void writeRegister(uint8_t reg, uint8_t value);
 void outputToCloud(String data);
 void check_wifi_file(void);
@@ -110,7 +112,7 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 49 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 50 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
@@ -256,7 +258,7 @@ SYSTEM_THREAD(ENABLED);
 
 //global objects
 CloudHandler cloud(&Particle);
-BuildProto proto();
+BuildProto * proto;
 Adafruit_BME680 bme; // I2C
 Telaire_T6713 t6713;  //CO2 sensor
 LMP91000 lmp91000;
@@ -471,7 +473,14 @@ void sendPacket(byte *packet, byte len);
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
 
-
+void buildManifest()
+{
+    Serial.println("Starting systemManifest build");
+    SystemManifest manifest = proto->buildSystemManifest();
+    Serial.println("Finsihed building the manifest. On to putting it together.");
+    cloud.publish(manifest);
+    return ;
+}
 
 
 // build Upload object for protobuf
@@ -1230,7 +1239,7 @@ void setup()
     Serial.print("Build: ");
     Serial.println(BUILD_VERSION);
 
-
+    proto = new BuildProto(DEVICE_id, ozone_enabled, NO2_enabled);
 
     enableContinuousGPS();
 
@@ -1264,6 +1273,7 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
+    buildManifest();
     if (car_topper_power_en)
     {
         carTopperCheck();

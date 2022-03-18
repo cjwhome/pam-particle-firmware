@@ -15,6 +15,13 @@ typedef enum _Composition {
     Composition_MULTI_PART = 1 
 } Composition;
 
+typedef enum _CalParamType { 
+    CalParamType_Slope = 0, 
+    CalParamType_Zero = 1, 
+    CalParamType_Voltage = 2, 
+    CalParamType_Other = 3 
+} CalParamType;
+
 typedef enum _SystemType { 
     SystemType_AQSYNC = 0, 
     SystemType_AQLITE = 1, 
@@ -31,27 +38,15 @@ typedef enum _Units {
     Units_PPM = 1, 
     Units_PPB = 2, 
     Units_V = 3, 
-    Units_BYTE = 4, 
-    Units_DATETIME = 5 
+    Units_BYTE = 4 
 } Units;
 
-typedef enum _Parameters { 
-    CalParams_Slope = 0,
-    CalParams_Zero = 1,
-    CalParams_Voltage = 2,
-    CalParams_Other = 3
-} Parameters;
-
-typedef struct _CalParams { 
-    CalParams parameters;
-    char value[30];
-} CalParams;
-
 /* Struct definitions */
-typedef struct _Calibration { 
+typedef struct _CalibrationParam { 
+    MY_pb_size_t parameter_count;
+    CalParamType parameter[20]; 
     char name[31]; 
-    CalParams parameters[20];
-} Calibration;
+} CalibrationParam;
 
 typedef struct _DataPoint { 
     char name[26]; 
@@ -74,17 +69,17 @@ typedef struct _Diagnostic {
 
 typedef struct _SystemSettings { 
     char name[26]; 
-    char SerialNumber[11]; 
+    char serial[11]; 
     SystemType type; 
     int32_t primaryUploadFrequeny; 
     int32_t diagnosticUploadFrequeny; 
-    MY_pb_size_t calibration_count;
-    Calibration calibration[40]; 
+    MY_pb_size_t calParams_count;
+    CalibrationParam calParams[20]; 
 } SystemSettings;
 
 typedef struct _Upload { 
     char SID[11]; 
-    int32_t DateUploaded; 
+    int32_t dateUploaded; 
     int32_t pointsTaken; 
     MY_pb_size_t dataPoints_count;
     DataPoint dataPoints[20]; 
@@ -94,8 +89,8 @@ typedef struct _Upload {
 
 typedef struct _SubSystem { 
     char SSID[26]; 
-    bool has_Settings;
-    SystemSettings Settings; 
+    bool has_settings;
+    SystemSettings settings; 
     char PSID[26]; 
 } SubSystem;
 
@@ -124,13 +119,17 @@ typedef struct _SystemManifest {
 #define _Composition_MAX Composition_MULTI_PART
 #define _Composition_ARRAYSIZE ((Composition)(Composition_MULTI_PART+1))
 
+#define _CalParamType_MIN CalParamType_Slope
+#define _CalParamType_MAX CalParamType_Other
+#define _CalParamType_ARRAYSIZE ((CalParamType)(CalParamType_Other+1))
+
 #define _SystemType_MIN SystemType_AQSYNC
 #define _SystemType_MAX SystemType_PARTICLE
 #define _SystemType_ARRAYSIZE ((SystemType)(SystemType_PARTICLE+1))
 
 #define _Units_MIN Units_OTHER
-#define _Units_MAX Units_DATETIME
-#define _Units_ARRAYSIZE ((Units)(Units_DATETIME+1))
+#define _Units_MAX Units_BYTE
+#define _Units_ARRAYSIZE ((Units)(Units_BYTE+1))
 
 
 #ifdef __cplusplus
@@ -140,8 +139,8 @@ extern "C" {
 /* Initializer values for message structs */
 #define SystemManifest_init_default              {"", false, SystemTopology_init_default, false, SystemSettings_init_default, 0, _Composition_MIN}
 #define SystemTopology_init_default              {0, {Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default, Device_init_default}, 0, {Diagnostic_init_default, Diagnostic_init_default, Diagnostic_init_default, Diagnostic_init_default, Diagnostic_init_default, Diagnostic_init_default, Diagnostic_init_default, Diagnostic_init_default, Diagnostic_init_default, Diagnostic_init_default}, 0, {SubSystem_init_default, SubSystem_init_default, SubSystem_init_default}}
-#define SystemSettings_init_default              {"", "", _SystemType_MIN, 0, 0, 0, {Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default, Calibration_init_default}}
-#define Calibration_init_default                 {"", 0, 0}
+#define SystemSettings_init_default              {"", "", _SystemType_MIN, 0, 0, 0, {CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default, CalibrationParam_init_default}}
+#define CalibrationParam_init_default            {0, {_CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN}, ""}
 #define SubSystem_init_default                   {"", false, SystemSettings_init_default, ""}
 #define Device_init_default                      {"", "", _Units_MIN}
 #define Diagnostic_init_default                  {"", "", _Units_MIN}
@@ -149,8 +148,8 @@ extern "C" {
 #define DataPoint_init_default                   {"", "", _Units_MIN, ""}
 #define SystemManifest_init_zero                 {"", false, SystemTopology_init_zero, false, SystemSettings_init_zero, 0, _Composition_MIN}
 #define SystemTopology_init_zero                 {0, {Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero, Device_init_zero}, 0, {Diagnostic_init_zero, Diagnostic_init_zero, Diagnostic_init_zero, Diagnostic_init_zero, Diagnostic_init_zero, Diagnostic_init_zero, Diagnostic_init_zero, Diagnostic_init_zero, Diagnostic_init_zero, Diagnostic_init_zero}, 0, {SubSystem_init_zero, SubSystem_init_zero, SubSystem_init_zero}}
-#define SystemSettings_init_zero                 {"", "", _SystemType_MIN, 0, 0, 0, {Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero, Calibration_init_zero}}
-#define Calibration_init_zero                    {"", 0, 0}
+#define SystemSettings_init_zero                 {"", "", _SystemType_MIN, 0, 0, 0, {CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero, CalibrationParam_init_zero}}
+#define CalibrationParam_init_zero               {0, {_CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN, _CalParamType_MIN}, ""}
 #define SubSystem_init_zero                      {"", false, SystemSettings_init_zero, ""}
 #define Device_init_zero                         {"", "", _Units_MIN}
 #define Diagnostic_init_zero                     {"", "", _Units_MIN}
@@ -158,9 +157,8 @@ extern "C" {
 #define DataPoint_init_zero                      {"", "", _Units_MIN, ""}
 
 /* Field tags (for use in manual encoding/decoding) */
-#define Calibration_name_tag                     1
-#define Calibration_zero_tag                     2
-#define Calibration_slope_tag                    3
+#define CalibrationParam_parameter_tag           1
+#define CalibrationParam_name_tag                2
 #define DataPoint_name_tag                       1
 #define DataPoint_value_tag                      2
 #define DataPoint_units_tag                      3
@@ -172,19 +170,19 @@ extern "C" {
 #define Diagnostic_SSID_tag                      2
 #define Diagnostic_units_tag                     3
 #define SystemSettings_name_tag                  1
-#define SystemSettings_SerialNumber_tag           2
+#define SystemSettings_serial_tag                2
 #define SystemSettings_type_tag                  3
 #define SystemSettings_primaryUploadFrequeny_tag 4
 #define SystemSettings_diagnosticUploadFrequeny_tag 5
-#define SystemSettings_calibration_tag           6
+#define SystemSettings_calParams_tag             6
 #define Upload_SID_tag                           1
-#define Upload_DateUploaded_tag                  2
+#define Upload_dateUploaded_tag                  2
 #define Upload_pointsTaken_tag                   3
 #define Upload_dataPoints_tag                    4
 #define Upload_terminated_tag                    5
 #define Upload_composition_tag                   6
 #define SubSystem_SSID_tag                       1
-#define SubSystem_Settings_tag                   2
+#define SubSystem_settings_tag                   2
 #define SubSystem_PSID_tag                       3
 #define SystemTopology_devices_tag               1
 #define SystemTopology_diagnostics_tag           2
@@ -219,29 +217,28 @@ X(a, STATIC,   REPEATED, MESSAGE,  subSystems,        3)
 
 #define SystemSettings_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, STRING,   name,              1) \
-X(a, STATIC,   SINGULAR, STRING,   SerialNumber,            2) \
+X(a, STATIC,   SINGULAR, STRING,   serial,            2) \
 X(a, STATIC,   SINGULAR, UENUM,    type,              3) \
 X(a, STATIC,   SINGULAR, INT32,    primaryUploadFrequeny,   4) \
 X(a, STATIC,   SINGULAR, INT32,    diagnosticUploadFrequeny,   5) \
-X(a, STATIC,   REPEATED, MESSAGE,  calibration,       6)
+X(a, STATIC,   REPEATED, MESSAGE,  calParams,         6)
 #define SystemSettings_CALLBACK NULL
 #define SystemSettings_DEFAULT NULL
-#define SystemSettings_calibration_MSGTYPE Calibration
+#define SystemSettings_calParams_MSGTYPE CalibrationParam
 
-#define Calibration_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, STRING,   name,              1) \
-X(a, STATIC,   SINGULAR, FLOAT,    zero,              2) \
-X(a, STATIC,   SINGULAR, FLOAT,    slope,             3)
-#define Calibration_CALLBACK NULL
-#define Calibration_DEFAULT NULL
+#define CalibrationParam_FIELDLIST(X, a) \
+X(a, STATIC,   REPEATED, UENUM,    parameter,         1) \
+X(a, STATIC,   SINGULAR, STRING,   name,              2)
+#define CalibrationParam_CALLBACK NULL
+#define CalibrationParam_DEFAULT NULL
 
 #define SubSystem_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, STRING,   SSID,              1) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  Settings,          2) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  settings,          2) \
 X(a, STATIC,   SINGULAR, STRING,   PSID,              3)
 #define SubSystem_CALLBACK NULL
 #define SubSystem_DEFAULT NULL
-#define SubSystem_Settings_MSGTYPE SystemSettings
+#define SubSystem_settings_MSGTYPE SystemSettings
 
 #define Device_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, STRING,   name,              1) \
@@ -259,7 +256,7 @@ X(a, STATIC,   SINGULAR, UENUM,    units,             3)
 
 #define Upload_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, STRING,   SID,               1) \
-X(a, STATIC,   SINGULAR, INT32,    DateUploaded,      2) \
+X(a, STATIC,   SINGULAR, INT32,    dateUploaded,      2) \
 X(a, STATIC,   SINGULAR, INT32,    pointsTaken,       3) \
 X(a, STATIC,   REPEATED, MESSAGE,  dataPoints,        4) \
 X(a, STATIC,   SINGULAR, BOOL,     terminated,        5) \
@@ -279,7 +276,7 @@ X(a, STATIC,   SINGULAR, STRING,   SSID,              4)
 extern const MY_pb_msgdesc_t SystemManifest_msg;
 extern const MY_pb_msgdesc_t SystemTopology_msg;
 extern const MY_pb_msgdesc_t SystemSettings_msg;
-extern const MY_pb_msgdesc_t Calibration_msg;
+extern const MY_pb_msgdesc_t CalibrationParam_msg;
 extern const MY_pb_msgdesc_t SubSystem_msg;
 extern const MY_pb_msgdesc_t Device_msg;
 extern const MY_pb_msgdesc_t Diagnostic_msg;
@@ -290,7 +287,7 @@ extern const MY_pb_msgdesc_t DataPoint_msg;
 #define SystemManifest_fields &SystemManifest_msg
 #define SystemTopology_fields &SystemTopology_msg
 #define SystemSettings_fields &SystemSettings_msg
-#define Calibration_fields &Calibration_msg
+#define CalibrationParam_fields &CalibrationParam_msg
 #define SubSystem_fields &SubSystem_msg
 #define Device_fields &Device_msg
 #define Diagnostic_fields &Diagnostic_msg
@@ -298,14 +295,14 @@ extern const MY_pb_msgdesc_t DataPoint_msg;
 #define DataPoint_fields &DataPoint_msg
 
 /* Maximum encoded size of messages (where known) */
-#define Calibration_size                         42
+#define CalibrationParam_size                    72
 #define DataPoint_size                           69
 #define Device_size                              46
 #define Diagnostic_size                          56
-#define SubSystem_size                           1000
-#define SystemManifest_size                      5514
-#define SystemSettings_size                      943
-#define SystemTopology_size                      4549
+#define SubSystem_size                           1600
+#define SystemManifest_size                      7914
+#define SystemSettings_size                      1543
+#define SystemTopology_size                      6349
 #define Upload_size                              1458
 
 #ifdef __cplusplus

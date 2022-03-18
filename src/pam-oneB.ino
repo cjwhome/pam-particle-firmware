@@ -43,8 +43,9 @@
 #include "SdFat.h"
 #include "HIH61XX.h"
 #include "CellularHelper.h"
+#include "buildProto.h"
 #include "CloudHandler.h"
-#include "../lib/buildProto/buildProto.h"
+
 
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
@@ -191,7 +192,7 @@ SYSTEM_THREAD(ENABLED);
 
 //global objects
 CloudHandler cloud(&Particle);
-BuildProto proto();
+BuildProto * proto;
 Adafruit_BME680 bme; // I2C
 Telaire_T6713 t6713;  //CO2 sensor
 LMP91000 lmp91000;
@@ -406,7 +407,14 @@ void sendPacket(byte *packet, byte len);
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
 
-
+void buildManifest()
+{
+    Serial.println("Starting systemManifest build");
+    SystemManifest manifest = proto->buildSystemManifest();
+    Serial.println("Finsihed building the manifest. On to putting it together.");
+    cloud.publish(manifest);
+    return ;
+}
 
 
 // build Upload object for protobuf
@@ -1165,7 +1173,7 @@ void setup()
     Serial.print("Build: ");
     Serial.println(BUILD_VERSION);
 
-
+    proto = new BuildProto(DEVICE_id, ozone_enabled, NO2_enabled);
 
     enableContinuousGPS();
 
@@ -1199,6 +1207,7 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
+    buildManifest();
     if (car_topper_power_en)
     {
         carTopperCheck();
