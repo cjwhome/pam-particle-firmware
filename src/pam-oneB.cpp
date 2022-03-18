@@ -74,7 +74,7 @@ bool checkStringIsValid(String data);
 int setSerialNumber(String serialNumber);
 #line 23 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15083);
-PRODUCT_VERSION(6);
+PRODUCT_VERSION(8);
 bool haveOfflineData = false;
 String diagnosticData = "";
 

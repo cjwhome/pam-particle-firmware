@@ -21,7 +21,7 @@
 #include "SerialBufferRK.h"
 
 PRODUCT_ID(15083);
-PRODUCT_VERSION(6);
+PRODUCT_VERSION(8);
 bool haveOfflineData = false;
 String diagnosticData = "";
 
