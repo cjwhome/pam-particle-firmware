@@ -13,17 +13,18 @@ class BuildProto
         bool ozone_enabled;
         String deviceName = "";
 
-        SystemSettings settings;
+        // SystemManifest manifest = SystemManifest_init_zero;
+        CalibrationParam calibration = CalibrationParam_init_zero;
     
     public:
         BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled);
 
         CalibrationParam buildSettingsCalibration(String name, CalParamType calParamTypes[2]);
-        SystemSettings buildSystemSettings(int deviceSize);
+        void buildSystemSettings(int deviceSize, SystemManifest& manifest);
         Device buildTopologyDevice(String SSID, String name, Units units);
 
-        SystemTopology buildSystemTopology(int deviceSize);
-        SystemManifest buildSystemManifest();
+        void buildSystemTopology(int deviceSize, SystemManifest& manifest);
+        void buildSystemManifest(SystemManifest& manifest);
 
 
 };
