@@ -21,14 +21,10 @@ bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, siz
 
 bool CloudHandler::publish(SystemManifest &upload)
 {
-    // Serial.println("At beginning of publish: ");
-    // uint8_t buffer[7914];
-    // Serial.println("Made the buffer");
-    // char out[7914 * 2 + 1];
     Serial.println("At beginning of publish: ");
-    uint8_t buffer[4];
+    uint8_t buffer[7914];
     Serial.println("Made the buffer");
-    char out[4 * 2 + 1];
+    char out[7914 * 2 + 1];
     Serial.println("Finsihed making the out");
     String hexString = "";
     Serial.println("About to do the ostream");

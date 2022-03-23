@@ -475,12 +475,12 @@ void locationCallback(float lat, float lon, float accuracy);
 
 void buildManifest()
 {
-    SystemManifest manifest = SystemManifest_init_zero;
     // manifest = SystemManifest_init_zero;
     Serial.println("Starting systemManifest build");
-    proto->buildSystemManifest(manifest);
+    SystemManifest manifest = proto->buildSystemManifest();
+
     Serial.println("Finsihed building the manifest. On to putting it together.");
-    cloud.publish(manifest);
+    // cloud.publish(manifest);
     return ;
 }
 

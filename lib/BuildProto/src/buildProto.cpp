@@ -2,9 +2,36 @@
 
 BuildProto::BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled)
 {
+    Serial.println("Starting initialization");
     deviceName = "PAM-"+String(DEVICE_id);
     ozone_enabled = ozoneEnabled;
     NO2_enabled = NO2Enabled;
+
+    deviceName.toCharArray(manifest.SID, deviceName.length());
+
+    int deviceSize = 0;
+    if (ozone_enabled == true)
+    {
+    deviceSize++;
+    }
+    if (NO2_enabled == true)
+    {
+    deviceSize++;
+    }
+    deviceSize += 11;
+
+    manifest.has_topology = true;
+    buildSystemTopology(deviceSize, manifest);
+
+    manifest.has_settings = true;
+    buildSystemSettings(deviceSize, manifest);
+    // manifest.settings = buildSystemSettings(deviceSize);
+
+    // Serial.println("All done");
+    manifest.terminating = false;
+    Serial.println("Finsihed terminating");
+    manifest.composition = Composition_MULTI_PART;
+    Serial.println("Finsihed composition");
 }
 
 CalibrationParam BuildProto::buildSettingsCalibration(String name, CalParamType calParamTypes[2])
@@ -207,33 +234,8 @@ void BuildProto::buildSystemTopology(int deviceSize, SystemManifest& manifest)
 }
 
 // build SystemManifest object for protobuf
-void BuildProto::buildSystemManifest(SystemManifest & manifest)
+SystemManifest BuildProto::buildSystemManifest()
 {
-
-    deviceName.toCharArray(manifest.SID, deviceName.length());
-
-    int deviceSize = 0;
-    if (ozone_enabled == true)
-    {
-    deviceSize++;
-    }
-    if (NO2_enabled == true)
-    {
-    deviceSize++;
-    }
-    deviceSize += 11;
-
-    manifest.has_topology = true;
-    buildSystemTopology(deviceSize, manifest);
-
-    manifest.has_settings = true;
-    buildSystemSettings(deviceSize, manifest);
-    // manifest.settings = buildSystemSettings(deviceSize);
-
-    // Serial.println("All done");
-    manifest.terminating = false;
-    Serial.println("Finsihed terminating");
-    manifest.composition = Composition_MULTI_PART;
-    Serial.println("Finsihed composition");
+    return manifest;
 }
 
