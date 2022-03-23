@@ -102,10 +102,10 @@ int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 #line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15205);
-PRODUCT_VERSION(5);
+PRODUCT_VERSION(6);
 
 #define APP_VERSION 7
-#define AQLITE_VERSION 5
+#define AQLITE_VERSION 6
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)

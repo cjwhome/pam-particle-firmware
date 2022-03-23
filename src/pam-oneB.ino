@@ -34,10 +34,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(15205);
-PRODUCT_VERSION(5);
+PRODUCT_VERSION(6);
 
 #define APP_VERSION 7
-#define AQLITE_VERSION 5
+#define AQLITE_VERSION 6
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -102,7 +102,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define GOOGLE_LOCATION_MEM_ADDRESS 136
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
-#define NUMBER_OF_MEASUREMENTS_SKIP 148
+#define NUMBER_OF_MEASUREMENTS_SKIP_ADDRESS 148
 #define MAX_MEM_ADDRESS 148
 
 
