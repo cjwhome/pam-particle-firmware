@@ -19,7 +19,7 @@ Using the nanopb library
 To use the nanopb library, you need to do two things:
 
 1. Compile your .proto files for nanopb, using `protoc`.
-2. Include *MY_pb_encode.c*, *MY_pb_decode.c* and *MY_pb_common.c* in your project.
+2. Include *MY_pb_encode.cpp*, *MY_pb_decode.cpp* and *MY_pb_common.cpp* in your project.
 
 The easiest way to get started is to study the project in "examples/simple".
 It contains a Makefile, which should work directly under most Linux systems.

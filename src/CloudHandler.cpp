@@ -19,25 +19,27 @@ bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, siz
     return true;
 }
 
-bool CloudHandler::publish(SystemManifest &upload)
+bool CloudHandler::publish(SystemManifest &manifest)
 {
-    Serial.println("At beginning of publish: ");
-    uint8_t buffer[7914];
-    Serial.println("Made the buffer");
-    char out[7914 * 2 + 1];
-    Serial.println("Finsihed making the out");
+    Serial.println("Going to print some stuff out to maybe see some problems");
+    Serial.println(manifest.settings.name);
+    Serial.println(manifest.settings.serial);
+    Serial.println(manifest.settings.type);
+    Serial.println(manifest.settings.primaryUploadFrequeny);
+    Serial.println(manifest.settings.diagnosticUploadFrequeny);
+    Serial.println(manifest.settings.calParams_count);
     String hexString = "";
-    Serial.println("About to do the ostream");
     MY_pb_ostream_t stream = MY_pb_ostream_from_buffer(buffer, sizeof(buffer));
     Serial.println("About to do the encoding");
-    MY_pb_encode(&stream, Upload_fields, &upload);
+    MY_pb_encode(&stream, Upload_fields, &manifest);
     Serial.println("About to encode to string");
 
     // encode binary protobuf to base64 string
     String encoded = Base64::encodeToString(buffer, sizeof(buffer));
     Serial.println("About toHex");
     toHex(out, sizeof(out), buffer, stream.bytes_written);
-    for (int i = 0; i < sizeof(buffer); i++) {
+    for (int i = 0; i < sizeof(buffer); i++) 
+    {
         hexString += out[i];
     }
 
@@ -46,6 +48,16 @@ bool CloudHandler::publish(SystemManifest &upload)
 
     bool published = _particle->publish("uploadCellular", hexString, PRIVATE);
     _particle->process();
+
+    if (savedIt == false)
+    {
+        if (sd.begin(CS)){
+            file.open("HexOfProto", O_CREAT | O_APPEND | O_WRITE);
+            file.println(hexString);
+            file.close();
+        }
+        savedIt = true;
+    }
 
     return published;
     return true;

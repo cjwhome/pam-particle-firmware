@@ -7,7 +7,7 @@ BuildProto::BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled)
     ozone_enabled = ozoneEnabled;
     NO2_enabled = NO2Enabled;
 
-    deviceName.toCharArray(manifest.SID, deviceName.length());
+    deviceName.toCharArray(manifest.SID, deviceName.length()+1);
 
     int deviceSize = 0;
     if (ozone_enabled == true)
@@ -46,8 +46,8 @@ CalibrationParam BuildProto::buildSettingsCalibration(String name, CalParamType 
 
 void BuildProto::buildSystemSettings(int deviceSize, SystemManifest& manifest)
 {
-    deviceName.toCharArray(manifest.settings.name, deviceName.length());
-    deviceName.toCharArray(manifest.settings.serial, deviceName.length());
+    deviceName.toCharArray(manifest.settings.name, deviceName.length()+1);
+    deviceName.toCharArray(manifest.settings.serial, deviceName.length()+1);
     manifest.settings.type = SystemType_PAM;
     manifest.settings.primaryUploadFrequeny = 60*2;
     manifest.settings.diagnosticUploadFrequeny = 0;
@@ -154,8 +154,8 @@ void BuildProto::buildSystemSettings(int deviceSize, SystemManifest& manifest)
 Device BuildProto::buildTopologyDevice(String SSID, String name, Units units)
 {
     Device device;
-    SSID.toCharArray(device.SSID, SSID.length());
-    name.toCharArray(device.name, name.length());
+    SSID.toCharArray(device.SSID, SSID.length()+1);
+    name.toCharArray(device.name, name.length()+1);
     device.units = units;
     return device;
 }
