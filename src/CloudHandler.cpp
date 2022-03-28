@@ -21,19 +21,17 @@ bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, siz
 
 bool CloudHandler::publish(SystemManifest &manifest)
 {
-    Serial.println("Going to print some stuff out to maybe see some problems");
-    Serial.println(manifest.settings.name);
-    Serial.println(manifest.settings.serial);
-    Serial.println(manifest.settings.type);
-    Serial.println(manifest.settings.primaryUploadFrequeny);
-    Serial.println(manifest.settings.diagnosticUploadFrequeny);
-    Serial.println(manifest.settings.calParams_count);
+    Serial.println("Inside publish");
+    delay(100);
     String hexString = "";
     MY_pb_ostream_t stream = MY_pb_ostream_from_buffer(buffer, sizeof(buffer));
     Serial.println("About to do the encoding");
-    MY_pb_encode(&stream, Upload_fields, &manifest);
+        delay(100);
+    MY_pb_encode(&stream, SystemManifest_fields, &manifest);
     Serial.println("About to encode to string");
-
+        delay(100);
+    Serial.print("Bytes written: ");
+    Serial.println(stream.bytes_written);
     // encode binary protobuf to base64 string
     String encoded = Base64::encodeToString(buffer, sizeof(buffer));
     Serial.println("About toHex");

@@ -480,6 +480,7 @@ void buildManifest()
     SystemManifest manifest = proto->buildSystemManifest();
 
     Serial.println("Finsihed building the manifest. On to putting it together.");
+    delay(100);
     cloud.publish(manifest);
     return ;
 }
