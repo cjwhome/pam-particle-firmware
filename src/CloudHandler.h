@@ -4,6 +4,7 @@
 #include "MY_pb_common.h"
 #include "MY_pb_encode.h"
 #include "pam.pb.h"
+#include "PI_pb_encode.h"
 
 #include "SdFat.h"
 #define CS A2               //Chip select for SPI/uSD card

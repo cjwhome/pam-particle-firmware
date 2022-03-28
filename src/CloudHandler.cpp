@@ -21,13 +21,38 @@ bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, siz
 
 bool CloudHandler::publish(SystemManifest &manifest)
 {
+    Serial.println("Going to print some stuff out to maybe see some problems");
+    Serial.println(manifest.SID);
+    Serial.println(manifest.has_topology);
+    Serial.println(manifest.settings.name);
+    Serial.println(manifest.settings.serial);
+    Serial.println(manifest.settings.type);
+    Serial.println(manifest.settings.primaryUploadFrequeny);
+    Serial.println(manifest.settings.diagnosticUploadFrequeny);
+    Serial.println(manifest.settings.calParams_count);
     Serial.println("Inside publish");
     delay(100);
     String hexString = "";
     MY_pb_ostream_t stream = MY_pb_ostream_from_buffer(buffer, sizeof(buffer));
     Serial.println("About to do the encoding");
         delay(100);
-    MY_pb_encode(&stream, SystemManifest_fields, &manifest);
+
+    bool encodeCheck = PI_pb_encode(&stream, SystemManifest_fields, &manifest);
+    Serial.print("The encode check bool: ");
+    Serial.println(encodeCheck);
+    // MY_pb_encode(&stream, SystemTopology_fields, &manifest.topology);
+    // MY_pb_encode(&stream, Device_fields, &manifest.topology.devices);
+    // MY_pb_encode(&stream, Diagnostic_fields, &manifest.topology.diagnostics);
+    // MY_pb_encode(&stream, SubSystem_fields, &manifest.topology.subSystems);
+    // MY_pb_encode(&stream, SystemSettings_fields, &manifest.settings);
+    // MY_pb_encode(&stream, CalibrationParam_fields, &manifest.settings.calParams);
+
+
+    
+
+    // MY_pb_encode(&stream, SystemTopology_fields, &manifest.topology);
+    Serial.print("Bytes written: ");
+    Serial.println(stream.bytes_written);
     Serial.println("About to encode to string");
         delay(100);
     Serial.print("Bytes written: ");
