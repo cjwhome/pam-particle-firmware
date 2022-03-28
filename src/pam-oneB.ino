@@ -2140,7 +2140,6 @@ void outputDataToESP(void){
     
 
     Serial.println(csv_output_string);
-
     //write data to file
     if (sd.begin(CS)){
         if(debugging_enabled)
@@ -2401,8 +2400,7 @@ void getEspOzoneData(void)
 
 
     delay(10);
-    char incomingByte = NULL;
-
+    Serial1.setTimeout(500);
     recievedData = Serial1.readString();
     if (recievedData == ozoneChangeCheck) // This is so we don't average Multiples of the same points.
     {

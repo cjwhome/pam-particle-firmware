@@ -170,7 +170,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define GOOGLE_LOCATION_MEM_ADDRESS 136
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
-#define NUMBER_OF_MEASUREMENTS_SKIP 148
+#define NUMBER_OF_MEASUREMENTS_SKIP_ADDRESS 148
 #define MAX_MEM_ADDRESS 148
 
 
@@ -2208,7 +2208,6 @@ void outputDataToESP(void){
     
 
     Serial.println(csv_output_string);
-
     //write data to file
     if (sd.begin(CS)){
         if(debugging_enabled)
@@ -2469,8 +2468,7 @@ void getEspOzoneData(void)
 
 
     delay(10);
-    char incomingByte = NULL;
-
+    Serial1.setTimeout(500);
     recievedData = Serial1.readString();
     if (recievedData == ozoneChangeCheck) // This is so we don't average Multiples of the same points.
     {
