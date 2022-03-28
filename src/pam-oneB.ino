@@ -1645,12 +1645,14 @@ void printPacket(byte *packet, byte len)
 
 float readTemperature(void){
     float temperature = 0;
-    if(hih8120_enabled){
+    if(hih8120_enabled)
+    {
         temperature = hih.temperature();
         if(debugging_enabled){
             Serial.println("Temperature reading from HIH8120");
         }
-    }else if(new_temperature_sensor_enabled){
+    }
+    else if(new_temperature_sensor_enabled){
         if(debugging_enabled){
             Serial.println("Temperature reading from TMP36");
         }
@@ -2751,246 +2753,386 @@ void serialMenu(){
     Serial.flush();
     while(!Serial.available());
     incomingByte = Serial.read();
-    if(incomingByte == 'a'){
+    if(incomingByte == 'a')
+    {
         serialGetCo2Slope();
-    }else if(incomingByte == 'b'){
+    }
+    else if(incomingByte == 'b')
+    {
         serialGetCo2Zero();
-    }else if(incomingByte == 'c'){
+    }
+    else if(incomingByte == 'c')
+    {
         serialGetCoSlope();
-    }else if(incomingByte == 'd'){
+    }
+    else if(incomingByte == 'd')
+    {
         serialGetCoZero();
-    }else if(incomingByte == 'e'){
+    }
+    else if(incomingByte == 'e')
+    {
         serialGetPm1Slope();
-    }else if(incomingByte == 'f'){
+    }
+    else if(incomingByte == 'f')
+    {
          serialGetPm1Zero();
-    }else if(incomingByte == 'g'){
+    }
+    else if(incomingByte == 'g')
+    {
         serialGetPm25Slope();
-    }else if(incomingByte == 'h'){
+    }
+    else if(incomingByte == 'h')
+    {
         serialGetPm25Zero();
-    }else if(incomingByte == 'i'){
+    }
+    else if(incomingByte == 'i')
+    {
         serialGetPm10Slope();
-    }else if(incomingByte == 'j'){
+    }
+    else if(incomingByte == 'j')
+    {
         serialGetPm10Zero();
-    }else if(incomingByte == 'k'){
+    }
+    else if(incomingByte == 'k')
+    {
         serialGetTemperatureSlope();
-    }else if(incomingByte == 'l'){
+    }
+    else if(incomingByte == 'l')
+    {
         serialGetTemperatureZero();
-    }else if(incomingByte == 'm'){
+    }
+    else if(incomingByte == 'm')
+    {
         serialGetPressureSlope();
-    }else if(incomingByte == 'n'){
+    }
+    else if(incomingByte == 'n')
+    {
         serialGetPressureZero();
-    }else if(incomingByte == 'o'){
+    }
+    else if(incomingByte == 'o')
+    {
         serialGetHumiditySlope();
-    }else if(incomingByte == 'p'){
+    }
+    else if(incomingByte == 'p')
+    {
         serialGetHumidityZero();
-    }else if(incomingByte == 'q'){
+    }
+    else if(incomingByte == 'q')
+    {
         Serial.println("Serial debugging enabled.");
         debugging_enabled = 1;
         EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
-    }else if(incomingByte == 'r'){
+    }
+    else if(incomingByte == 'r')
+    {
         Serial.println("Serial debugging disabled.");
         debugging_enabled = 0;
         EEPROM.put(DEBUGGING_ENABLED_MEM_ADDRESS, debugging_enabled);
-    }else if(incomingByte == 's'){
+    }
+    else if(incomingByte == 's')
+    {
         String header = buildHeaderString();
         Serial.println(header);
-    }else if(incomingByte == 't'){
+    }
+    else if(incomingByte == 't')
+    {
         serialGetTimeDate();
-    }else if(incomingByte == 'u'){
+    }
+    else if(incomingByte == 'u')
+    {
         serialGetZone();
-    }else if(incomingByte == 'v'){
+    }
+    else if(incomingByte == 'v')
+    {
         serialGetDeviceId();
-    }else if(incomingByte == 'w'){
+    }
+    else if(incomingByte == 'w')
+    {
         serialGetWifiCredentials();
-    }else if(incomingByte == 'y'){
-        if(serial_cellular_enabled == 0){
+    }
+    else if(incomingByte == 'y')
+    {
+        if(serial_cellular_enabled == 0)
+        {
             Serial.println("Enabling Cellular.");
-        }else{
+        }
+        else
+        {
             Serial.println("Cellular already enabled.");
         }
         serial_cellular_enabled = 1;
         EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
-    }else if(incomingByte == 'z'){
-        if(serial_cellular_enabled == 1){
+    }
+    else if(incomingByte == 'z')
+    {
+        if(serial_cellular_enabled == 1)
+        {
             Serial.println("Disabling Cellular");
             Cellular.off();
-        }else{
+        }
+        else
+        {
             Serial.println("Cellular already disabled.");
         }
         serial_cellular_enabled = 0;
         EEPROM.put(SERIAL_CELLULAR_EN_MEM_ADDRESS, serial_cellular_enabled);
-    }else if(incomingByte == 'D'){
-        if(temperature_units == CELCIUS){
+    }
+    else if(incomingByte == 'D')
+    {
+        if(temperature_units == CELCIUS)
+        {
             temperature_units = FARENHEIT;
 
-        }else{
+        }
+        else
+        {
             Serial.println("Temperature units already set to Fareneit.");
         }
 
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
 
-    }else if(incomingByte == 'C'){
-        if(temperature_units == FARENHEIT){
+    }
+    else if(incomingByte == 'C')
+    {
+        if(temperature_units == FARENHEIT)
+        {
             temperature_units = CELCIUS;
-
-        }else{
+        }
+        else
+        {
             Serial.println("Temperature units already set to Celcius.");
         }
-
         EEPROM.put(TEMPERATURE_UNITS_MEM_ADDRESS, temperature_units);
-    }else if(incomingByte == 'F'){
-        if(new_temperature_sensor_enabled == 1){
+    }
+    else if(incomingByte == 'F')
+    {
+        if(new_temperature_sensor_enabled == 1)
+        {
             new_temperature_sensor_enabled = 0;
             Serial.println("Disabling new temperature sensor");
-        }else{
-
+        }
+        else
+        {
             Serial.println("Temperature sensor already disabled");
         }
         EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled);
 
-    }else if(incomingByte == 'E'){
-        if(new_temperature_sensor_enabled == 1){
+    }
+    else if(incomingByte == 'E')
+    {
+        if(new_temperature_sensor_enabled == 1)
+        {
             Serial.println("Temperature sensor already enabled");
-        }else{
+        }
+        else
+        {
             new_temperature_sensor_enabled = 1;
             Serial.println("Temperatue sensor now enabled");
         }
         EEPROM.put(TEMPERATURE_SENSOR_ENABLED_MEM_ADDRESS, new_temperature_sensor_enabled );
 
-    }else if(incomingByte == 'G'){      //enable analog reading of ozone and disable esp reading of ozone
-        if(ozone_analog_enabled == 1){
+    }
+    else if(incomingByte == 'G')
+    {      //enable analog reading of ozone and disable esp reading of ozone
+        if(ozone_analog_enabled == 1)
+        {
             Serial.println("Analog reading of ozone already enabled");
-        }else{
+        }else
+        {
             ozone_analog_enabled = 1;
             Serial.println("Analog reading of ozone now enabled");
         }
         EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
 
-    }else if(incomingByte == 'H'){      //disable analog reading of ozone and read from esp
-        if(ozone_analog_enabled == 0){
+    }
+    else if(incomingByte == 'H')
+    {      //disable analog reading of ozone and read from esp
+        if(ozone_analog_enabled == 0)
+        {
             Serial.println("Digital reading of ozone already enabled");
-        }else{
+        }
+        else
+        {
             ozone_analog_enabled = 0;
             Serial.println("Digital reading of ozone now enabled");
         }
         EEPROM.put(OZONE_A_OR_D_MEM_ADDRESS, ozone_analog_enabled);
 
-    }else if(incomingByte == 'I'){      //disable analog reading of ozone and read from esp
+    }
+    else if(incomingByte == 'I')
+    {      //disable analog reading of ozone and read from esp
         serialGetAverageTime();
-    }else if(incomingByte == 'J'){
+    }
+    else if(incomingByte == 'J')
+    {
         resetESP();
         Serial.println("ESP reset!");
-    }else if(incomingByte == 'K'){
+    }
+    else if(incomingByte == 'K')
+    {
       Serial.println("Outputting GPS continuously");
       echoGps();
-    }else if(incomingByte == 'L'){
+    }
+    else if(incomingByte == 'L')
+    {
       serialResetSettings();
-    }else if(incomingByte == 'M'){
+    }
+    else if(incomingByte == 'M')
+    {
       //serialTestRemoteFunction();
-      if(battery_threshold_enable == 1){
+      if(battery_threshold_enable == 1)
+      {
           Serial.println("Battery threshold already enabled");
-      }else{
+      }
+      else
+      {
           Serial.println("Enabling battery threshold limiting");
           battery_threshold_enable = 1;
           EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
       }
-
-    }else if(incomingByte == 'N'){
+    }
+    else if(incomingByte == 'N')
+    {
       //serialTestRemoteFunction();
-      if(battery_threshold_enable == 0){
+      if(battery_threshold_enable == 0)
+      {
           Serial.println("Battery threshold already disabled");
-      }else{
+      }
+      else
+      {
           Serial.println("Disabling battery threshold limiting");
           battery_threshold_enable = 0;
           EEPROM.put(BATTERY_THRESHOLD_ENABLE_MEM_ADDRESS, battery_threshold_enable);
       }
 
-    }else if(incomingByte == 'O'){
+    }
+    else if(incomingByte == 'O')
+    {
         //Serial.println("Changing frequency for gps");
         //changeFrequency();
         Serial.println("Enabling low power for gps");
         enableLowPowerGPS();
-    }else if(incomingByte  == 'P'){
+    }
+    else if(incomingByte  == 'P')
+    {
         Serial.println("Turning off batfet");
         writeRegister(7, 0b01101011);   //turn off batfet
-    }else if(incomingByte == 'Q'){
-
+    }
+    else if(incomingByte == 'Q')
+    {
         Serial.println("Allowing batfet to turn on");
         writeRegister(7, 0b01001011);   //allow batfet to turn on
-    }else if(incomingByte == 'R'){
-        if(abc_logic_enabled){
+    }
+    else if(incomingByte == 'R')
+    {
+        if(abc_logic_enabled)
+        {
             Serial.println("Disabling ABC logic for CO2 sensor");
             abc_logic_enabled = 0;
             EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
             t6713.disableABCLogic();
-        }else{
+        }
+        else
+        {
             Serial.println("ABC logic already disabled");
         }
-
-    }else if(incomingByte == 'S'){
-        if(!abc_logic_enabled){
+    }
+    else if(incomingByte == 'S')
+    {
+        if(!abc_logic_enabled)
+        {
             Serial.println("Enabling abc logic for CO2 sensor");
             abc_logic_enabled = 1;
             EEPROM.put(ABC_ENABLE_MEM_ADDRESS, abc_logic_enabled);
             t6713.enableABCLogic();
-        }else{
+        }
+        else
+        {
             Serial.println("ABC logic already enabled");
         }
-    }else if(incomingByte == 'T'){
-        if(!hih8120_enabled){
+    }
+    else if(incomingByte == 'T')
+    {
+        if(!hih8120_enabled)
+        {
             Serial.println("Enabling HIH8120 RH sensor");
             hih8120_enabled = 1;
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
 
-        }else{
+        }
+        else
+        {
             Serial.println("Disabling HIH8120 RH sensor");
             hih8120_enabled = 0;
             EEPROM.put(HIH8120_ENABLE_MEM_ADDRESS, hih8120_enabled);
         }
 
-    }else if(incomingByte == 'U'){
-        if(!CO_socket){
+    }
+    else if(incomingByte == 'U')
+    {
+        if(!CO_socket)
+        {
             Serial.println("Now reading CO from U20-Alpha2");
             CO_socket = 1;
             EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
 
-        }else{
+        }
+        else
+        {
             Serial.println("Now reading CO from U19-Alpha1");
             CO_socket = 0;
             EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
         }
-    }else if(incomingByte == 'V'){
+    }
+    else if(incomingByte == 'V')
+    {
         Serial.println("Reseting the CO2 sensor");
         t6713.resetSensor();
 
-    }else if(incomingByte == '1'){
+    }
+    else if(incomingByte == '1')
+    {
         serialGetNO2Slope();
-    }else if(incomingByte == '2'){
+    }
+    else if(incomingByte == '2')
+    {
         serialGetNO2Zero();
-    }else if(incomingByte == '3'){
+    }
+    else if(incomingByte == '3')
+    {
         Serial.print("APP Version: ");
         Serial.println(APP_VERSION);
         Serial.print("Build: ");
         Serial.println("AQLITE: "+AQLITE_VERSION);
     }
-    else if(incomingByte == '6'){
-        if(NO2_enabled == 0){
+    else if(incomingByte == '6')
+    {
+        if(NO2_enabled == 0)
+        {
             Serial.println("Enabling NO2");
-        }else{
+        }
+        else
+        {
             Serial.println("NO2 already enabled");
         }
         NO2_enabled = 1;
         EEPROM.put(NO2_EN_MEM_ADDRESS, NO2_enabled);
-    }else if(incomingByte == '7'){
-        if(NO2_enabled == 1){
+    }
+    else if(incomingByte == '7')
+    {
+        if(NO2_enabled == 1)
+        {
             Serial.println("Disabling NO2");
-        }else{
+        }
+        else
+        {
             Serial.println("NO2 already disabled");
         }
         NO2_enabled = 0;
         EEPROM.put(NO2_EN_MEM_ADDRESS, NO2_enabled);
     }
-    else if(incomingByte == '8'){
+    else if(incomingByte == '8')
+    {
         Serial.print("Fault: ");
         byte fault = pmic.getFault();
         Serial.println(fault);
@@ -2998,48 +3140,54 @@ void serialMenu(){
         byte systemStatus = pmic.getSystemStatus();
         Serial.println(systemStatus);
 
-    }else if(incomingByte == '9'){
+    }
+    else if(incomingByte == '9')
+    {
         serialIncreaseChargeCurrent();
-    }else if(incomingByte == '0'){
+    }
+    else if(incomingByte == '0')
+    {
         serialIncreaseInputCurrent();
-    }else if(incomingByte == 'A'){
+    }
+    else if(incomingByte == 'A')
+    {
         readAlpha1Constantly();
-    }else if(incomingByte == 'B'){
-        if(output_only_particles == 1){
+    }
+    else if(incomingByte == 'B')
+    {
+        if(output_only_particles == 1)
+        {
             output_only_particles = 0;
             Serial.println("Outputting normally");
-        }else{
+        }
+        else
+        {
             output_only_particles = 1;
             Serial.println("Outputting only PM");
         }
         EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
 
     }
-    // else if(incomingByte == '!'){
-
-    //     Serial.println("Outputting VOCs continuously!  Press any button to exit...");
-    //     while(!Serial.available()){
-    //         if (! bme.performReading()) {
-    //           Serial.println("Failed to read BME680");
-    //           return;
-    //         }else{
-    //             Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
-    //         }
-    //     }
-    // }
-    else if(incomingByte == '@'){
-        if(sensible_iot_en == 1){
+    else if(incomingByte == '@')
+    {
+        if(sensible_iot_en == 1)
+        {
             Serial.println("Disabling sensible iot data push.");
             sensible_iot_en = 0;
             EEPROM.put(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
-        }else{
-            serialSetSensibleIotEnable();
-            
         }
-    }else if(incomingByte == 'W'){
+        else
+        {
+            serialSetSensibleIotEnable();
+        }
+    }
+    else if(incomingByte == 'W')
+    {
         printFileToSerial();
         
-    }else if(incomingByte == 'X'){
+    }
+    else if(incomingByte == 'X')
+    {
         //calibrate CO2 sensor
         //if(debugging_enabled){
             t6713.calibrate(1);
@@ -3048,8 +3196,6 @@ void serialMenu(){
         //}
         
         co2_calibration_timer = 180;        //6 minutes if measurement cycle is 2 seconds
-        
-    
     }
     else if(incomingByte == 'Y')
     {
