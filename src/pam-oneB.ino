@@ -37,8 +37,7 @@ PRODUCT_ID(15205);
 PRODUCT_VERSION(6);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 13
-#define AQLITE_VERSION 3
+#define AQLITE_VERSION 6
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -103,7 +102,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define GOOGLE_LOCATION_MEM_ADDRESS 136
 #define SENSIBLEIOT_ENABLE_MEM_ADDRESS 140
 #define CAR_TOPPER_POWER_MEM_ADDRESS 144
-#define NUMBER_OF_MEASUREMENTS_SKIP 148
+#define NUMBER_OF_MEASUREMENTS_SKIP_ADDRESS 148
 #define UPDATE_MEM_ADDRESS 152
 #define AVERAGING_ON_MEM_ADDRESS 156
 // Dont move this in memory
@@ -200,6 +199,33 @@ float coefficient_low;
 float coefficient_med;
 float coefficient_high;
 float sensor_sensitivity;
+
+//used for temperature corrections for Alphasense	
+#define CO_COEFF_TEMP_LOW 1.00	
+#define CO_COEFF_TEMP_MED -1.00	
+#define CO_COEFF_TEMP_HIGH -0.76	
+#define CO_SENSITIVITY 0.358	
+#define CO_SENSOR 1	
+#define NO2_COEFF_TEMP_LOW 1.09	
+#define NO2_COEFF_TEMP_MED 1.35	
+#define NO2_COEFF_TEMP_HIGH 3.00	
+#define NO2_SENSITIVITY -0.358	
+#define NO2_SENSOR 2	
+#define NO_COEFF_TEMP_LOW 1.48	
+#define NO_COEFF_TEMP_MED 2.02	
+#define NO_COEFF_TEMP_HIGH 1.72	
+#define NO_SENSITIVITY 0.450	
+#define NO_SENSOR 3	
+#define O3_COEFF_TEMP_LOW 0.75	
+#define O3_COEFF_TEMP_MED 1.28	
+#define O3_COEFF_TEMP_HIGH 1.36	
+#define O3_SENSITIVITY -0.450	
+#define O3_SENSOR 4	
+#define SO2_COEFF_TEMP_LOW 1.15	
+#define SO2_COEFF_TEMP_MED 1.82	
+#define SO2_COEFF_TEMP_HIGH 3.93	
+#define SO2_SENSITIVITY 0.450	
+#define SO2_SENSOR 5
 
 
 int lmp91000_1_en = B0;     //enable line for the lmp91000 AFE chip for measuring CO
@@ -344,9 +370,10 @@ uint16_t value;
 char recieveStr[5];
 
 //plantower PMS5003 vars
-int PM01Value=0;
-int PM2_5Value=0;
-int PM10Value=0;
+float PM01Value=0;
+float PM2_5Value=0;
+float PM10Value=0;
+
 float corrected_PM_25 = 0;
 float corrected_PM_1 = 0;
 #define LENG 31   //0x42 + 31 bytes equal to 32 bytes, length of buffer sent from PMS1003 Particulate Matter sensor
@@ -492,9 +519,11 @@ String buildHeaderString()
     Particle.publish("testJson", data, PRIVATE);
 }*/
 //todo: average everything except ozone
-void outputToCloud(){
+void outputToCloud()
+{
     String webhook_data = " ";
-    if (measurement_count >= number_of_measurements_skip)
+    measurement_count++;
+    if (measurement_count > number_of_measurements_skip)
     {
         CO_sum += CO_float;
         CO2_sum += CO2_float;
@@ -503,12 +532,10 @@ void outputToCloud(){
         PM10_sum += PM10Value;
         pressure_sum += bme.pressure / 100.0;
         humidity_sum += readHumidity();
-
         if (NO2_enabled)
         {
             NO2_sum += NO2_float;
         }
-
         // if (sd.begin(CS)){
         //     log_file.open("average test", O_CREAT | O_APPEND | O_WRITE);
         //     log_file.print("This is the count: ");
@@ -517,17 +544,13 @@ void outputToCloud(){
         //     log_file.println(CO_float);
         //     log_file.print("This is the CO_sum: ");
         //     log_file.println(CO_sum);
-
         //     log_file.close();
         // }
         // else
         // {
         //     Serial.println("Unable to write to log file");
         // }
-
     }
-    measurement_count++;
-
     if(measurement_count == measurements_to_average)
     {
         int fixed_count = measurement_count-number_of_measurements_skip;
@@ -538,32 +561,26 @@ void outputToCloud(){
         PM10_sum /= fixed_count;
         pressure_sum /= fixed_count;
         humidity_sum /= fixed_count;
-
         if (NO2_enabled)
         {
             NO2_sum /= fixed_count;
         }
-
         O3_sum /= ozone_measurement_count;
         O3_celltemp_sum /= ozone_measurement_count;
-
         // if (sd.begin(CS)){
         //     log_file.open("average test", O_CREAT | O_APPEND | O_WRITE);
         //     log_file.println("-----------------------------------------");
         //     log_file.print("This is the Co_sum value: ");
         //     log_file.println(CO_sum);
-
         //     log_file.close();
         // }
         // else
         // {
         //     Serial.println("Unable to write to log file");
         // }
-
         String webhook_data = buildAverageCloudString();
         //String(DEVICE_id) + ", CO: " + CO_sum + ", CO2: " + CO2_sum + ", PM1: " + PM1_sum + ",PM2.5: " + PM25_sum + ", PM10: " + PM10_sum + ",Temp: " + String(readTemperature(), 1) + ",Press: ";
         //webhook_data += String(bme.pressure / 100.0, 1) + ",HUM: " + String(bme.humidity, 1) + ",O3: " + O3_sum + "\n\r";
-
         if(Particle.connected() && serial_cellular_enabled){
             if (sensible_iot_en == 1)
             {
@@ -574,7 +591,7 @@ void outputToCloud(){
                 webhook_data += "0";
             }
             status_word.status_int |= 0x0002;
-            Particle.publish("AQLite Upload Dev", webhook_data, PRIVATE);
+            Particle.publish("AQLite_Upload_Dev", webhook_data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
             Particle.publish("AQLite Upload", webhook_data, PRIVATE);
             Particle.process(); //attempt at ensuring the publish is complete before sleeping
@@ -587,7 +604,6 @@ void outputToCloud(){
                 if(debugging_enabled){
                     Serial.println("Cellular is disabled.");
                     writeLogFile("Cellular is disabled.");
-
                   }
             }else{
                 status_word.status_int &= 0xFFFD;   //clear the connected bit
@@ -607,7 +623,6 @@ void outputToCloud(){
         pressure_sum = 0;
         humidity_sum = 0;
         O3_celltemp_sum = 0;
-
         measurement_count = 0;
         ozone_measurement_count = 0;
     }
@@ -719,7 +734,7 @@ void readStoredVars(void){
     EEPROM.get(SENSIBLEIOT_ENABLE_MEM_ADDRESS, sensible_iot_en);
     EEPROM.get(CAR_TOPPER_POWER_MEM_ADDRESS, car_topper_power_en);
     EEPROM.get(TEMP_CORRECTION_EN_ADDRESS, temperature_correction_enabled);
-    EEPROM.get(NUMBER_OF_MEASUREMENTS_SKIP, number_of_measurements_skip);
+    EEPROM.get(NUMBER_OF_MEASUREMENTS_SKIP_ADDRESS, number_of_measurements_skip);
 
     // We don't want this to ever be less than 5.
     if (number_of_measurements_skip < 5)
@@ -884,7 +899,7 @@ void setup()
     Serial.println("Starting the initialization");
     status_word.status_int  = 0;
     status_word.status_int |= (APP_VERSION << 12) & 0xFF00;
-    status_word.status_int |= (BUILD_VERSION << 8) & 0xF00;
+    status_word.status_int |= (AQLITE_VERSION << 8) & 0xF00;
     //status_word.status_int |= 0x6500;
 
     String init_log; //intialization error log
@@ -1688,7 +1703,8 @@ void printPacket(byte *packet, byte len)
     Serial.println();
 }
 
-float readTemperature(void){
+float readTemperature(void)
+{
     float temperature = 0;
     if(hih8120_enabled){
         temperature = hih.temperature();
@@ -2243,11 +2259,11 @@ void outputDataToESP(void){
     //     csv_output_string += String(air_quality_score, 1) + ",";
     // }
    
-    csv_output_string += String(corrected_PM_1) + ",";
+    csv_output_string += String(corrected_PM_1, 1) + ",";
     
-    csv_output_string += String(corrected_PM_25, 0) + ",";
+    csv_output_string += String(corrected_PM_25, 1) + ",";
     
-    csv_output_string += String(PM10Value) + ",";
+    csv_output_string += String(PM10Value, 1) + ",";
     
     csv_output_string += String(O3_CellTemp, 1) + ",";
     
@@ -2792,7 +2808,7 @@ char checkValue(char *thebuf, char leng)  {
     }
     return receiveflag;
 }
-int transmitPM01(char *thebuf)  {
+float transmitPM01(char *thebuf)  {
     int PM01Val;
     PM01Val=((thebuf[3]<<8) + thebuf[4]); //count PM1.0 value of the air detector module
     return PM01Val;
@@ -2804,7 +2820,7 @@ float transmitPM2_5(char *thebuf) {
     return PM2_5Val;
 }
 //transmit PM Value to PC
-int transmitPM10(char *thebuf)  {
+float transmitPM10(char *thebuf)  {
     int PM10Val;
     PM10Val=((thebuf[7]<<8) + thebuf[8]); //count PM10 value of the air detector module
     return PM10Val;
@@ -3184,18 +3200,6 @@ void serialMenu(){
         EEPROM.put(OUTPUT_PARTICLES_MEM_ADDRESS, output_only_particles);
 
     }
-    // else if(incomingByte == '!'){
-
-    //     Serial.println("Outputting VOCs continuously!  Press any button to exit...");
-    //     while(!Serial.available()){
-    //         if (! bme.performReading()) {
-    //           Serial.println("Failed to read BME680");
-    //           return;
-    //         }else{
-    //             Serial.printf("TVocs=%1.0f, Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.gas_resistance/100, bme.temperature, bme.pressure, bme.humidity);
-    //         }
-    //     }
-    // }
     else if(incomingByte == '@'){
         if(sensible_iot_en == 1){
             Serial.println("Disabling sensible iot data push.");
@@ -4057,7 +4061,7 @@ int setSkipReadings(String numberOfSkips)
 {
     int numOfSkips = numberOfSkips.toInt();
     number_of_measurements_skip = numOfSkips;
-    EEPROM.put(NUMBER_OF_MEASUREMENTS_SKIP, number_of_measurements_skip);
+    EEPROM.put(NUMBER_OF_MEASUREMENTS_SKIP_ADDRESS, number_of_measurements_skip);
     return numOfSkips;
 }
 
@@ -4229,7 +4233,7 @@ void outputSerialMenuOptions(void){
     Serial.println("U:  Switch socket where CO is read from");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
     Serial.println("W:  List files to choose what to print in serial");
-
+    Serial.println("X: Calibrate CO2 sensor (leave outside for up to 20 minutes)");
     Serial.println("Y:  Go to 108_L serial menu");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
     // Serial.println("!:  Continuous serial output of VOC's");
