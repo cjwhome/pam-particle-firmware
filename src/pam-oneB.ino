@@ -206,11 +206,14 @@ float sensor_sensitivity;
 #define CO_COEFF_TEMP_HIGH -0.76	
 #define CO_SENSITIVITY 0.358	
 #define CO_SENSOR 1	
-#define NO2_COEFF_TEMP_LOW 1.09	
-#define NO2_COEFF_TEMP_MED 1.35	
-#define NO2_COEFF_TEMP_HIGH 3.00	
+
+//changed from Andrew's temperature oven tests 3-29-22
+#define NO2_COEFF_TEMP_LOW 1.00	
+#define NO2_COEFF_TEMP_MED 1.00	
+#define NO2_COEFF_TEMP_HIGH 2.30	
 #define NO2_SENSITIVITY -0.358	
 #define NO2_SENSOR 2	
+
 #define NO_COEFF_TEMP_LOW 1.48	
 #define NO_COEFF_TEMP_MED 2.02	
 #define NO_COEFF_TEMP_HIGH 1.72	
@@ -1769,10 +1772,10 @@ float readCO(void){
     float_offset = CO_zero;
     float_offset /= 1000;
     float sensor_temperature = read_sensor_temperature();
-    if(!temperature_correction_enabled)
-    {
-        sensor_temperature = 25;
-    }
+    //if(!temperature_correction_enabled)
+    //{
+        sensor_temperature = 25;    //always disable for CO!!  Andrew has determined that there is a complex temperature effect for CO and not for NO2 3-39-22
+    //}
     //float sensor_temperature = 30;
     CO_float = readAlpha2(sensor_temperature, CO_SENSOR);
 
@@ -1968,13 +1971,11 @@ float readAlpha1(float sensor_temperature, int species){
             Serial.printf("NO2 Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
         }
                
-        if(sensor_temperature <= 10){
-          correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
-        }
-        else if(sensor_temperature <= 35){
+        
+        if(sensor_temperature <= 30){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 35){
+        else if(sensor_temperature > 30){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha1_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
