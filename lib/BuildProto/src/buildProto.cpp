@@ -37,7 +37,6 @@ BuildProto::BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled)
 CalibrationParam BuildProto::buildSettingsCalibration(String name, CalParamType calParamTypes[2])
 {
     name.toCharArray(calibration.name, name.length()+1);
-    calibration.parameter_count = 2;
     calibration.parameter[0] = calParamTypes[0];
     calibration.parameter[1] = calParamTypes[1];
 

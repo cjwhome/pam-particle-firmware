@@ -37,7 +37,7 @@ bool CloudHandler::publish(SystemManifest &manifest)
     Serial.println("About to do the encoding");
         delay(100);
 
-    bool encodeCheck = PI_pb_encode(&stream, SystemManifest_fields, &manifest);
+    bool encodeCheck = MY_pb_encode(&stream, SystemManifest_fields, &manifest);
     Serial.print("The encode check bool: ");
     Serial.println(encodeCheck);
     // MY_pb_encode(&stream, SystemTopology_fields, &manifest.topology);
