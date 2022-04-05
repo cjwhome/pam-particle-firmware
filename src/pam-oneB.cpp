@@ -51,7 +51,6 @@
 #include "buildProto.h"
 #include "CloudHandler.h"
 
-
 void buildManifest();
 void writeRegister(uint8_t reg, uint8_t value);
 void outputToCloud(String data);
@@ -112,7 +111,7 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 50 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 49 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(7);
 
@@ -477,11 +476,11 @@ void buildManifest()
 {
     // manifest = SystemManifest_init_zero;
     Serial.println("Starting systemManifest build");
-    SystemManifest manifest = proto->buildSystemManifest();
+    // SystemManifest manifest = proto->buildSystemManifest();
 
     Serial.println("Finsihed building the manifest. On to putting it together.");
     delay(100);
-    cloud.publish(manifest);
+    cloud.publish(proto->manifest);
     return ;
 }
 

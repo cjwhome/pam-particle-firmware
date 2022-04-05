@@ -1,10 +1,11 @@
 #ifndef _BUILD_PROTO_H_
 #define _BUILD_PROTO_H_
 
-
-#include "pam.pb.h"
+#include "manifest.h"
 #include "Particle.h"
+#include "../../ArduinoJson/src/ArduinoJson.h"
 
+DynamicJsonDocument doc(7000);
 
 class BuildProto
 {
@@ -12,20 +13,18 @@ class BuildProto
         bool NO2_enabled;
         bool ozone_enabled;
         String deviceName = "";
-
-        SystemManifest manifest = SystemManifest_init_zero;
-        CalibrationParam calibration = CalibrationParam_init_zero;
     
     public:
         BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled);
 
         CalibrationParam buildSettingsCalibration(String name, CalParamType calParamTypes[2]);
         void buildSystemSettings(int deviceSize, SystemManifest& manifest);
-        Device buildTopologyDevice(String SSID, String name, Units units);
+        void buildTopologyDevice(String SSID, String name, Units units, int count);
 
         void buildSystemTopology(int deviceSize, SystemManifest& manifest);
         SystemManifest buildSystemManifest();
 
+        SystemManifest manifest;
 
 };
 

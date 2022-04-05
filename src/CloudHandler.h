@@ -1,9 +1,6 @@
 #pragma once
 #include <Base64RK.h>
-#include "MY_pb.h"
-#include "MY_pb_common.h"
-#include "MY_pb_encode.h"
-#include "pam.pb.h"
+#include "manifest.h"
 
 #include "SdFat.h"
 #define CS A2               //Chip select for SPI/uSD card
