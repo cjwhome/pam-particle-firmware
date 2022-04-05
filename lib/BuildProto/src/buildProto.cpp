@@ -2,13 +2,16 @@
 
 BuildProto::BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled)
 {
+    DynamicJsonDocument doc(7000);
+
+// This prints:
+// {"sensor":"gps","time":1351824120,"data":[48.756080,2.302038]}
     Serial.println("Starting initialization");
     deviceName = "PAM-"+String(DEVICE_id);
     ozone_enabled = ozoneEnabled;
     NO2_enabled = NO2Enabled;
     deviceName.toCharArray(manifest.sid, deviceName.length()+1);
-    // doc["manifest"]["sid"] = deviceName;
-
+    doc["manifest"]["sid"] = manifest.sid;
     int deviceSize = 0;
     if (ozone_enabled == true)
     {

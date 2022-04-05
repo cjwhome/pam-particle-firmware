@@ -5,8 +5,6 @@
 #include "Particle.h"
 #include "../../ArduinoJson/src/ArduinoJson.h"
 
-DynamicJsonDocument doc(7000);
-
 class BuildProto
 {
     private:
@@ -25,7 +23,6 @@ class BuildProto
         SystemManifest buildSystemManifest();
 
         SystemManifest manifest;
-
 };
 
 
