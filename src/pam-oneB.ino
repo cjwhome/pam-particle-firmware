@@ -4218,7 +4218,7 @@ void outputSerialMenuOptions(void){
     Serial.println("0:  Disable SD card");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
-    Serial.println("C:  Change temperature units to Celcius/ Fahrenheit");
+    Serial.println("C:  Change temperature units to Celsius/ Fahrenheit");
     Serial.println("D:  Enable / Disable Temperature Correction for EC's");
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone");
@@ -4241,7 +4241,7 @@ void outputSerialMenuOptions(void){
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
 
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
-    Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
+    Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absence of external power will stop cellular.");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
