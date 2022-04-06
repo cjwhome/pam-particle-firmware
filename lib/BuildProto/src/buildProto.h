@@ -10,19 +10,20 @@ class BuildProto
     private:
         bool NO2_enabled;
         bool ozone_enabled;
-        String deviceName = "";
+        char * deviceName;
+
+        DynamicJsonDocument doc;
     
     public:
         BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled);
 
-        CalibrationParam buildSettingsCalibration(String name, CalParamType calParamTypes[2]);
-        void buildSystemSettings(int deviceSize, SystemManifest& manifest);
-        void buildTopologyDevice(String SSID, String name, Units units, int count);
+        void buildSettingsCalibration(char * name, CalParamType calParamTypes[2], int count);
+        void buildSystemSettings(int deviceSize);
+        void buildTopologyDevice(char * SSID, char * name, Units units, int count);
 
-        void buildSystemTopology(int deviceSize, SystemManifest& manifest);
-        SystemManifest buildSystemManifest();
+        void buildSystemTopology(int deviceSize);
+        String buildSystemManifest();
 
-        SystemManifest manifest;
 };
 
 

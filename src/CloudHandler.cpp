@@ -5,7 +5,7 @@ CloudHandler::CloudHandler(CloudClass* particle_ptr)
     _particle = particle_ptr;
 }
 
-bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, size_t val_len) {
+bool CloudHandler::toHex(char* dest, size_t dest_len, const char* values, size_t val_len) {
     if(dest_len < (val_len*2+1)) /* check that dest is large enough */
         return false;
 
@@ -19,18 +19,31 @@ bool CloudHandler::toHex(char* dest, size_t dest_len, const uint8_t* values, siz
     return true;
 }
 
-bool CloudHandler::publish(SystemManifest &manifest)
+bool CloudHandler::publish(String jsonManifest)
 {
-    Serial.println("Inside publish");
+    // Serial.println("Inside publish");
+    // char buffer[3];
+    // char out[2000 * 2 + 1];
+    // String hexString = "";
     // delay(100);
     // String hexString = "";
     // Serial.println("About to do the encoding");
     //     delay(100);
 
-    Serial.println("This is some manifest testing: ");
-    Serial.println(manifest.settings.primaryUploadFrequency);
-    Serial.println(manifest.sid);
-    Serial.println(manifest.topology.devices[0].name);
+    // encode binary protobuf to base64 string
+
+    // toHex(out, sizeof(out), jsonManifest, sizeof(jsonManifest));
+    
+    // for (int i = 0; i < sizeof(jsonManifest); i++) {
+    //     sprintf(buffer, "%02x", (int)jsonManifest[i]);
+    //     Serial.println(buffer);
+    //     hexString += buffer;
+    // }
+    // Serial.println(sizeof(jsonManifest));
+    // Serial.println(hexString.length());
+    Serial.println(jsonManifest);
+    Particle.publish("TestingMsgPack", jsonManifest, PRIVATE);
+    // free(jsonManifest);
 
 
     

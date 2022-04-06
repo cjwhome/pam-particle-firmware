@@ -472,15 +472,17 @@ void sendPacket(byte *packet, byte len);
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
 
+
+bool sentManifest = false;
 void buildManifest()
 {
     // manifest = SystemManifest_init_zero;
     Serial.println("Starting systemManifest build");
-    // SystemManifest manifest = proto->buildSystemManifest();
+    String manifest = proto->buildSystemManifest();
 
     Serial.println("Finsihed building the manifest. On to putting it together.");
     delay(100);
-    cloud.publish(proto->manifest);
+    cloud.publish(manifest);
     return ;
 }
 
@@ -1275,7 +1277,16 @@ void locationCallback(float lat, float lon, float accuracy) {
 }
 
 void loop() {
-    buildManifest();
+    if (sentManifest == false)
+    {
+        if (Particle.connected())
+        {
+            buildManifest();
+            sentManifest = true;
+        }
+
+    }
+
     if (car_topper_power_en)
     {
         carTopperCheck();

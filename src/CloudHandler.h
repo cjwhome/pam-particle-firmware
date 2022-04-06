@@ -10,7 +10,7 @@ class CloudHandler
 private:
     CloudClass* _particle;
     void process();
-    static bool toHex(char* dest, size_t dest_len, const uint8_t* values, size_t val_len);
+    static bool toHex(char* dest, size_t dest_len, const char* values, size_t val_len);
     uint8_t buffer[7914];
     char out[7914 * 2 + 1];
 
@@ -20,6 +20,6 @@ private:
 
 public:
     CloudHandler(CloudClass* particle_ptr);
-    bool publish(SystemManifest &upload);
+    bool publish(String jsonManifest);
 
 };

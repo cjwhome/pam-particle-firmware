@@ -1,6 +1,6 @@
 #pragma once
 
-typedef enum _Composition { 
+typedef enum class _Composition { 
     Single = 0,
     Multi = 1,
 } Composition;
@@ -13,14 +13,14 @@ typedef enum class _Units {
     BYTE = 4,
 } Units;
 
-typedef enum _ValueType { 
+typedef enum class _ValueType { 
     Numeric = 0,
     Boolean = 1,
     StatusByte = 2,
     Other = 3,
 } ValueType;
 
-typedef enum _SystemType { 
+typedef enum class _SystemType { 
     AQSync = 0,
     AQLite = 1,
     PAM = 2,

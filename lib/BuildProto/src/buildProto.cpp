@@ -1,17 +1,13 @@
 #include "buildProto.h"
 
-BuildProto::BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled)
+BuildProto::BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled) : doc(7000)
 {
-    DynamicJsonDocument doc(7000);
-
-// This prints:
-// {"sensor":"gps","time":1351824120,"data":[48.756080,2.302038]}
     Serial.println("Starting initialization");
-    deviceName = "PAM-"+String(DEVICE_id);
+    String placeHolder = "PAM-"+String(DEVICE_id);
+    placeHolder.toCharArray(deviceName, placeHolder.length()+1);
     ozone_enabled = ozoneEnabled;
     NO2_enabled = NO2Enabled;
-    deviceName.toCharArray(manifest.sid, deviceName.length()+1);
-    doc["manifest"]["sid"] = manifest.sid;
+    doc["manifest"]["sid"] = deviceName;
     int deviceSize = 0;
     if (ozone_enabled == true)
     {
@@ -23,97 +19,94 @@ BuildProto::BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled)
     }
     deviceSize += 11;
 
-    buildSystemTopology(deviceSize, manifest);
+    buildSystemTopology(deviceSize);
 
-    buildSystemSettings(deviceSize, manifest);
-    // manifest.settings = buildSystemSettings(deviceSize);
+    buildSystemSettings(deviceSize);
 
     // Serial.println("All done");
-    manifest.terminating = false;
+    doc["manifest"]["terminating"] = false;
     Serial.println("Finsihed terminating");
-    manifest.composition = Multi;
+    doc["manifest"]["composition"] = (int)Composition::Multi;
     Serial.println("Finsihed composition");
-    String placeHolder = "";
 }
 
-CalibrationParam BuildProto::buildSettingsCalibration(String name, CalParamType calParamTypes[2])
+void BuildProto::buildSettingsCalibration(char * name, CalParamType calParamTypes[2], int count)
 {
-    CalibrationParam calibration;
-    name.toCharArray(calibration.name, name.length()+1);
-    calibration.parameters[0] = calParamTypes[0];
-    calibration.parameters[1] = calParamTypes[1];
 
-    return calibration;
+    doc["manifest"]["settings"]["calParams"][count]["name"] = name;
+    doc["manifest"]["settings"]["calParams"][count]["parameters"][0] = (int)calParamTypes[0];
+    doc["manifest"]["settings"]["calParams"][count]["parameters"][1] = (int)calParamTypes[1];
 }
 
-void BuildProto::buildSystemSettings(int deviceSize, SystemManifest& manifest)
+void BuildProto::buildSystemSettings(int deviceSize)
 {
-    deviceName.toCharArray(manifest.settings.name, deviceName.length()+1);
-    deviceName.toCharArray(manifest.settings.ssid, deviceName.length()+1);
-    manifest.settings.type = PAM;
-    manifest.settings.primaryUploadFrequency = 60*2;
-    manifest.settings.diagnosticUploadFrequency = 0;
+    doc["manifest"]["settings"]["name"] = deviceName;
+    doc["manifest"]["settings"]["ssid"] = deviceName;
+
+    doc["manifest"]["settings"]["type"] = (int)SystemType::PAM;
+
+    doc["manifest"]["settings"]["primaryUploadFrequency"] = 60*2;
+    doc["manifest"]["settings"]["diagnosticUploadFrequency"] = 0;
+
     CalParamType paramType[2] = {CalParamType::Slope, CalParamType::Zero};
     int count = 0;
     for (int i = 0; i < deviceSize; i++)
     {
-        Serial.print("Inisde for loop. The i: ");
-        Serial.println(i);
         switch(i)
         {
             case 0:
             {
-                manifest.settings.calParams[count] = buildSettingsCalibration("CO", paramType);
+                buildSettingsCalibration("CO", paramType, count);
                 count++;
                 break;
             }
 
             case 1:
-                manifest.settings.calParams[count] = buildSettingsCalibration("CO2", paramType);
+                buildSettingsCalibration("CO2", paramType, count);
                 count++;
                 break;
             case 2:
                 if (NO2_enabled == true)
                 {
-                    manifest.settings.calParams[count] = buildSettingsCalibration("NO2", paramType);
+                    buildSettingsCalibration("NO2", paramType, count);
                     count++;
                     break;
                 }
             case 3:
-                manifest.settings.calParams[count] = buildSettingsCalibration("PM1", paramType);
+                buildSettingsCalibration("PM1", paramType, count);
                 count++;
                 break;
             case 4:
-                manifest.settings.calParams[count] = buildSettingsCalibration("PM2.5", paramType);
+                buildSettingsCalibration("PM2.5", paramType, count);
                 count++;
                 break;
             case 5:
-                manifest.settings.calParams[count] = buildSettingsCalibration("PM10", paramType);
+                buildSettingsCalibration("PM10", paramType, count);
                 count++;
                 break;
             case 6:
-                manifest.settings.calParams[count] = buildSettingsCalibration("Temperature", paramType);
+                buildSettingsCalibration("Temperature", paramType, count);
                 count++;
                 break;
             case 7:
-                manifest.settings.calParams[count] = buildSettingsCalibration("Pressure", paramType);
+                buildSettingsCalibration("Pressure", paramType, count);
                 count++;
                 break;
             case 8:
-                manifest.settings.calParams[count] = buildSettingsCalibration("Relative Humidity", paramType);
+                buildSettingsCalibration("Relative Humidity", paramType, count);
                 count++;
                 break;
             case 9: 
                 paramType[0] = CalParamType::Voltage;
                 paramType[1] = CalParamType::Other;
-                manifest.settings.calParams[count] = buildSettingsCalibration("Battery", paramType);
+                buildSettingsCalibration("Battery", paramType, count);
                 paramType[0] = CalParamType::Slope;
                 paramType[1] = CalParamType::Zero;
                 break;
             case 10:
                 paramType[0] = CalParamType::Other;
                 paramType[1] = CalParamType::Other;
-                manifest.settings.calParams[count] = buildSettingsCalibration("Latitude", paramType);
+                buildSettingsCalibration("Latitude", paramType, count);
                 paramType[0] = CalParamType::Slope;
                 paramType[1] = CalParamType::Zero;
                 count++;
@@ -121,7 +114,7 @@ void BuildProto::buildSystemSettings(int deviceSize, SystemManifest& manifest)
             case 11:
                 paramType[0] = CalParamType::Other;
                 paramType[1] = CalParamType::Other;
-                manifest.settings.calParams[count] = buildSettingsCalibration("Longitude", paramType);
+                buildSettingsCalibration("Longitude", paramType, count);
                 paramType[0] = CalParamType::Slope;
                 paramType[1] = CalParamType::Zero;
                 count++;
@@ -129,7 +122,7 @@ void BuildProto::buildSystemSettings(int deviceSize, SystemManifest& manifest)
             case 12: 
                 if (ozone_enabled)
                 {
-                    manifest.settings.calParams[count] = buildSettingsCalibration("Ozone", paramType);
+                    buildSettingsCalibration("Ozone", paramType, count);
                     count++;
                 }
                 break;
@@ -137,30 +130,16 @@ void BuildProto::buildSystemSettings(int deviceSize, SystemManifest& manifest)
                 break;
         }
     }
-    Serial.println("Going to print some stuff out to maybe see some problems");
-    Serial.println(manifest.settings.name);
-    Serial.println(manifest.settings.ssid);
-    Serial.println(manifest.settings.type);
-    Serial.println(manifest.settings.primaryUploadFrequency);
-    Serial.println(manifest.settings.diagnosticUploadFrequency);
-    Serial.println("Going to return the setttings");
-    // return settings;
 }
 
-void BuildProto::buildTopologyDevice(String SSID, String name, Units units, int count)
+void BuildProto::buildTopologyDevice(char * SSID, char * name, Units units, int count)
 {
-    // doc["manifest"]["topology"]["devices"][count]["ssid"] = SSID; 
-    // doc["manifest"]["topology"]["devices"][count]["name"] = name;
-    // doc["manifest"]["topology"]["devices"][count]["units"] = Units::PPM;
-
-    // Device device;
-    // SSID.toCharArray(device.ssid, SSID.length()+1);
-    // name.toCharArray(device.name, name.length()+1);
-    // device.units = units;
-    // return device;
+    doc["manifest"]["topology"]["devices"][count]["ssid"] = SSID; 
+    doc["manifest"]["topology"]["devices"][count]["name"] = name;
+    doc["manifest"]["topology"]["devices"][count]["units"] = (int)units;
 }
 
-void BuildProto::buildSystemTopology(int deviceSize, SystemManifest& manifest)
+void BuildProto::buildSystemTopology(int deviceSize)
 {
     int count = 0;
     for (int i = 0; i <  deviceSize; i++)
@@ -169,84 +148,58 @@ void BuildProto::buildSystemTopology(int deviceSize, SystemManifest& manifest)
         {
             case 0:
                 buildTopologyDevice(deviceName, "CO", Units::PPM, count);
-                // doc["manifest"]["topology"]["devices"][count]["ssid"] = deviceName; 
-                // doc["manifest"]["topology"]["devices"][count]["name"] = "CO";
-                // doc["manifest"]["topology"]["devices"][count]["units"] = Units::PPM;
-
-            // Device device;
-            // SSID.toCharArray(device.ssid, SSID.length()+1);
-            // name.toCharArray(device.name, name.length()+1);
-            // device.units = units;
-            // return device;
-            //     manifest.topology.devices[count] = buildTopologyDevice(deviceName, "CO", Units::PPM);
                 count++;
                 break;
             case 1:
-                // doc["manifest"]["topology"]["devices"][count]["ssid"] = deviceName; 
-                // doc["manifest"]["topology"]["devices"][count]["name"] = "CO2";
-                // doc["manifest"]["topology"]["devices"][count]["units"] = Units::PPM;
-
                 buildTopologyDevice(deviceName, "CO2", Units::PPM, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "CO2", Units::PPM);
                 count++;
                 break;
             case 2:
             if (NO2_enabled == true)
             {
                 buildTopologyDevice(deviceName, "NO2", Units::PPM, count);
-                //manifest.topology.devices[count] = buildTopologyDevice(deviceName, "NO2", Units::PPM);
                 count++;
                 break;
             }
             case 3:
                 buildTopologyDevice(deviceName, "PM1", Units::PPM, count);
-                //manifest.topology.devices[count] = buildTopologyDevice(deviceName, "PM1", Units::PPM);
                 count++;
                 break;
             case 4:
                 buildTopologyDevice(deviceName, "PM2.5", Units::PPM, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "PM2.5", Units::PPM);
                 count++;
                 break;
             case 5:
                 buildTopologyDevice(deviceName, "PM10", Units::PPM, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "PM10", Units::PPM);
                 count++;
                 break;
             case 6:
                 buildTopologyDevice(deviceName, "Temperature", Units::OTHER, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "Temperature", Units::OTHER);
                 count++;
                 break;
             case 7:
                 buildTopologyDevice(deviceName, "Pressure", Units::OTHER, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "Pressure", Units::OTHER);
                 count++;
                 break;
             case 8:
                 buildTopologyDevice(deviceName, "Humidity", Units::OTHER, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "Relative Humidity", Units::OTHER);
                 count++;
                 break;
             case 9: 
                 buildTopologyDevice(deviceName, "Battery", Units::OTHER, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "Battery", Units::OTHER);
                 break;
             case 10:
                 buildTopologyDevice(deviceName, "Latitude", Units::OTHER, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "Latitude", Units::OTHER);
                 count++;
                 break;
             case 11:
                 buildTopologyDevice(deviceName, "Longitude", Units::OTHER, count);
-                // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "Longitude", Units::OTHER);
                 count++;
                 break;
             case 12: 
                 if (ozone_enabled)
                 {
                     buildTopologyDevice(deviceName, "Ozone", Units::PPB, count);
-                    // manifest.topology.devices[count] = buildTopologyDevice(deviceName, "Ozone", Units::PPB);
                     count++;
                 }
                 break;
@@ -257,8 +210,28 @@ void BuildProto::buildSystemTopology(int deviceSize, SystemManifest& manifest)
 }
 
 // build SystemManifest object for protobuf
-SystemManifest BuildProto::buildSystemManifest()
+String BuildProto::buildSystemManifest()
 {
-    return manifest;
+    char *output = (char*)malloc(7000);
+    memset(output, 0, 7000*sizeof(char));
+    String jsonString = "";
+    int numOfMsgPacker = serializeJson(doc, output, 7000);
+    Serial.println(numOfMsgPacker);
+    Serial.printf("%s\n", output);
+    Serial.println("");
+    Serial.println("");
+    numOfMsgPacker = serializeMsgPack(doc, output, 7000);
+    // char * jsonPacked = (char*)malloc(numOfMsgPacker+1);
+    Serial.println(numOfMsgPacker);
+    char buf[3];
+    for (int i = 0; i < numOfMsgPacker; i++)
+    {
+        sprintf(buf, "%02x", (int)output[i]);
+        jsonString += buf;
+        // jsonPacked[i] = output[i];
+        //Serial.printf("%2x", (int)output[i]);
+    }
+    free(output);
+    return jsonString;
 }
 
