@@ -182,9 +182,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CO_SENSITIVITY 0.358
 #define CO_SENSOR 1
 
-#define NO2_COEFF_TEMP_LOW 1.09
-#define NO2_COEFF_TEMP_MED 1.35
-#define NO2_COEFF_TEMP_HIGH 3.00
+#define NO2_COEFF_TEMP_LOW 1.00	
+#define NO2_COEFF_TEMP_MED 1.00	
+#define NO2_COEFF_TEMP_HIGH 2.30
 #define NO2_SENSITIVITY -0.358
 #define NO2_SENSOR 2
 
@@ -1875,11 +1875,12 @@ float readCO(void){
     
     float_offset = CO_zero;
     float_offset /= 1000;
-    float sensor_temperature = read_sensor_temperature();
-    if(!temperature_correction_enabled)
-    {
-        sensor_temperature = 25;
-    }
+    float sensor_temperature = 25;  //always disable for CO!!  Andrew has determined that there is a complex temperature effect for CO and not for NO2 3-39-22
+    //read_sensor_temperature();
+    //if(!temperature_correction_enabled)
+    //{
+    //sensor_temperature = 25;
+    //}
     //float sensor_temperature = 30;
     CO_float = readAlpha2(sensor_temperature, CO_SENSOR);
 
@@ -2033,10 +2034,10 @@ float readAlpha1(float sensor_temperature, int species){
         if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 35){
+        else if(sensor_temperature <= 30){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 35){
+        else if(sensor_temperature > 30){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha1_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -2157,10 +2158,10 @@ float readAlpha2(float sensor_temperature, int species){
         if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 35){
+        else if(sensor_temperature <= 30){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 35){
+        else if(sensor_temperature > 30){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
