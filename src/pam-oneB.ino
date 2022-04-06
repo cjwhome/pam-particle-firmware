@@ -2910,7 +2910,15 @@ void serialMenu(){
   {
     Serial.print("AQLite Menu>");
     Serial.flush();
-    while(!Serial.available());
+    time_t timeoutMain = Time.now()+120;
+    while(!Serial.available())
+    {
+        if (timeoutMain < Time.now())
+        {
+            Serial.println("The menu has timed out. Resuming normal operation...");
+            return ;
+        }
+    }
     incomingByte = Serial.read();
     if(incomingByte == 'a'){
         serialGetCo2Slope();
@@ -3231,6 +3239,7 @@ void serialMenu(){
         Serial.println("Going into the 108_L menu");
         Serial1.print(getMenu);
         String message108;
+        time_t timeout108 = Time.now()+120;
         while (message108 != "x")
         {
             if (Serial1.available() > 0)
@@ -3245,7 +3254,12 @@ void serialMenu(){
                 Serial1.println("C"+message108+"&");
                 delay(10);
             }
-        }
+            if (timeout108 < Time.now())
+            {
+                Serial.println("This menu has timed out... Going back to regular operations.");
+                return ;
+            }
+       }
         Serial.println();
         Serial.println("Exiting the 108_L Menu... ");
     }
