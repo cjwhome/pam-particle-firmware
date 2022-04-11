@@ -28,7 +28,7 @@ typedef enum class _SystemType {
     Ozone = 4,
     CO2 = 5,
     Weather = 6,
-    // Particle = 7,
+    Particle = 7,
 } SystemType;
 
 typedef enum class _CalParamType { 
@@ -38,44 +38,35 @@ typedef enum class _CalParamType {
     Voltage = 3,
 } CalParamType;
 
-
-typedef struct _CalibrationParam { 
-    CalParamType parameters[20];
-    char name[30];
-} CalibrationParam;
-
 typedef struct _SystemSettings { 
     char name[25];
-    char ssid[10];
-    SystemType type;
-    int primaryUploadFrequency;
-    int diagnosticUploadFrequency;
-    CalibrationParam calParams[20];
+    Units units;
+    CalParamType calParams[20];
 } SystemSettings;
 
-typedef struct _Device { 
-    char name[15];
-    char ssid[25];
+typedef struct _SystemDiagnostics { 
+    char name[25];
     Units units;
-} Device;
-
-typedef struct _Diagnostic { 
-    char name[15];
-    char ssid[25];
-    Units units;
-} Diagnostic;
+    CalParamType calParams[20];
+} SystemDiagnostics;
 
 typedef struct _SubSystem { 
     char ssid[25];
     char psid[25];
     SystemSettings settings;
+    SystemDiagnostics diagnostics;
+    SystemType type;
+    // SubSystem * subSystems[5];
 } SubSystem;
 
-typedef struct _SystemTopology { 
-    Device devices[20];
-    Diagnostic diagnostics[10];
-    SubSystem subSystems[5];
-} SystemTopology;
+typedef struct _SystemManifest { 
+    char sid[15];
+    bool terminating;
+    Composition composition;
+    int primaryUploadFrequency;
+    int diagnosticUploadFrequency;
+    SubSystem subSystems[10];
+} SystemManifest;
 
 typedef struct _DataPoint { 
     char name[25];
@@ -93,11 +84,3 @@ typedef struct _Upload {
     bool terminated;
     Composition composition;
 } Upload;
-
-typedef struct _SystemManifest { 
-    char sid[10];
-    bool terminating;
-    Composition composition;
-    SystemTopology topology;
-    SystemSettings settings;
-} SystemManifest;

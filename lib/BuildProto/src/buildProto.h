@@ -17,7 +17,7 @@ class BuildProto
     public:
         BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled);
 
-        void buildSettingsCalibration(char * name, CalParamType calParamTypes[2], int count);
+        void buildSettingsCalibration(char * name, CalParamType calParamTypes[2], Units units, int count);
         void buildSystemSettings(int deviceSize);
         void buildTopologyDevice(char * SSID, char * name, Units units, int count);
 
