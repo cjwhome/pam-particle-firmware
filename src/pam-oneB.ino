@@ -1213,11 +1213,11 @@ void locationCallback(float lat, float lon, float accuracy) {
 void loop() {
     if (sentManifest == false)
     {
-        if (Particle.connected())
-        {
+        //if (Particle.connected())
+        //{
             buildManifest();
             sentManifest = true;
-        }
+        //}
 
     }
 

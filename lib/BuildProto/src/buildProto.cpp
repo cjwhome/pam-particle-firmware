@@ -102,6 +102,7 @@ void BuildProto::buildSystemSettings(int deviceSize)
                 buildSettingsCalibration("Battery", paramType, count);
                 paramType[0] = CalParamType::Slope;
                 paramType[1] = CalParamType::Zero;
+                count++;
                 break;
             case 10:
                 paramType[0] = CalParamType::Other;
@@ -187,6 +188,7 @@ void BuildProto::buildSystemTopology(int deviceSize)
                 break;
             case 9: 
                 buildTopologyDevice(deviceName, "Battery", Units::OTHER, count);
+                count++;
                 break;
             case 10:
                 buildTopologyDevice(deviceName, "Latitude", Units::OTHER, count);

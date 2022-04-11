@@ -10,7 +10,7 @@ class BuildProto
     private:
         bool NO2_enabled;
         bool ozone_enabled;
-        char * deviceName;
+        char deviceName[15];
 
         DynamicJsonDocument doc;
     
