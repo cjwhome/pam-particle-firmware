@@ -32,10 +32,10 @@ BuildProto::BuildProto(int DEVICE_id, bool ozoneEnabled, bool NO2Enabled) : doc(
 
 void BuildProto::buildSettingsCalibration(char * name, CalParamType calParamTypes[2], Units units, int count)
 {
-    doc["manifest"]["subSystem"][0]["SystemSettings"]["name"] = name;
-    doc["manifest"]["subSystem"][0]["SystemSettings"]["units"] = (int)units;
-    doc["manifest"]["subSystem"][0]["SystemSettings"]["parameters"][0] = (int)calParamTypes[0];
-    doc["manifest"]["subSystem"][0]["SystemSettings"]["parameters"][1] = (int)calParamTypes[1];
+    doc["manifest"]["subSystem"][0]["SystemSettings"][count]["name"] = name;
+    doc["manifest"]["subSystem"][0]["SystemSettings"][count]["units"] = (int)units;
+    doc["manifest"]["subSystem"][0]["SystemSettings"][count]["parameters"][0] = (int)calParamTypes[0];
+    doc["manifest"]["subSystem"][0]["SystemSettings"][count]["parameters"][1] = (int)calParamTypes[1];
 
     // doc["manifest"]["settings"]["calParams"][count]["name"] = name;
     // doc["manifest"]["settings"]["calParams"][count]["parameters"][0] = (int)calParamTypes[0];
