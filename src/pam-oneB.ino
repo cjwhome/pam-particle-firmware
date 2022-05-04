@@ -818,12 +818,9 @@ void readStoredVars(void){
         EEPROM.get(CORE_ID+(i*4), tempId);
         coreId += String(tempId);
     }
-    Serial.println("This is the coreId: ");
-    Serial.println(coreId);
     EEPROM.get(WIFI_ENABLED, wifi_enabled);
     if (wifi_enabled != 0 && wifi_enabled != 1)
     {
-        Serial.println("wifi wasn't set");
         wifi_enabled = 0;
         EEPROM.put(WIFI_ENABLED, wifi_enabled);
     }
@@ -4203,7 +4200,7 @@ void outputSerialMenuOptions(void){
     Serial.println("t:  Enter new time and date (Will be overwritten upon cellular connection)");
     Serial.println("u:  Enter new time zone (This will not accommodate daylight savings time in your area)");
     Serial.println("v:  Adjust the Device ID");
-    Serial.println("w:  Get wifi credentials");
+    // Serial.println("w:  Get wifi credentials");
     Serial.println("y:  Enable cellular");
     Serial.println("z:  Disable cellular");
     Serial.println("1:  Adjust NO2 Slope");
@@ -4236,8 +4233,8 @@ void outputSerialMenuOptions(void){
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Set coreId");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
-    Serial.println("W:  Enable/ Disable wifi (This will turn off cellular uploads)");
-    Serial.println("Y:  Check wifi status");
+    // Serial.println("W:  Enable/ Disable wifi (This will turn off cellular uploads)");
+    // Serial.println("Y:  Check wifi status");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
 
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");

@@ -248,9 +248,9 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define CO_SENSITIVITY 0.358
 #define CO_SENSOR 1
 
-#define NO2_COEFF_TEMP_LOW 1.09
-#define NO2_COEFF_TEMP_MED 1.35
-#define NO2_COEFF_TEMP_HIGH 3.00
+#define NO2_COEFF_TEMP_LOW 1.00	
+#define NO2_COEFF_TEMP_MED 1.00	
+#define NO2_COEFF_TEMP_HIGH 2.30
 #define NO2_SENSITIVITY -0.358
 #define NO2_SENSOR 2
 
@@ -884,12 +884,9 @@ void readStoredVars(void){
         EEPROM.get(CORE_ID+(i*4), tempId);
         coreId += String(tempId);
     }
-    Serial.println("This is the coreId: ");
-    Serial.println(coreId);
     EEPROM.get(WIFI_ENABLED, wifi_enabled);
     if (wifi_enabled != 0 && wifi_enabled != 1)
     {
-        Serial.println("wifi wasn't set");
         wifi_enabled = 0;
         EEPROM.put(WIFI_ENABLED, wifi_enabled);
     }
@@ -1941,11 +1938,12 @@ float readCO(void){
     
     float_offset = CO_zero;
     float_offset /= 1000;
-    float sensor_temperature = read_sensor_temperature();
-    if(!temperature_correction_enabled)
-    {
-        sensor_temperature = 25;
-    }
+    float sensor_temperature = 25;  //always disable for CO!!  Andrew has determined that there is a complex temperature effect for CO and not for NO2 3-39-22
+    //read_sensor_temperature();
+    //if(!temperature_correction_enabled)
+    //{
+    //sensor_temperature = 25;
+    //}
     //float sensor_temperature = 30;
     CO_float = readAlpha2(sensor_temperature, CO_SENSOR);
 
@@ -2099,10 +2097,10 @@ float readAlpha1(float sensor_temperature, int species){
         if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 35){
+        else if(sensor_temperature <= 30){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 35){
+        else if(sensor_temperature > 30){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha1_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -2223,10 +2221,10 @@ float readAlpha2(float sensor_temperature, int species){
         if(sensor_temperature <= 10){
           correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
         }
-        else if(sensor_temperature <= 35){
+        else if(sensor_temperature <= 30){
           correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
         }
-        else if(sensor_temperature > 35){
+        else if(sensor_temperature > 30){
           correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
         }
         alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
@@ -4268,7 +4266,7 @@ void outputSerialMenuOptions(void){
     Serial.println("t:  Enter new time and date (Will be overwritten upon cellular connection)");
     Serial.println("u:  Enter new time zone (This will not accommodate daylight savings time in your area)");
     Serial.println("v:  Adjust the Device ID");
-    Serial.println("w:  Get wifi credentials");
+    // Serial.println("w:  Get wifi credentials");
     Serial.println("y:  Enable cellular");
     Serial.println("z:  Disable cellular");
     Serial.println("1:  Adjust NO2 Slope");
@@ -4283,7 +4281,7 @@ void outputSerialMenuOptions(void){
     Serial.println("0:  Disable SD card");
     Serial.println("A:  Ouptput CO constantly and rapidly");
     Serial.println("B:  Output PM constantly and rapidly");
-    Serial.println("C:  Change temperature units to Celcius/ Fahrenheit");
+    Serial.println("C:  Change temperature units to Celsius/ Fahrenheit");
     Serial.println("D:  Enable / Disable Temperature Correction for EC's");
     Serial.println("G:  Read ozone from analog input (not digitally - board dependent)");
     Serial.println("H:  Read ozone");
@@ -4301,12 +4299,12 @@ void outputSerialMenuOptions(void){
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Set coreId");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
-    Serial.println("W:  Enable/ Disable wifi (This will turn off cellular uploads)");
-    Serial.println("Y:  Check wifi status");
+    // Serial.println("W:  Enable/ Disable wifi (This will turn off cellular uploads)");
+    // Serial.println("Y:  Check wifi status");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
 
     Serial.println("@   Enable/Disable Sensible-iot data push.  If enabled, time zone will be ignored - UTC will be used.");
-    Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absense of external power will stop cellular.");
+    Serial.println("#   Enable/Disable cartopper power mode.  If enabled, absence of external power will stop cellular.");
     Serial.println("?:  Output this menu");
     Serial.println("x:  Exits this menu");
   }
