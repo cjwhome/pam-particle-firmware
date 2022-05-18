@@ -3555,13 +3555,15 @@ void serialGetDeviceId(void)
     Serial.println(DEVICE_id);
     Serial.println("Please enter password in order to change the ID");
     Serial.setTimeout(SERIAL_MENU_TIMEOUT);
-    String tempString = readSerBufUntilDone();
+    // String tempString = readSerBufUntilDone();
+    String tempString = Serial.readStringUntil('\r');
 
     if (tempString == SERIAL_PASSWORD)
     {
         Serial.println("Password correct!");
         Serial.println("Enter new Device ID:");
-        int tempValue = readSerBufUntilDone().toInt();
+        // int tempValue = readSerBufUntilDone().toInt();
+        int tempValue = Serial.readStringUntil('\r').toInt();
         Serial.println("");
         if (tempValue > MIN_DEVICE_ID_NUMBER && tempValue < MAX_DEVICE_ID_NUMBER)
         {
