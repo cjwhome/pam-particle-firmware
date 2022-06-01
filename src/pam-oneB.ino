@@ -45,10 +45,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(8);
+PRODUCT_VERSION(9);
 
 #define APP_VERSION 8
-#define BUILD_VERSION 1
+#define BUILD_VERSION 2
 
 
 //define constants
@@ -503,6 +503,8 @@ void dateTime(uint16_t* date, uint16_t* time) {
 
 void outputToCloudAveraging()
 {
+    if(debugging_enabled)
+        Serial.println("in OutputToCloudAveraging");
     String finalData = "";
     if (measurement_count > number_of_measurements_skip)
     {
@@ -607,11 +609,15 @@ void outputToCloud(String data)
                 }
                 if (wifi_enabled == 0 && Particle.connected() && serial_cellular_enabled)
                 {
+                    if(debugging_enabled)
+                        Serial.println("in OutputToCloud Publishing!");
                     Particle.publish("uploadCellular", finalData, PRIVATE);
                     Particle.process();
                 }
-                else
+                else if(wifi_enabled == 1)
                 {
+                    if(debugging_enabled)
+                        Serial.println("in OutputToCloud Sending wifi string");
                     sendESPWifiString(finalData);
                 }
 
@@ -636,6 +642,8 @@ void sendESPWifiString(String finalData)
     bool notDone = true;
     String wifiStuff = "";
     time_t timer = Time.now()+2500;
+    if(debugging_enabled)
+        Serial.println("in SendESPWifiString before while loop");
     while (notDone && timer > Time.now())
     {
         if (Serial1.available())
@@ -651,6 +659,8 @@ void sendESPWifiString(String finalData)
             }
         }
     }
+    if(debugging_enabled)
+        Serial.println("in SendESPWifiString after while loop");
     if (notDone == true)
     {
         wifi_status = 0;
@@ -2300,6 +2310,8 @@ void outputDataToESP(void){
     //************Fill the cloud output array and file output array for row in csv file on usd card*****************************/
     //This is different than the ble packet in that we are putting all of the data that we have in one packet
     //"$1:D555g47.7M-22.050533C550.866638r1R1q2T45.8P844.9h17.2s1842.700000&"
+    if(debugging_enabled)
+        Serial.println("in Outputdata to ESP 1");
     String cloud_output_string = "";    //create a clean string
     String csv_output_string = "";
     String latitude_string = "";
@@ -2389,8 +2401,11 @@ void outputDataToESP(void){
     //csv_output_string += String(Time.format(local_time, "%d/%m/%y,%H:%M:%S"));
     cloud_output_string += String(PARTICLE_TIME_PACKET_CONSTANT) + String(Time.now());
     cloud_output_string += '&';
-    
+    if(debugging_enabled)
+        Serial.println("in Outputdata to ESP before outputToCloud");
     outputToCloud(cloud_output_string);
+    if(debugging_enabled)
+        Serial.println("in Outputdata to ESP after outputToCloud");
     
     if(esp_wifi_connection_status){
         if(debugging_enabled){
@@ -2400,7 +2415,8 @@ void outputDataToESP(void){
         Serial1.println(cloud_output_string);
     }
     Serial.println(csv_output_string);
-
+     if(debugging_enabled)
+        Serial.println("in Outputdata to ESP before writing to file");
     if (sd_enabled == 0)
     {
         //write data to file
@@ -2422,7 +2438,8 @@ void outputDataToESP(void){
             file.close();
         }
     }
-
+    if(debugging_enabled)
+        Serial.println("in Outputdata to ESP after writing to file");
     //create an array of binary data to store and send all data at once to the ESP
     //Each "section" in the array is separated by a #
     //we are using binary for the ble packets so we can compress the data into 19 bytes for the small payload
@@ -2545,6 +2562,8 @@ void outputDataToESP(void){
 
     }
 
+     if(debugging_enabled)
+        Serial.println("in Outputdata to ESP before writing to ESP");
     if (measurement_count != measurements_to_average-1 || measurement_count == 0)
     {
         Serial1.print("$");
@@ -2552,7 +2571,8 @@ void outputDataToESP(void){
         Serial1.print("&");
         delay(200);
     }
-
+    if(debugging_enabled)
+        Serial.println("in Outputdata to ESP after writing to ESP");
     /*Serial.println("Successfully output BLE string to ESP");
     for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
         Serial.printf("array[%d]:%X ", i, ble_output_array[i]);
