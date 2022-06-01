@@ -3222,8 +3222,8 @@ void serialMenu(){
             EEPROM.put(CO_SOCKET_MEM_ADDRESS, CO_socket);
         }
     }else if(incomingByte == 'V'){
-        Serial.println("Reseting the CO2 sensor");
-        t6713.resetSensor();
+        Serial.println("Calibrating CO2 Sensor...");
+        calibrateCO2(" ");
 
     }else if(incomingByte == '1'){
         serialGetNO2Slope();
@@ -4150,20 +4150,31 @@ int setSkipReadings(String numberOfSkips)
 
 int calibrateCO2(String nothing) // this has a nothing string so we can call this as a function using the particle.io stuff.
 {
-    Serial.println("Calibrating CO2");
+    //int currentState = digitalRead(D4);
+    Serial.println("Calibrating CO2.\n\rThis will take 15 minutes and then will restart.\n\rMake sure to go outdoors away from indoor air.");
     t6713.calibrate(1);
-    int timeout = 900; //900 seconds is 15 minutes
-    time_t timer = Time.now();
-    while (Time.now() < timer+timeout)
+    //int timeout = 900000; //900 seconds is 15 minutes
+    //time_t timer = millis();
+    //1800 = 15 mins!
+    int counter = 0;
+    while (counter <= 1800)
     {
+        counter++;
+        /*int newState = digitalRead(D4);
+        if (newState == currentState)
+        {
+            Serial.println("You interrupted the CO2 cal. Restarting now.");
+        }*/
         digitalWrite(power_led_en, HIGH);   // Sets the LED on
         delay(250);                   // waits for a second
         digitalWrite(power_led_en, LOW);    // Sets the LED off
         delay(250);
+        Serial.printf("%d/1800\r", counter);
     }
+    System.reset();
     restart = true;
     return 1;
-
+    // Add a check in the middle to see if you press the button more. If so, turn off and on.
 }
 
 int setEEPROMAddress(String data)
