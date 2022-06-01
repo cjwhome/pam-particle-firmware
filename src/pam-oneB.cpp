@@ -111,10 +111,10 @@ int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
 #line 47 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 PRODUCT_ID(2735);
-PRODUCT_VERSION(8);
+PRODUCT_VERSION(9);
 
 #define APP_VERSION 8
-#define BUILD_VERSION 1
+#define BUILD_VERSION 2
 
 
 //define constants
@@ -4113,22 +4113,26 @@ int setUploadSpeed(String uploadSpeed)
 
 int calibrateCO2(String nothing) // this has a nothing string so we can call this as a function using the particle.io stuff.
 {
-    int currentState = digitalRead(D4);
-    Serial.println("Calibrating CO2");
+    //int currentState = digitalRead(D4);
+    Serial.println("Calibrating CO2.\n\rThis will take 15 minutes and then will restart.\n\rMake sure to go outdoors away from indoor air.");
     t6713.calibrate(1);
-    int timeout = 900000; //900 seconds is 15 minutes
-    time_t timer = millis();
-    while (millis() < timer+timeout)
+    //int timeout = 900000; //900 seconds is 15 minutes
+    //time_t timer = millis();
+    //1800 = 15 mins!
+    int counter = 0;
+    while (counter <= 1800)
     {
-        int newState = digitalRead(D4);
+        counter++;
+        /*int newState = digitalRead(D4);
         if (newState == currentState)
         {
             Serial.println("You interrupted the CO2 cal. Restarting now.");
-        }
+        }*/
         digitalWrite(power_led_en, HIGH);   // Sets the LED on
         delay(250);                   // waits for a second
         digitalWrite(power_led_en, LOW);    // Sets the LED off
         delay(250);
+        Serial.printf("%d/1800\r", counter);
     }
     restart = true;
     return 1;
