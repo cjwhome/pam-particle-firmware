@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -109,7 +109,7 @@ void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
-#line 47 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
+#line 47 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(9);
 
@@ -4134,6 +4134,7 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
         delay(250);
         Serial.printf("%d/1800\r", counter);
     }
+    System.reset();
     restart = true;
     return 1;
     // Add a check in the middle to see if you press the button more. If so, turn off and on.

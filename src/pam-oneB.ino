@@ -4068,6 +4068,7 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
         delay(250);
         Serial.printf("%d/1800\r", counter);
     }
+    System.reset();
     restart = true;
     return 1;
     // Add a check in the middle to see if you press the button more. If so, turn off and on.
