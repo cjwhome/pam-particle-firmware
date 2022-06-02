@@ -2566,7 +2566,6 @@ void getEspOzoneData(void) {
     {
         return ;
     }
-    Serial.println("Updating ozone data with new ozone");
     ozoneChangeCheck = recievedData;
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
     if(debugging_enabled)
