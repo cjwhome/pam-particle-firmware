@@ -111,10 +111,10 @@ int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
 #line 47 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
-PRODUCT_VERSION(9);
+PRODUCT_VERSION(10);
 
 #define APP_VERSION 8
-#define BUILD_VERSION 2
+#define BUILD_VERSION 3
 
 
 //define constants
@@ -541,7 +541,7 @@ String buildHeaderString()
     String header = "DEV,CO(ppm),CO2(ppm),";
     if (NO2_enabled == 1)
     {
-        header += "NO2(ppm),";
+        header += "NO2(ppb),";
     }
     header += "PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),";
     if (ozone_enabled == 1)
@@ -1381,7 +1381,7 @@ void setup()
     {
         String header = buildHeaderString();
         Serial.println(String(header));
-        if (sd.begin(CS)){
+        if (sd.begin(CS)) {
             file.open(fileName, O_CREAT | O_APPEND | O_WRITE);
             file.println("File Start timestamp: ");
             file.println(Time.timeStr());
@@ -1914,9 +1914,8 @@ float readTemperature(void){
         temperature = bme.temperature;
     }
     //
-
-    temperature *= temp_slope;
     temperature += temp_zero;       //user input zero offset
+    temperature *= temp_slope;
 
     return temperature;
     //temperature = temperature +
@@ -1933,9 +1932,8 @@ float readHumidity(void){
         
     }
 
-
-    humidity *= rh_slope;
     humidity += rh_zero;       //user input zero offset
+    humidity *= rh_slope;
     if(humidity > 100)
         humidity = 100;
     return humidity;
@@ -1957,27 +1955,26 @@ float readCO(void){
     //float sensor_temperature = 30;
     CO_float = readAlpha2(sensor_temperature, CO_SENSOR);
 
-    CO_float *= CO_slope;
     CO_float += float_offset;
+    CO_float *= CO_slope;
+
 
     return CO_float;
 }
 
 float readNO2(void){
-    float float_offset;
-
-    float_offset = NO2_zero;
-    float_offset /= 1000;
+    // float_offset /= 1000;
     float sensor_temperature = read_sensor_temperature();
     if(!temperature_correction_enabled)
     {
         sensor_temperature = 25;
     }
-     //float sensor_temperature = 30;
-    NO2_float = readAlpha1(sensor_temperature, NO2_SENSOR);
 
+    NO2_float = readAlpha1(sensor_temperature, NO2_SENSOR);
+    NO2_float *= 1000; // going from ppm to ppb
+
+    NO2_float += NO2_zero;
     NO2_float *= NO2_slope;
-    NO2_float += float_offset;
 
     return NO2_float;
 }
@@ -1995,8 +1992,9 @@ float readCO2(void){
         CO2_float_previous = CO2_float;
     }
 
-    CO2_float *= CO2_slope;
     CO2_float += CO2_zero;
+    CO2_float *= CO2_slope;
+
     
     return CO2_float;
 }
@@ -2228,16 +2226,17 @@ float readAlpha2(float sensor_temperature, int species){
         if(debugging_enabled){
             Serial.printf("CO Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
         }
-        if(sensor_temperature <= 10){
-          correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
-        }
-        else if(sensor_temperature <= 30){
-          correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
-        }
-        else if(sensor_temperature > 30){
-          correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
-        }
-        alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        // if(sensor_temperature <= 10){
+        //   correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
+        // }
+        // else if(sensor_temperature <= 30){
+        //   correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
+        // }
+        // else if(sensor_temperature > 30){
+        //   correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
+        // }
+        alpha2_ppmraw = (sensorCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        // alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha2_ppmRounded = String(alpha2_ppmraw, 2);
       }
 
