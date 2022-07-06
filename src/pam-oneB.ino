@@ -34,10 +34,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(15205);
-PRODUCT_VERSION(7);
+PRODUCT_VERSION(8);
 
 #define APP_VERSION 7
-#define AQLITE_VERSION 7
+#define AQLITE_VERSION 8
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -2595,6 +2595,10 @@ void getEspOzoneData(void) {
             case 1:
 
                 O3_CellTemp = nextData.toFloat();
+                if(O3_CellTemp > 250)
+                {
+                    O3_CellTemp -= 273.15;
+                }
                 O3_celltemp_sum += O3_CellTemp;
                 break;
             case 2: 

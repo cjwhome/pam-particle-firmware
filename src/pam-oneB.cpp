@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -100,12 +100,12 @@ int setSkipReadings(String numberOfSkips);
 int calibrateCO2(String nothing);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 36 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 36 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
 PRODUCT_ID(15205);
-PRODUCT_VERSION(7);
+PRODUCT_VERSION(8);
 
 #define APP_VERSION 7
-#define AQLITE_VERSION 7
+#define AQLITE_VERSION 8
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -2663,6 +2663,10 @@ void getEspOzoneData(void) {
             case 1:
 
                 O3_CellTemp = nextData.toFloat();
+                if(O3_CellTemp > 250)
+                {
+                    O3_CellTemp -= 273.15;
+                }
                 O3_celltemp_sum += O3_CellTemp;
                 break;
             case 2: 
