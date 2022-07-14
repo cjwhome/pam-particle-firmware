@@ -269,6 +269,7 @@ String fileName;
 String logFileName;
 int file_started = 0;
 int log_file_started = 0;
+bool cellData_started = 0;
 
 //wifi
 String ssid; //wifi network name
@@ -1449,7 +1450,8 @@ void loop() {
     outputDataToESP();
 
     sample_counter = ++sample_counter;
-    if(sample_counter == 99)    {
+    if(sample_counter == 99)    
+    {
           sample_counter = 0;
     }
 
@@ -2092,7 +2094,8 @@ float readAlpha2(float sensor_temperature, int species){
     }else{
         half_Vref = ads2.readADC_SingleEnded(3); //half of Vref
         volt_half_Vref = half_Vref * ads_bitmv;
-        if(abs((volt_half_Vref)/1000 - 1.25) > 0.5){
+        if(abs((volt_half_Vref)/1000 - 1.25) > 0.5)
+        {
           //operation_log += "AD1_VREF2,";
           //digitalWrite(red_status_led, HIGH);
           //delay(200);
@@ -2419,8 +2422,39 @@ void outputDataToESP(void){
     if (sd_enabled == 0)
     {
         //write data to file
-        if (sd.begin(CS)){
-            SdFile::dateTimeCallback(dateTime);
+        if (sd.begin(CS))
+        {
+
+            //     SdFile::dateTimeCallback(dateTime);
+            //     file.open("Cell-GPS-Data-"+fileName, O_CREAT | O_APPEND | O_WRITE);
+            //     if(cellData_started == 0)
+            //     {
+            //         file.println("CellStrength,Lat,Lon,Date,Time");
+            //         cellData_started = 1;
+            //     }
+            // String cellStatus = "";
+            // if (Particle.connected())
+            // {
+            //     CellularSignal sig = Cellular.RSSI();
+            //     float strength = sig.getStrength();
+            //     Serial.println(strength);
+            //     cellStatus = String(strength);
+            //     cellStatus += ',';
+            // }
+            // else 
+            // {
+            //     cellStatus = "0.0,";
+            // }
+            //     cellStatus += String(gps.get_latitude());
+            //     cellStatus += ',';
+            //     cellStatus += String(gps.get_longitude());
+            //     cellStatus += ',';
+            //     cellStatus += String(Time.format(Time.now(), "%d/%m/%y,%H:%M:%S"));
+            //     file.println(cellStatus);
+
+            //     file.close();
+            // }
+
             if(debugging_enabled)
                 Serial.println("Writing row to file.");
             SdFile::dateTimeCallback(dateTime);
@@ -2435,7 +2469,7 @@ void outputDataToESP(void){
             file.println(csv_output_string);
 
             file.close();
-        }
+    }
     }
     if(debugging_enabled)
         Serial.println("in Outputdata to ESP after writing to file");
