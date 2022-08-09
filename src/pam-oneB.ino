@@ -1505,9 +1505,13 @@ void loop() {
       }
     }
 
-    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() == 4)){
-        Serial.println("Going to sleep because battery is below 20% charge");
-        goToSleepBattery();
+    if((fuel.getSoC() < BATTERY_THRESHOLD) )
+    {
+        if (System.batteryState() == 4 || System.batteryState() == 1)
+        {
+            Serial.println("Going to sleep because battery is below 20\% charge");
+            goToSleepBattery();
+        }
     }
 
     if(co2_calibration_timer){

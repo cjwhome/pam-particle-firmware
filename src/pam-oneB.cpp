@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -109,7 +109,7 @@ void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
-#line 47 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 47 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(10);
 
@@ -1571,9 +1571,13 @@ void loop() {
       }
     }
 
-    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() == 4)){
-        Serial.println("Going to sleep because battery is below 20% charge");
-        goToSleepBattery();
+    if((fuel.getSoC() < BATTERY_THRESHOLD) )
+    {
+        if (System.batteryState() == 4 || System.batteryState() == 1)
+        {
+            Serial.println("Going to sleep because battery is below 20\% charge");
+            goToSleepBattery();
+        }
     }
 
     if(co2_calibration_timer){
