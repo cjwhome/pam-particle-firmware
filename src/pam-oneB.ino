@@ -1505,9 +1505,13 @@ void loop() {
       }
     }
 
-    if((fuel.getSoC() < BATTERY_THRESHOLD) && (System.batteryState() == 4)){
-        Serial.println("Going to sleep because battery is below 20% charge");
-        goToSleepBattery();
+    if((fuel.getSoC() < BATTERY_THRESHOLD) )
+    {
+        if (System.batteryState() == 4 || System.batteryState() == 1)
+        {
+            Serial.println("Going to sleep because battery is below 20% charge");
+            goToSleepBattery();
+        }
     }
 
     if(co2_calibration_timer){
@@ -4044,15 +4048,9 @@ void startCarTopperTimer()
 void carTopperCheck()
 {
     int batteryState = System.batteryState();
-    if(batteryState == 4 || batteryState == 1){ // battery is discharging
-        if (buttonOffTime == NULL)
-        {
-            startCarTopperTimer();
-        }
-        else if(Time.now() > buttonOffTime+1800) // The 1800 is the amount of seconds in 30 minutes.
-        {
-            goToSleepBattery();
-        }
+    if(batteryState == 4 || batteryState == 1) // battery is discharging
+    {
+        goToSleepBattery();
     }
     else if (buttonOffTime != NULL && System.batteryState() == 2)
     {
