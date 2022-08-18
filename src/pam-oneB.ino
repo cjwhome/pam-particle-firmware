@@ -45,10 +45,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(10);
+PRODUCT_VERSION(11);
 
 #define APP_VERSION 8
-#define BUILD_VERSION 3
+#define BUILD_VERSION 4
 
 
 //define constants
@@ -1507,7 +1507,8 @@ void loop() {
 
     if((fuel.getSoC() < BATTERY_THRESHOLD) )
     {
-        if (System.batteryState() == 4 || System.batteryState() == 1)
+        int batteryState = System.batteryState();
+        if (batteryState == 4 || batteryState == 1)
         {
             Serial.println("Going to sleep because battery is below 20% charge");
             goToSleepBattery();
