@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -100,7 +100,7 @@ int setSkipReadings(String numberOfSkips);
 int calibrateCO2(String nothing);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 36 "c:/Users/cwilliford/Documents/particleProjects/pam-one/src/pam-oneB.ino"
+#line 36 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15205);
 PRODUCT_VERSION(8);
 
@@ -2646,7 +2646,8 @@ void getEspOzoneData(void) {
         return ;
     }
     String nextData;
-
+    float O3_check;
+    float O3_CellTemp_check;
     for (int i = 0; i < 4; i++)
     {
         nextData = recievedData.substring(0, recievedData.indexOf(','));
@@ -2654,20 +2655,20 @@ void getEspOzoneData(void) {
         switch(i)
         { 
             case 0:
-
-                O3_float = nextData.toFloat();
+                O3_check = nextData.toFloat();
+                // O3_float = nextData.toFloat();
                 ozone_measurement_count += 1;
                 // I would normally do this averaging with the other varibales, but this is the only way to make sure we are only suming ozone when we get the new measurement
-                O3_sum += O3_float;
+                // O3_sum += O3_float;
                 break;
             case 1:
-
-                O3_CellTemp = nextData.toFloat();
-                if(O3_CellTemp > 250)
+                O3_CellTemp_check = nextData.toFloat();
+                // O3_CellTemp = nextData.toFloat();
+                if(O3_CellTemp_check > 250)
                 {
-                    O3_CellTemp -= 273.15;
+                    O3_CellTemp_check -= 273.15;
                 }
-                O3_celltemp_sum += O3_CellTemp;
+                // O3_celltemp_sum += O3_CellTemp;
                 break;
             case 2: 
                 O3_CellPress = nextData.toFloat();
@@ -2678,6 +2679,12 @@ void getEspOzoneData(void) {
             default:
                 break;
         }
+    }
+    if (String(O3_check, 2) != "0.0" && String(O3_CellTemp_check, 2) != "0.0")
+    {
+        O3_float = O3_check;
+        O3_sum += O3_float;
+        O3_CellTemp = O3_CellTemp_check;
     }
     return ;
 }
