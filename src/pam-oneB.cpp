@@ -65,7 +65,7 @@ void enableLowPowerGPS();
 void printPacket(byte *packet, byte len);
 float readTemperature(void);
 float readHumidity(void);
-float readNO2(void);
+float readSO2(void);
 float readCO2(void);
 float readAlpha1(float sensor_temperature, int species);
 float readAlpha2(float sensor_temperature, int species);
@@ -144,8 +144,8 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define DEVICE_ID_MEM_ADDRESS 0
 #define CO2_ZERO_MEM_ADDRESS 4
 #define CO2_SLOPE_MEM_ADDRESS 8
-#define CO_ZERO_MEM_ADDRESS 12
-#define CO_SLOPE_MEM_ADDRESS 16
+#define SO2_ZERO_MEM_ADDRESS 12
+#define SO2_SLOPE_MEM_ADDRESS 16
 #define PM_1_ZERO_MEM_ADDRESS 20
 #define PM_1_SLOPE_MEM_ADDRESS 24
 #define PM_25_ZERO_MEM_ADDRESS 28
@@ -296,6 +296,7 @@ const int DEBOUNCE_DELAY = 50;
 float CO_sum = 0;
 float CO2_sum = 0;
 float NO2_sum = 0;
+float SO2_sum = 0;
 float pressure_sum = 0;
 float humidity_sum = 0;
 float temperature_sum = 0;
@@ -346,8 +347,6 @@ int wifi_code = 0;
 
 //global variables
 int counter = 0;
-float CO_float = 0;
-float CO_float_2 = 0;
 float CO2_float = 0;
 float CO2_float_previous = 0;
 float O3_float = 0;
@@ -361,6 +360,7 @@ int debugging_enabled = 0;
 int ozone_enabled = 0;
 int NO2_enabled = 0;
 float NO2_float = 0;
+float SO2_float = 0;
 int temperature_units = 0;
 int output_only_particles = 0;
 int new_temperature_sensor_enabled = 0;
@@ -385,8 +385,8 @@ char geolocation_accuracy[6] = "255.0";
 //calibration parameters
 float CO2_slope;
 int CO2_zero;
-float CO_slope;
-int CO_zero;
+float SO2_slope;
+int SO2_zero;
 float PM_1_slope;
 float PM_25_slope;
 float PM_10_slope;
@@ -478,7 +478,7 @@ void outputToCloud(void);
 void outputToCloudAveraging(void);
 void echoGps();
 void readOzone(void);
-float readCO(void);
+float readNO2(void);
 float getEspOzoneData(void);
 void resetEsp(void);
 void sendEspSerialCom(char *serial_command);
@@ -539,11 +539,8 @@ String checksumMaker(String data)
 
 String buildHeaderString()
 {
-    String header = "DEV,CO(ppm),CO2(ppm),";
-    if (NO2_enabled == 1)
-    {
-        header += "NO2(ppb),";
-    }
+    String header = "DEV,NO2(ppb),CO2(ppm),";
+    header += "SO2(ppm),";
     header += "PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),";
     if (ozone_enabled == 1)
     {
@@ -575,7 +572,7 @@ void outputToCloudAveraging()
     String finalData = "";
     if (measurement_count > number_of_measurements_skip)
     {
-        CO_sum += CO_float;
+        NO2_sum += NO2_float;
         CO2_sum += CO2_float;
         PM1_sum += corrected_PM_1;
         PM25_sum += corrected_PM_25;
@@ -584,15 +581,12 @@ void outputToCloudAveraging()
         humidity_sum += readHumidity();
         temperature_sum += readTemperature();
 
-        if (NO2_enabled)
-        {
-            NO2_sum += NO2_float;
-        }
+        SO2_sum += SO2_float;
     }
     if (measurement_count == measurements_to_average)
     {
         int fixed_count = measurement_count-number_of_measurements_skip;
-        CO_sum /= fixed_count;
+        NO2_sum /= fixed_count;
         CO2_sum /= fixed_count;
         PM1_sum /= fixed_count;
         PM25_sum /= fixed_count;
@@ -601,14 +595,11 @@ void outputToCloudAveraging()
         humidity_sum /= fixed_count;
         temperature_sum /= fixed_count;
 
-        if (NO2_enabled)
-        {
-            NO2_sum /= fixed_count;
-        }
+        SO2_sum /= fixed_count;
         finalData = buildAverageCloudString();
-        CO_sum = 0;
-        CO2_sum = 0;
         NO2_sum = 0;
+        CO2_sum = 0;
+        SO2_sum = 0;
         PM1_sum = 0;
         PM25_sum = 0;
         PM10_sum = 0;
@@ -619,8 +610,12 @@ void outputToCloudAveraging()
         measurement_count = 0;
         if (wifi_enabled == 0)
         {
-            Particle.publish("uploadCellular", finalData, PRIVATE);
-            Particle.process();
+            if (serial_cellular_enabled && Particle.connected())
+            {
+                Particle.publish("uploadCellular", finalData, PRIVATE);
+                Particle.process();
+            }
+
         }
         else
         {
@@ -792,9 +787,9 @@ void readStoredVars(void){
     EEPROM.get(CO2_SLOPE_MEM_ADDRESS, tempValue);
     CO2_slope = tempValue;
     CO2_slope /= 100;
-    EEPROM.get(CO_SLOPE_MEM_ADDRESS, tempValue);
-    CO_slope = tempValue;
-    CO_slope /= 100;
+    EEPROM.get(SO2_SLOPE_MEM_ADDRESS, tempValue);
+    SO2_slope = tempValue;
+    SO2_slope /= 100;
     EEPROM.get(NO2_SLOPE_MEM_ADDRESS, tempValue);
     NO2_slope = tempValue;
     NO2_slope /= 100;
@@ -819,7 +814,7 @@ void readStoredVars(void){
 
 
     EEPROM.get(CO2_ZERO_MEM_ADDRESS, CO2_zero);
-    EEPROM.get(CO_ZERO_MEM_ADDRESS, CO_zero);
+    EEPROM.get(SO2_ZERO_MEM_ADDRESS, SO2_zero);
     EEPROM.get(NO2_ZERO_MEM_ADDRESS, NO2_zero);
     EEPROM.get(PM_1_ZERO_MEM_ADDRESS, PM_1_zero);
     EEPROM.get(PM_25_ZERO_MEM_ADDRESS, PM_25_zero);
@@ -871,9 +866,9 @@ void readStoredVars(void){
     {
         CO2_slope = 1;
     }
-    if(!CO_slope)
+    if(!SO2_slope)
     {
-        CO_slope = 1;
+        SO2_slope = 1;
     }
     if(!PM_1_slope)
     {
@@ -908,7 +903,7 @@ void writeDefaultSettings(void){
 
 
     EEPROM.put(CO2_SLOPE_MEM_ADDRESS, 100);
-    EEPROM.put(CO_SLOPE_MEM_ADDRESS, 100);
+    EEPROM.put(SO2_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PM_1_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PM_25_SLOPE_MEM_ADDRESS, 100);
     EEPROM.put(PM_10_SLOPE_MEM_ADDRESS, 100);
@@ -918,7 +913,7 @@ void writeDefaultSettings(void){
     EEPROM.put(NO2_SLOPE_MEM_ADDRESS, 100);
 
     EEPROM.put(CO2_ZERO_MEM_ADDRESS, 0);
-    EEPROM.put(CO_ZERO_MEM_ADDRESS, 0);
+    EEPROM.put(SO2_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(NO2_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_1_ZERO_MEM_ADDRESS, 0);
     EEPROM.put(PM_25_ZERO_MEM_ADDRESS, 0);
@@ -1463,11 +1458,8 @@ void loop() {
 
 
     //read CO values and apply calibration factors
-    CO_float = readCO();
-    if (NO2_enabled)
-    {
-        NO2_float = readNO2();
-    }
+    NO2_float = readNO2();
+    SO2_float = readSO2();
 
     CO2_float = readCO2();
 
@@ -1946,26 +1938,20 @@ float readHumidity(void){
     //temperature = temperature +
 }
 
-//read Carbon monoxide alphasense sensor
-float readCO(void){
-    float float_offset;
-    
-    float_offset = CO_zero;
-    float_offset /= 1000;
-    float sensor_temperature = 25;  //always disable for CO!!  Andrew has determined that there is a complex temperature effect for CO and not for NO2 3-39-22
-    //read_sensor_temperature();
-    //if(!temperature_correction_enabled)
-    //{
-    //sensor_temperature = 25;
-    //}
-    //float sensor_temperature = 30;
-    CO_float = readAlpha2(sensor_temperature, CO_SENSOR);
+float readSO2(void){
+    // float_offset /= 1000;
+    float sensor_temperature = read_sensor_temperature();
+    if(!temperature_correction_enabled)
+    {
+        sensor_temperature = 25;
+    }
 
-    CO_float += float_offset;
-    CO_float *= CO_slope;
+    SO2_float = readAlpha1(25, SO2_SENSOR);
 
+    SO2_float += SO2_zero;
+    SO2_float *= SO2_slope;
 
-    return CO_float;
+    return SO2_float;
 }
 
 float readNO2(void){
@@ -1976,7 +1962,7 @@ float readNO2(void){
         sensor_temperature = 25;
     }
 
-    NO2_float = readAlpha1(sensor_temperature, NO2_SENSOR);
+    NO2_float = readAlpha2(sensor_temperature, NO2_SENSOR);
     NO2_float *= 1000; // going from ppm to ppb
 
     NO2_float += NO2_zero;
@@ -2099,25 +2085,27 @@ float readAlpha1(float sensor_temperature, int species){
             Serial.println(readTemperature());
         }
        
-        coefficient_low = NO2_COEFF_TEMP_LOW;
-        coefficient_med = NO2_COEFF_TEMP_MED;
-        coefficient_high = NO2_COEFF_TEMP_HIGH;
-        sensor_sensitivity = NO2_SENSITIVITY;
+        // coefficient_low = SO2_COEFF_TEMP_LOW;
+        // coefficient_med = SO2_COEFF_TEMP_MED;
+        // coefficient_high = SO2_COEFF_TEMP_HIGH;
+        sensor_sensitivity = SO2_SENSITIVITY;
 
         if(debugging_enabled){
             Serial.printf("NO2 Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
         }
                
-        if(sensor_temperature <= 10){
-          correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
-        }
-        else if(sensor_temperature <= 30){
-          correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
-        }
-        else if(sensor_temperature > 30){
-          correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
-        }
-        alpha1_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        // if(sensor_temperature <= 10){
+        //   correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
+        // }
+        // else if(sensor_temperature <= 30){
+        //   correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
+        // }
+        // else if(sensor_temperature > 30){
+        //   correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
+        // }
+
+        alpha1_ppmraw = (sensorCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        // alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha1_ppmRounded = String(alpha1_ppmraw, 2);
       }
 
@@ -2225,32 +2213,32 @@ float readAlpha2(float sensor_temperature, int species){
             Serial.println(readTemperature());
         }
         
-        coefficient_low = CO_COEFF_TEMP_LOW;
-        coefficient_med = CO_COEFF_TEMP_MED;
-        coefficient_high = CO_COEFF_TEMP_HIGH;
-        sensor_sensitivity = CO_SENSITIVITY;
+	    coefficient_low = NO2_COEFF_TEMP_LOW;
+        coefficient_med = NO2_COEFF_TEMP_MED;
+        coefficient_high =NO2_COEFF_TEMP_HIGH;
+        sensor_sensitivity = NO2_SENSITIVITY;
               
         if(debugging_enabled){
             Serial.printf("CO Coefficient_low:%1.2f, med:%1.2f, high:%1.2f\n\r", coefficient_low, coefficient_med, coefficient_high);
         }
-        // if(sensor_temperature <= 10){
-        //   correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
-        // }
-        // else if(sensor_temperature <= 30){
-        //   correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
-        // }
-        // else if(sensor_temperature > 30){
-        //   correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
-        // }
-        alpha2_ppmraw = (sensorCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
-        // alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+
+        if(sensor_temperature <= 10){
+          correctedCurrent = ((sensorCurrent) - coefficient_low*(auxCurrent));
+        }
+        else if(sensor_temperature <= 30){
+          correctedCurrent = ((sensorCurrent) - coefficient_med*(auxCurrent));
+        }
+        else if(sensor_temperature > 30){
+          correctedCurrent = ((sensorCurrent) - coefficient_high*(auxCurrent));
+        }
+        alpha2_ppmraw = (correctedCurrent / sensor_sensitivity); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha2_ppmRounded = String(alpha2_ppmraw, 2);
       }
 
       digitalWrite(lmp91000_2_en, HIGH);  //disable
 
     if(debugging_enabled){
-          Serial.print("CO measurements:  \n\r");
+          Serial.print("CONO2easurements:  \n\r");
           Serial.printf("A0_gas: %d\n\r", A0_gas);
           Serial.printf("A1_aux: %d\n\r", A1_aux);
           Serial.printf("A2_temp: %d\n\r", A2_temperature);
@@ -2395,15 +2383,12 @@ void outputDataToESP(void){
     csv_output_string += String(DEVICE_id) + ",";
 
 
-    cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_float, 3);
-    csv_output_string += String(CO_float, 3) + ",";
+    cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 1);
+    csv_output_string += String(NO2_float, 1) + ",";
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
-    if (NO2_enabled)
-    {
-        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
-        csv_output_string += String(NO2_float, 3) + ",";
-    }
+        cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(SO2_float, 3);
+        csv_output_string += String(SO2_float, 3) + ",";
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(corrected_PM_1, 0);
     csv_output_string += String(corrected_PM_1, 0) + ",";
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(corrected_PM_25, 0);
@@ -2475,7 +2460,10 @@ void outputDataToESP(void){
     cloud_output_string += '&';
     if(debugging_enabled)
         Serial.println("in Outputdata to ESP before outputToCloud");
-    outputToCloud(cloud_output_string);
+    if (Particle.connected() && serial_cellular_enabled)
+    {
+        outputToCloud(cloud_output_string);
+    }
     if(debugging_enabled)
         Serial.println("in Outputdata to ESP after outputToCloud");
     
@@ -2584,8 +2572,8 @@ void outputDataToESP(void){
         11-sound_average
         */
         if(i == 0){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = CO_float;
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = NO2_PACKET_CONSTANT;
+            floatBytes.myFloat = NO2_float;
         }else if(i == 1){
             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
             floatBytes.myFloat = CO2_float;
@@ -2612,10 +2600,10 @@ void outputDataToESP(void){
             floatBytes.myFloat = readHumidity();
         }
         
-        // else if(i == 10){
-        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-        //     floatBytes.myFloat = air_quality_score;
-        // }
+        else if(i == 9){
+            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
+            floatBytes.myFloat = SO2_float;
+        }
         else if(i == 11){
             if (ozone_enabled)
             {
@@ -3753,23 +3741,23 @@ void serialGetCo2Zero(void){
 void serialGetCoSlope(void){
 
     Serial.println();
-    Serial.print("Current CO slope:");
-    Serial.print(String(CO_slope, 2));
+    Serial.print("Current SO2 slope:");
+    Serial.print(String(SO2_slope, 2));
     Serial.println(" ppm");
-    Serial.print("Enter new CO slope\n\r");
+    Serial.print("Enter new SO2 slope\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
     int tempValue;
 
     if(tempfloat >= 0.1 && tempfloat < 2.0){
-        CO_slope = tempfloat;
+        SO2_slope = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
-        Serial.print("\n\rNew CO slope: ");
-        Serial.println(String(CO_slope,2));
+        Serial.print("\n\rNew SO2 slope: ");
+        Serial.println(String(SO2_slope,2));
 
-        EEPROM.put(CO_SLOPE_MEM_ADDRESS, tempValue);
+        EEPROM.put(SO2_SLOPE_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3777,10 +3765,10 @@ void serialGetCoSlope(void){
 
 void serialGetCoZero(void){
     Serial.println();
-    Serial.print("Current CO zero:");
-    Serial.print(CO_zero);
+    Serial.print("Current SO2 zero:");
+    Serial.print(SO2_zero);
     Serial.println(" ppb");
-    Serial.print("Enter new CO Zero\n\r");
+    Serial.print("Enter new SO2 Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
@@ -3788,8 +3776,8 @@ void serialGetCoZero(void){
     if(tempValue >= -5000 && tempValue < 5000){
         Serial.print("\n\rNew CO zero: ");
         Serial.println(tempValue);
-        CO_zero = tempValue;
-        EEPROM.put(CO_ZERO_MEM_ADDRESS, tempValue);
+        SO2_zero = tempValue;
+        EEPROM.put(SO2_ZERO_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -4179,8 +4167,8 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
 
 void readAlpha1Constantly(void){
     while(!Serial.available()){
-        CO_float = readCO();
-        Serial.printf("CO: %1.3f ppm\n\r", CO_float);
+        NO2_float = readNO2();
+        Serial.printf("NO2: %3.1f ppm\n\r", NO2_float);
     }
 }
 
@@ -4239,10 +4227,7 @@ String buildAverageCloudString()
     cloud_output_string += String(DEVICE_ID_PACKET_CONSTANT) + String(DEVICE_id);   //device id
     cloud_output_string += String(CARBON_MONOXIDE_PACKET_CONSTANT) + String(CO_sum, 3);
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_sum, 0);
-    if (NO2_enabled)
-    {
-        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
-    }
+        cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 1);
     cloud_output_string += String(PM1_PACKET_CONSTANT) + String(PM1_sum);
     cloud_output_string += String(PM2PT5_PACKET_CONSTANT) + String(PM25_sum, 0);
     cloud_output_string += String(PM10_PACKET_CONSTANT) + String(PM10_sum);
@@ -4308,8 +4293,8 @@ void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
     Serial.println("a:  Adjust CO2 slope");
     Serial.println("b:  Adjust CO2 zero");
-    Serial.println("c:  Adjust CO slope");
-    Serial.println("d:  Adjust CO zero");
+    Serial.println("c:  Adjust SO2 slope");
+    Serial.println("d:  Adjust SO2 zero");
     Serial.println("e:  Adjust PM1 slope");
     Serial.println("f:  Adjust PM1 zero");
     Serial.println("g:  Adjust PM2.5 slope");
