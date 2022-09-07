@@ -2478,17 +2478,19 @@ void outputDataToESP(void){
     outputToCloud(cloud_output_string);
     if(debugging_enabled)
         Serial.println("in Outputdata to ESP after outputToCloud");
+
+    Serial1.println(cloud_output_string);
     
-    if(esp_wifi_connection_status){
-        if(debugging_enabled){
-            Serial.println("Sending data to esp to upload via wifi...");
-            writeLogFile("Sending data to esp to upload via wifi");
-          }
-        Serial1.println(cloud_output_string);
-    }
-    Serial.println(csv_output_string);
-     if(debugging_enabled)
-        Serial.println("in Outputdata to ESP before writing to file");
+    // if(esp_wifi_connection_status){
+    //     if(debugging_enabled){
+    //         Serial.println("Sending data to esp to upload via wifi...");
+    //         writeLogFile("Sending data to esp to upload via wifi");
+    //     }
+    //     Serial1.println(cloud_output_string);
+    // }
+    // Serial.println(csv_output_string);
+    //  if(debugging_enabled)
+    //     Serial.println("in Outputdata to ESP before writing to file");
     if (sd_enabled == 0)
     {
         //write data to file
@@ -2547,135 +2549,135 @@ void outputDataToESP(void){
     //Each "section" in the array is separated by a #
     //we are using binary for the ble packets so we can compress the data into 19 bytes for the small payload
 
-    byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE] = {0, };     //19 bytes per data line and 12 species to output
-    memset(ble_output_array, 0, sizeof(byte));
+    // byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE] = {0, };     //19 bytes per data line and 12 species to output
+    // memset(ble_output_array, 0, sizeof(byte));
 
-    for(int i=0; i<NUMBER_OF_SPECIES; i++){
+    // for(int i=0; i<NUMBER_OF_SPECIES; i++){
 
-        //************Fill the ble output array**********************//
-        //Serial.printf("making array[%d]\n", i);
-        //byte 0 - version
-        ble_output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
+    //     //************Fill the ble output array**********************//
+    //     //Serial.printf("making array[%d]\n", i);
+    //     //byte 0 - version
+    //     ble_output_array[0 + i*(BLE_PAYLOAD_SIZE)] = 1;
 
-        //bytes 1,2 - Device ID
-        //DEVICE_id = 555;
-        wordBytes.myWord = DEVICE_id;
-        ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+    //     //bytes 1,2 - Device ID
+    //     //DEVICE_id = 555;
+    //     wordBytes.myWord = DEVICE_id;
+    //     ble_output_array[1 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+    //     ble_output_array[2 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
-        //byte 3 - Measurement number
-        ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
+    //     //byte 3 - Measurement number
+    //     ble_output_array[3 + i*(BLE_PAYLOAD_SIZE)] = sample_counter;
 
-        //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
-        //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
-        //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
-        /*
-        0-CO_float
-        1-CO2_float
-        2-bme.gas_resistance / 1000.0
-        3-PM01Value
-        4-PM2_5Value
-        5-PM10Value
-        6-bme.temperature
-        7-bme.pressure / 100.0
-        8-bme.humidity
-        9-O3_float
-        10-fuel.getSoC()
-        11-sound_average
-        */
-        if(i == 0){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = CO_float;
-        }else if(i == 1){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
-            floatBytes.myFloat = CO2_float;
-        }else if(i == 2){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
-            floatBytes.myFloat = fuel.getSoC();
-        }else if(i == 3){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
-            floatBytes.myFloat = corrected_PM_1;
-        }else if(i == 4){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
-            floatBytes.myFloat = corrected_PM_25;
-        }else if(i == 5){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
-            floatBytes.myFloat = PM10Value;
-        }else if(i == 6){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
-            floatBytes.myFloat = readTemperature();
-        }else if(i == 7){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
-            floatBytes.myFloat = bme.pressure / 100.0;
-        }else if(i == 8){
-            ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
-            floatBytes.myFloat = readHumidity();
-        }
+    //     //byte 4 - Identifier (B:battery, a:Latitude, o:longitude,
+    //     //t:Temperature, P:Pressure, h:humidity, s:Sound, O:Ozone,
+    //     //C:CO2, M:CO, r:PM1, R:PM2.5, q:PM10, g:VOCs)
+    //     /*
+    //     0-CO_float
+    //     1-CO2_float
+    //     2-bme.gas_resistance / 1000.0
+    //     3-PM01Value
+    //     4-PM2_5Value
+    //     5-PM10Value
+    //     6-bme.temperature
+    //     7-bme.pressure / 100.0
+    //     8-bme.humidity
+    //     9-O3_float
+    //     10-fuel.getSoC()
+    //     11-sound_average
+    //     */
+    //     if(i == 0){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_MONOXIDE_PACKET_CONSTANT;
+    //         floatBytes.myFloat = CO_float;
+    //     }else if(i == 1){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = CARBON_DIOXIDE_PACKET_CONSTANT;
+    //         floatBytes.myFloat = CO2_float;
+    //     }else if(i == 2){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = BATTERY_PACKET_CONSTANT;
+    //         floatBytes.myFloat = fuel.getSoC();
+    //     }else if(i == 3){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM1_PACKET_CONSTANT;
+    //         floatBytes.myFloat = corrected_PM_1;
+    //     }else if(i == 4){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM2PT5_PACKET_CONSTANT;
+    //         floatBytes.myFloat = corrected_PM_25;
+    //     }else if(i == 5){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PM10_PACKET_CONSTANT;
+    //         floatBytes.myFloat = PM10Value;
+    //     }else if(i == 6){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = TEMPERATURE_PACKET_CONSTANT;
+    //         floatBytes.myFloat = readTemperature();
+    //     }else if(i == 7){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = PRESSURE_PACKET_CONSTANT;
+    //         floatBytes.myFloat = bme.pressure / 100.0;
+    //     }else if(i == 8){
+    //         ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = HUMIDITY_PACKET_CONSTANT;
+    //         floatBytes.myFloat = readHumidity();
+    //     }
         
-        // else if(i == 10){
-        //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
-        //     floatBytes.myFloat = air_quality_score;
-        // }
-        else if(i == 11){
-            if (ozone_enabled)
-            {
-                ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
-                floatBytes.myFloat = O3_float;
-            }
-        }
+    //     // else if(i == 10){
+    //     //     ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = VOC_PACKET_CONSTANT;
+    //     //     floatBytes.myFloat = air_quality_score;
+    //     // }
+    //     else if(i == 11){
+    //         if (ozone_enabled)
+    //         {
+    //             ble_output_array[4 + i*(BLE_PAYLOAD_SIZE)] = OZONE_PACKET_CONSTANT;
+    //             floatBytes.myFloat = O3_float;
+    //         }
+    //     }
 
-        //bytes 5,6,7,8 - Measurement Value
-        ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
-        ble_output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
-        ble_output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
-        ble_output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
-
-
-        //bytes 9-12 - latitude
-        wordBytes.myWord = gps.get_latitudeWhole();
-        ble_output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        wordBytes.myWord = gps.get_latitudeFrac();
-        ble_output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        //bytes 14-17 - longitude
-        wordBytes.myWord = gps.get_longitudeWhole();
-        ble_output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        wordBytes.myWord = gps.get_longitudeFrac();
-        ble_output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
+    //     //bytes 5,6,7,8 - Measurement Value
+    //     ble_output_array[5 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[0];
+    //     ble_output_array[6 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
+    //     ble_output_array[7 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
+    //     ble_output_array[8 + i*(BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
 
 
-        //byte 18 - east west and north south indicator
-        //  LSB 0 = East, LSB 1 = West
-        //  MSB 0 = South, MSB 1 = North
-        int northSouth = gps.get_nsIndicator();
-        int eastWest = gps.get_ewIndicator();
+    //     //bytes 9-12 - latitude
+    //     wordBytes.myWord = gps.get_latitudeWhole();
+    //     ble_output_array[9 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+    //     ble_output_array[10 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
-        ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
-        ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
-        ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[1];
-        ble_output_array[20 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[0];
+    //     wordBytes.myWord = gps.get_latitudeFrac();
+    //     ble_output_array[11 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+    //     ble_output_array[12 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
-        ble_output_array[21 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
+    //     //bytes 14-17 - longitude
+    //     wordBytes.myWord = gps.get_longitudeWhole();
+    //     ble_output_array[13 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+    //     ble_output_array[14 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
-    }
+    //     wordBytes.myWord = gps.get_longitudeFrac();
+    //     ble_output_array[15 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
+    //     ble_output_array[16 + i*(BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
 
-     if(debugging_enabled)
-        Serial.println("in Outputdata to ESP before writing to ESP");
-    if (measurement_count != measurements_to_average-1 || measurement_count == 0)
-    {
-        Serial1.print("$");
-        Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
-        Serial1.print("&");
-        delay(200);
-    }
-    if(debugging_enabled)
-        Serial.println("in Outputdata to ESP after writing to ESP");
+
+    //     //byte 18 - east west and north south indicator
+    //     //  LSB 0 = East, LSB 1 = West
+    //     //  MSB 0 = South, MSB 1 = North
+    //     int northSouth = gps.get_nsIndicator();
+    //     int eastWest = gps.get_ewIndicator();
+
+    //     ble_output_array[17 + i*(BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
+    //     ble_output_array[18 + i*(BLE_PAYLOAD_SIZE)] = gps.get_horizontalDillution();
+    //     ble_output_array[19 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[1];
+    //     ble_output_array[20 + i*(BLE_PAYLOAD_SIZE)] = status_word.byte[0];
+
+    //     ble_output_array[21 + i*(BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
+
+    // }
+
+    //  if(debugging_enabled)
+    //     Serial.println("in Outputdata to ESP before writing to ESP");
+    // if (measurement_count != measurements_to_average-1 || measurement_count == 0)
+    // {
+    //     Serial1.print("$");
+    //     Serial1.write(ble_output_array, NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE);
+    //     Serial1.print("&");
+    //     delay(200);
+    // }
+    // if(debugging_enabled)
+    //     Serial.println("in Outputdata to ESP after writing to ESP");
     /*Serial.println("Successfully output BLE string to ESP");
     for(int i=0;i<NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE;i++){
         Serial.printf("array[%d]:%X ", i, ble_output_array[i]);
