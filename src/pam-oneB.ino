@@ -1367,7 +1367,8 @@ void locationCallback(float lat, float lon, float accuracy) {
   }
 }
 
-void loop() {
+void loop() 
+{
     if (car_topper_power_en)
     {
         carTopperCheck();
@@ -2422,7 +2423,7 @@ void outputDataToESP(void){
     //     }
     //     Serial1.println(cloud_output_string);
     // }
-    // Serial.println(csv_output_string);
+    Serial.println(csv_output_string);
     //  if(debugging_enabled)
     //     Serial.println("in Outputdata to ESP before writing to file");
     if (sd_enabled == 0)
