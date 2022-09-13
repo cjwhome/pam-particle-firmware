@@ -271,6 +271,8 @@ int file_started = 0;
 int log_file_started = 0;
 bool cellData_started = 0;
 
+bool sendBluetooth = true;
+
 //wifi
 String ssid; //wifi network name
 String password; //wifi network password
@@ -558,7 +560,7 @@ void outputToCloudAveraging()
         }
         else
         {
-            sendESPWifiString(finalData);
+            // sendESPWifiString(finalData);
         }
 
     }
@@ -619,7 +621,7 @@ void outputToCloud(String data)
                 {
                     if(debugging_enabled)
                         Serial.println("in OutputToCloud Sending wifi string");
-                    sendESPWifiString(finalData);
+                    // sendESPWifiString(finalData);
                 }
 
             }
@@ -628,55 +630,55 @@ void outputToCloud(String data)
     }
 }
 
-void sendESPWifiString(String finalData)
-{
-    int index = finalData.indexOf('&');
-    finalData[index] = '#';
-    // String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), "%yyyy-%m-%dT%H:%M:%SZ"))+"\"}";
-    String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
-    wifiString ="!!"+wifiString;
-    String checkSum = checksumMaker(wifiString);
-    wifiString += checkSum;
-    sendBLE = false;
-    delay(4000);
-    Serial1.print(wifiString);
-    bool notDone = true;
-    String wifiStuff = "";
-    time_t timer = Time.now()+2500;
-    if(debugging_enabled)
-        Serial.println("in SendESPWifiString before while loop");
-    while (notDone && timer > Time.now())
-    {
-        if (Serial1.available())
-        {
-            char inchar = (char)Serial1.read();
-            if (inchar == '&')
-            {
-                notDone = false;
-            }
-            else
-            {
-                wifiStuff += inchar;
-            }
-        }
-    }
-    if(debugging_enabled)
-        Serial.println("in SendESPWifiString after while loop");
-    if (notDone == true)
-    {
-        wifi_status = 0;
-        wifi_code = 0;
-        return ;
-    }
-    else
-    {
-        index = wifiStuff.indexOf(',');
-        wifi_status = wifiStuff.substring(0, index).toInt();
-        wifi_code = wifiStuff.substring(index+1, wifiStuff.length()).toInt();
-    }
+// void sendESPWifiString(String finalData)
+// {
+//     int index = finalData.indexOf('&');
+//     finalData[index] = '#';
+//     // String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), "%yyyy-%m-%dT%H:%M:%SZ"))+"\"}";
+//     String wifiString = "{\"data\": \""+finalData+"\", \"event\": \"pamup-wifi\", \"coreid\": \""+coreId+"\", \"published_at\": \""+String(Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL))+"\"}";
+//     wifiString ="!!"+wifiString;
+//     String checkSum = checksumMaker(wifiString);
+//     wifiString += checkSum;
+//     sendBLE = false;
+//     delay(4000);
+//     Serial1.print(wifiString);
+//     bool notDone = true;
+//     String wifiStuff = "";
+//     time_t timer = Time.now()+2500;
+//     if(debugging_enabled)
+//         Serial.println("in SendESPWifiString before while loop");
+//     while (notDone && timer > Time.now())
+//     {
+//         if (Serial1.available())
+//         {
+//             char inchar = (char)Serial1.read();
+//             if (inchar == '&')
+//             {
+//                 notDone = false;
+//             }
+//             else
+//             {
+//                 wifiStuff += inchar;
+//             }
+//         }
+//     }
+//     if(debugging_enabled)
+//         Serial.println("in SendESPWifiString after while loop");
+//     if (notDone == true)
+//     {
+//         wifi_status = 0;
+//         wifi_code = 0;
+//         return ;
+//     }
+//     else
+//     {
+//         index = wifiStuff.indexOf(',');
+//         wifi_status = wifiStuff.substring(0, index).toInt();
+//         wifi_code = wifiStuff.substring(index+1, wifiStuff.length()).toInt();
+//     }
 
 
-}
+// }
 
 //send memory address and value separated by a comma
 int remoteWriteStoredVars(String addressAndValue){
@@ -1448,6 +1450,15 @@ void loop()
     corrected_PM_1 = corrected_PM_1 * PM_1_slope;
 
     //getEspWifiStatus();
+    if (Serial1.available())
+    {
+        sendBluetooth = true;
+        while(Serial1.available())
+        {
+            Serial1.read();
+        }
+        Serial1.flush();
+    }
     outputDataToESP();
 
     sample_counter = ++sample_counter;
@@ -2414,7 +2425,11 @@ void outputDataToESP(void){
     if(debugging_enabled)
         Serial.println("in Outputdata to ESP after outputToCloud");
 
-    Serial1.println(cloud_output_string);
+    if (sendBluetooth)
+    {
+        Serial1.println(cloud_output_string);
+        sendBluetooth = false;
+    }
     
     // if(esp_wifi_connection_status){
     //     if(debugging_enabled){
@@ -2659,51 +2674,51 @@ void outputDataToESP(void){
 // }
 
 //send wifi information to the ESP
-bool  sendWifiInfo(void)
-{
-    String wifiCredentials = "!@"+String(ssid) + "," + String(password);
-    wifiCredentials += checksumMaker(wifiCredentials);
-    Serial.println("Sending new wifi credentials to ESP: ");
-    Serial.println(wifiCredentials);
+// bool  sendWifiInfo(void)
+// {
+//     String wifiCredentials = "!@"+String(ssid) + "," + String(password);
+//     wifiCredentials += checksumMaker(wifiCredentials);
+//     Serial.println("Sending new wifi credentials to ESP: ");
+//     Serial.println(wifiCredentials);
     
-    Serial1.print(wifiCredentials);
-    delay(200);
-    Serial1.setTimeout(500000);
-    String response = Serial1.readStringUntil('\r');
-    Serial.println("Trying to connect to the network. Please give up to 1 minute...");
-    Serial1.flush();
-    if (response == "not connected" || response.length() < 2)
-    {
-        Serial.println("Did not connect to the wifi. Doing a system restart now...");
-        return 0;
-    }
-    else
-    {
-        Serial.println("Conected to the wifi. This is your local IP: ");
-        Serial.println(response);
-        return 1;
-    }
-}
+//     Serial1.print(wifiCredentials);
+//     delay(200);
+//     Serial1.setTimeout(500000);
+//     String response = Serial1.readStringUntil('\r');
+//     Serial.println("Trying to connect to the network. Please give up to 1 minute...");
+//     Serial1.flush();
+//     if (response == "not connected" || response.length() < 2)
+//     {
+//         Serial.println("Did not connect to the wifi. Doing a system restart now...");
+//         return 0;
+//     }
+//     else
+//     {
+//         Serial.println("Conected to the wifi. This is your local IP: ");
+//         Serial.println(response);
+//         return 1;
+//     }
+// }
 
 //ask the ESP if it has a wifi connection
-void getESPWifi(void){
+// void getESPWifi(void){
     
-    String wifiStatus = "";
-    Serial1.print("!$&");
-    Serial.println("Checking your wifi status. This may take a minute.....");
+//     String wifiStatus = "";
+//     Serial1.print("!$&");
+//     Serial.println("Checking your wifi status. This may take a minute.....");
     
-    Serial1.setTimeout(50000);
-    wifiStatus = Serial1.readStringUntil('\r');
-    if (wifiStatus.length() < 2 || wifiStatus == "not connected")
-    {
-        Serial.println("You are not connected wifi");
-    }
-    else
-    {
-        Serial.println("You are connected to wifi. This is your local IP address...");
-        Serial.println(wifiStatus);
-    }
-}
+//     Serial1.setTimeout(50000);
+//     wifiStatus = Serial1.readStringUntil('\r');
+//     if (wifiStatus.length() < 2 || wifiStatus == "not connected")
+//     {
+//         Serial.println("You are not connected wifi");
+//     }
+//     else
+//     {
+//         Serial.println("You are connected to wifi. This is your local IP address...");
+//         Serial.println(wifiStatus);
+//     }
+// }
 
 // float getEspOzoneData(void){
 //     float ozone_value = 0.0;
@@ -2994,7 +3009,7 @@ void serialMenu(){
     else if(incomingByte == 'v'){
         serialGetDeviceId();
     }else if(incomingByte == 'w'){
-        serialGetWifiCredentials();
+        // serialGetWifiCredentials();
     }else if(incomingByte == 'y'){
         if(serial_cellular_enabled == 0){
             Serial.println("Enabling Cellular.");
@@ -3196,7 +3211,7 @@ void serialMenu(){
     }
     else if (incomingByte == 'Y')
     {
-        getESPWifi();
+        // getESPWifi();
     }
     else if(incomingByte == '1'){
         serialGetNO2Slope();
@@ -3452,86 +3467,86 @@ void serialIncreaseChargeCurrent(void){
     Serial.printf("new charge current of %d mA\n\r", total_current);
 }
 
-void serialGetWifiCredentials(void)
-{
-    Serial.println("You would like to pick a wifi network. One second while we scan for available networks...");
+// void serialGetWifiCredentials(void)
+// {
+//     Serial.println("You would like to pick a wifi network. One second while we scan for available networks...");
 
-    String availableNetworks = "!#";
-    availableNetworks += checksumMaker(availableNetworks);
-    delay(4000); // This is to make sure it clears out the serial line
-    Serial1.println(availableNetworks);
-    bool notDone = true;
-    int count = 0;
-    char char_array[500];
-    availableNetworks = "";
+//     String availableNetworks = "!#";
+//     availableNetworks += checksumMaker(availableNetworks);
+//     delay(4000); // This is to make sure it clears out the serial line
+//     Serial1.println(availableNetworks);
+//     bool notDone = true;
+//     int count = 0;
+//     char char_array[500];
+//     availableNetworks = "";
 
-    while (notDone)
-    {
-        if (Serial1.available())
-        {
-            char inchar = (char)Serial1.read();
-            availableNetworks += String(inchar);
-            count++;
-            if (inchar == '&')
-                notDone = false;
-        }
-    }
+//     while (notDone)
+//     {
+//         if (Serial1.available())
+//         {
+//             char inchar = (char)Serial1.read();
+//             availableNetworks += String(inchar);
+//             count++;
+//             if (inchar == '&')
+//                 notDone = false;
+//         }
+//     }
 
-    if (availableNetworks == "no networks found&")
-    {
-        Serial.println("There are no available networks in your area");
-        return ;
-    }
+//     if (availableNetworks == "no networks found&")
+//     {
+//         Serial.println("There are no available networks in your area");
+//         return ;
+//     }
 
-    Serial.println("This is a list of the available networks: ");
-    availableNetworks = availableNetworks.substring(0, availableNetworks.length()-1);
-    Serial.println(availableNetworks);
+//     Serial.println("This is a list of the available networks: ");
+//     availableNetworks = availableNetworks.substring(0, availableNetworks.length()-1);
+//     Serial.println(availableNetworks);
 
-    Serial.println("Please enter the number of the network you would like to connect to: ");
-    Serial.setTimeout(50000);
-    String tempString = Serial.readStringUntil('\r');
-    notDone = true;
-    int i = 0;
-    while (availableNetworks[0] != '1')
-    {
-        availableNetworks = availableNetworks.substring(1, availableNetworks.length());
-    }
-    while(notDone && availableNetworks.length() > 2)
-    {
-        int placeHolder = tempString.toInt();
-        if (i+1 == tempString.toInt())
-        {
-            notDone = false;
-            tempString = availableNetworks.substring(availableNetworks.indexOf(':')+2, availableNetworks.indexOf('\n\r'));
-        }
-        else
-        {
-            availableNetworks = availableNetworks.substring(availableNetworks.indexOf('\n\r')+2, availableNetworks.length());
-        }
-        i++;
-    }
-    Serial.println("You have chosen network: ");
-    Serial.println(tempString);
+//     Serial.println("Please enter the number of the network you would like to connect to: ");
+//     Serial.setTimeout(50000);
+//     String tempString = Serial.readStringUntil('\r');
+//     notDone = true;
+//     int i = 0;
+//     while (availableNetworks[0] != '1')
+//     {
+//         availableNetworks = availableNetworks.substring(1, availableNetworks.length());
+//     }
+//     while(notDone && availableNetworks.length() > 2)
+//     {
+//         int placeHolder = tempString.toInt();
+//         if (i+1 == tempString.toInt())
+//         {
+//             notDone = false;
+//             tempString = availableNetworks.substring(availableNetworks.indexOf(':')+2, availableNetworks.indexOf('\n\r'));
+//         }
+//         else
+//         {
+//             availableNetworks = availableNetworks.substring(availableNetworks.indexOf('\n\r')+2, availableNetworks.length());
+//         }
+//         i++;
+//     }
+//     Serial.println("You have chosen network: ");
+//     Serial.println(tempString);
 
-    Serial.println("Enter the password");
-    String tempPassword = Serial.readStringUntil('\r');
-    Serial.print("Your new password will be: ");
-    Serial.println(tempPassword);
-    Serial.println("Is this correct?(y or n)");
-    String ok = Serial.readStringUntil('\r');
-    if(ok.equals("y")){
-        Serial.println("Saving new password");
-        ssid = tempString;
-        password = tempPassword;
-        sendWifiInfo();
-    }
-    else
-    {
-        Serial.println("Leaving network settings now. Restart to retry.");
-    }
+//     Serial.println("Enter the password");
+//     String tempPassword = Serial.readStringUntil('\r');
+//     Serial.print("Your new password will be: ");
+//     Serial.println(tempPassword);
+//     Serial.println("Is this correct?(y or n)");
+//     String ok = Serial.readStringUntil('\r');
+//     if(ok.equals("y")){
+//         Serial.println("Saving new password");
+//         ssid = tempString;
+//         password = tempPassword;
+//         sendWifiInfo();
+//     }
+//     else
+//     {
+//         Serial.println("Leaving network settings now. Restart to retry.");
+//     }
 
-    return ;
-}
+//     return ;
+// }
 void serialSetSensibleIotEnable(void){
     Serial.println("Please enter password in order to enable data push to Sensible Iot");
     Serial.setTimeout(50000);
