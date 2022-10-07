@@ -1186,7 +1186,7 @@ void loop() {
     //read PM values and apply calibration factors
     readPlantower();
 
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+    pm_25_correction_factor = 1;
     if(debugging_enabled){
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
         Serial.printf("PM2.5 value befor correction: %d\n", PM2_5Value);
