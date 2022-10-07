@@ -50,7 +50,6 @@
 #include "CellularHelper.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
-String checksumMaker(String data);
 void outputToCloudAveraging();
 void outputToCloud(String data);
 void check_wifi_file(void);
@@ -499,6 +498,7 @@ void enableContinuousGPS(void);
 void changeFrequency(void);
 void sendPacket(byte *packet, byte len);
 void sendPacket(byte *packet, byte len);
+String checksumMaker(String data);
 
 //google api callback
 void locationCallback(float lat, float lon, float accuracy);
@@ -508,7 +508,6 @@ void powerUpErrorHandler(HIH61xx<TwoWire>& hih)
   Serial.println("Error powering up HIH61xx device");
   //digitalWrite(clearDebounce, LOW);
 }
-
 
 void readErrorHandler(HIH61xx<TwoWire>& hih)
 {
@@ -2409,7 +2408,7 @@ void outputDataToESP(void){
     csv_output_string += String(CO_float, 3) + ",";
     cloud_output_string += String(CARBON_DIOXIDE_PACKET_CONSTANT) + String(CO2_float, 0);
     csv_output_string += String(CO2_float, 0) + ",";
-    if (NO2_enabled)
+    if (NO2_enabled == 1)
     {
         cloud_output_string += String(NO2_PACKET_CONSTANT) + String(NO2_float, 3);
         csv_output_string += String(NO2_float, 3) + ",";
@@ -2491,7 +2490,8 @@ void outputDataToESP(void){
 
     if (sendBluetooth)
     {
-        Serial1.println(cloud_output_string);
+        String checkSumString = cloud_output_string+checksumMaker(cloud_output_string);
+        Serial1.println(checkSumString);
         sendBluetooth = false;
     }
     
