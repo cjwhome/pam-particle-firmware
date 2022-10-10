@@ -45,10 +45,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(2735);
-PRODUCT_VERSION(6);
+PRODUCT_VERSION(12);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 21
+#define BUILD_VERSION 22
 
 
 //define constants
@@ -1776,16 +1776,16 @@ float readAlpha1(void){
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
-          correctedCurrent = ((sensorCurrent) - (auxCurrent));
-        }
-        else if(readTemperature() <= 25){
-          correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
-        }
-        else{
-          correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
-        }
-        alpha1_ppmraw = (correctedCurrent / -0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        // if(readTemperature() <= 15){
+        //   correctedCurrent = ((sensorCurrent) - (auxCurrent));
+        // }
+        // else if(readTemperature() <= 25){
+        //   correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
+        // }
+        // else{
+        //   correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
+        // }
+        alpha1_ppmraw = (sensorCurrent / -0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha1_ppmRounded = String(alpha1_ppmraw, 2);
       }
 

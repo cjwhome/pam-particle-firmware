@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -107,12 +107,12 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 47 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 47 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
-PRODUCT_VERSION(6);
+PRODUCT_VERSION(12);
 
 #define APP_VERSION 7
-#define BUILD_VERSION 21
+#define BUILD_VERSION 22
 
 
 //define constants
@@ -1250,7 +1250,7 @@ void loop() {
     //read PM values and apply calibration factors
     readPlantower();
 
-    pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
+    pm_25_correction_factor = 1;
     if(debugging_enabled){
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
         Serial.printf("PM2.5 value befor correction: %d\n", PM2_5Value);
@@ -1840,16 +1840,16 @@ float readAlpha1(void){
         sensorCurrent = (volt_half_Vref - volt0_gas) / (-1*120); // Working Electrode current in microamps (millivolts / Kohms)
         auxCurrent = (volt_half_Vref - volt1_aux) / (-1*150);
         //{1, -1, -0.76}, //CO-A4 (<=10C, 20C, >=30C)
-        if(readTemperature() <= 15){
-          correctedCurrent = ((sensorCurrent) - (auxCurrent));
-        }
-        else if(readTemperature() <= 25){
-          correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
-        }
-        else{
-          correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
-        }
-        alpha1_ppmraw = (correctedCurrent / -0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
+        // if(readTemperature() <= 15){
+        //   correctedCurrent = ((sensorCurrent) - (auxCurrent));
+        // }
+        // else if(readTemperature() <= 25){
+        //   correctedCurrent = ((sensorCurrent) - (-1)*(auxCurrent));
+        // }
+        // else{
+        //   correctedCurrent = ((sensorCurrent) - (-0.76)*(auxCurrent));
+        // }
+        alpha1_ppmraw = (sensorCurrent / -0.358); //sensitivity .358 nA/ppb - from Alphasense calibration certificate, So .358 uA/ppm
         alpha1_ppmRounded = String(alpha1_ppmraw, 2);
       }
 
@@ -1902,8 +1902,6 @@ float readAlpha2(void){
           //delay(200);
           //digitalWrite(red_status_led, LOW);
           //delay(200);
-          Serial.print("half vref2 ads1");
-          Serial.println(volt_half_Vref/1000);
 
         }
     }
