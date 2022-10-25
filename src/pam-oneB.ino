@@ -8,7 +8,6 @@
 #include "LMP91000.h"
 #include "Serial4/Serial4.h"
 #include "Serial5/Serial5.h"
-#include "gps.h"
 #include "inttypes.h"
 #include "Particle.h"
 #include "PowerCheck.h"
@@ -21,7 +20,7 @@
 #include "SerialBufferRK.h"
 
 PRODUCT_ID(15083);
-PRODUCT_VERSION(8);
+PRODUCT_VERSION(10);
 bool haveOfflineData = false;
 String diagnosticData = "";
 
@@ -164,6 +163,9 @@ int sound_input = B5;       //ozone monitor's voltage output is connected to thi
 int co2_en = C5;            //enables the CO2 sensor power
 int plantower_select = D3;
 
+String horizontalDilution = "Not-Set";
+String numSatellites = "Not-Set";
+
 std::allocator<String> alloc;
 std::vector<String> diagnostics;
 
@@ -181,7 +183,6 @@ LMP91000 lmp91000_2;
 Adafruit_ADS1115 ads1(0x49); //Set I2C address of ADC1
 Adafruit_ADS1115 ads2(0x4A); //Set I2C address of ADC2
 FuelGauge fuel;
-GPS gps;
 PMIC pmic;
 PowerCheck powerCheck;
 time_t systemTime;
@@ -246,8 +247,8 @@ int sensible_iot_en = 0;
 int car_topper_power_en = 0;
 double measurement_number = 0;
 
-char geolocation_latitude[12] = "999.9999999";
-char geolocation_longitude[13] = "99.9999999";
+String geolocation_latitude = "39.798990";
+String geolocation_longitude = "-104.932385";
 char geolocation_accuracy[6] = "255.0";
 
 //used for averaging
@@ -319,6 +320,8 @@ union{
 char cellular_status = 0;
 char gps_status = 0;
 
+String accumulated_data = "";
+
 /*
 The status is being parsed as the last two bytes that are received from the BLE packet, bytes 19 and 20 (indexed from 0). Bit 15 is the MSB of byte 19, and bit 0 is the LSB of byte 20.
 
@@ -372,6 +375,8 @@ void serialTestRemoteFunction(void);
 void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
 
+String sendGPSData(String i);
+
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
 void echoGps();
@@ -412,39 +417,52 @@ void writeRegister(uint8_t reg, uint8_t value)
     Wire3.endTransmission(true);
 }
 
-void outputToCloud(String data, String sensible_data)
+void outputToCloud(String data) 
 {
-    String webhook_data = " ";
-    if(Particle.connected() && serial_cellular_enabled)
+    measurement_count++;
+    String finalData = "";
+    if (measurement_count == measurements_to_average)
     {
-        status_word.status_int |= 0x0002;
-        Particle.publish("pamup", data, PRIVATE);
-        Particle.process(); //attempt at ensuring the publish is complete before sleeping
-        if(debugging_enabled)
+        measurement_count = 0;
+        if (measurements_to_average <= 20)
         {
-            Serial.println("Published pamup data!");
-            writeLogFile("Published pamup data!");
-        }
-    }
-    else
-    {
-        if(serial_cellular_enabled == 0)
-        {
-            if(debugging_enabled)
+            if (accumulated_data.length()+data.length() >= 500)
             {
-                Serial.println("Cellular is disabled.");
-                writeLogFile("Cellular is disabled.");
+                finalData = accumulated_data;
+                accumulated_data = data; 
+            }
+            else
+            {
+                if (accumulated_data == "")
+                {
+                    accumulated_data = data;
+                }
+                accumulated_data += "," + data;
             }
         }
         else
         {
-            status_word.status_int &= 0xFFFD;   //clear the connected bit
-            if(debugging_enabled)
+            finalData = data;
+        }
+        if (finalData != "")// This is a check to see if we are either above the measurements to average threshold of putting together uploads, or if that bulk upload is ready to be sent up.
+        {
+            if (sensible_iot_en == 1)
             {
-                Serial.println("Couldn't connect to particle.");
-                writeLogFile("Couldn't connect to particle.");
+                finalData += '2';
+            }
+            else
+            { 
+                finalData += "0";
+            }
+            if (Particle.connected())
+            {
+                if(debugging_enabled)
+                    Serial.println("in OutputToCloud Publishing!");
+                Particle.publish("uploadCellular", finalData, PRIVATE);
+                Particle.process();
             }
         }
+        measurement_count = 0;
     }
 }
 
@@ -702,6 +720,10 @@ void setup()
     Particle.function("geteepromdata", remoteReadStoredVars);
     Particle.function("setEEPROM (value,address)", setEEPROMAddress);
     Particle.function("restartPAM", restartPAM);
+    Particle.variable("Number of Satellites", numSatellites);
+    Particle.variable("Horizontal Dillution", horizontalDilution);
+    Particle.variable("Latitude", geolocation_latitude);
+    Particle.variable("Longitude", geolocation_longitude);
     //Particle.variable("CO_zeroA", CO_zeroA);
     //debugging_enabled = 1;  //for testing...
     //initialize serial1 for communication with BLE nano from redbear labs
@@ -857,9 +879,7 @@ void loop()
 
     //read CO values and apply calibration factors
     CO_float_A = readCO_A();
-    CO_float_B = readCO_B();
-    readGpsStream();
-    readGpsStreamDate();        //get the gps date and time along with the cellular time and determine which one to output
+    CO_float_B = readCO_B();      //get the gps date and time along with the cellular time and determine which one to output
                                 //if no gps connection, use the cellular time.
 
     systemTime = Time.now();
@@ -987,275 +1007,6 @@ void echoGps()
     Serial5.write()
 }*/
 
-void readGpsStream(void) 
-{
-    String gps_sentence = "init";
-    int stringFound = 0;
-    int error = 0;
-    int comma_counter = 0;
-    while (!stringFound && !error) 
-    {
-        gps_sentence = Serial5.readStringUntil('\r');
-        String prefix_string = gps_sentence.substring(4, 7);
-        if (prefix_string.equals("GGA")) 
-        {
-            //Serial.print("prefix string: ");
-            //Serial.println(prefix_string);
-            //Serial.print("String:");
-            //Serial.println(gps_sentence);
-            stringFound = 1;
-        }
-        else if (gps_sentence.equals("init")) 
-        {
-            error = 1;
-            Serial.println("Error reading GPS");
-            writeLogFile("Error reading GPS");
-        }
-    }
-    if (stringFound) 
-    {
-        //parse the gps string into latitude, longitude
-        //UTC time is after first comma
-        //Latitude is after second comma (ddmm.mmmm)
-        //N/S indicator is after 3rd comma
-        //longitude is after 4th comma (dddmm.mmmm)
-        //E/W indicator is after 5th comma
-        //quality is after 6th comma
-        //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
-        //
-        comma_counter = 0;
-
-        String tempStr;
-        for (uint16_t a = 0; a < gps_sentence.length(); a++)
-        {
-            if (gps_sentence.charAt(a) == ',')
-            {
-                switch (comma_counter)
-                {
-                case TIME_FIELD_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 11);
-                        //Serial.print("GPS utc string: ");
-                        if (debugging_enabled)
-                        {
-                            Serial.print("GPS utc string: ");
-                            Serial.println(tempStr);
-                        }
-                        //Serial.println(utc_string);
-                    }
-                    break;
-
-                case LATITUDE_FIELD_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 10);
-                        if (debugging_enabled)
-                        {
-                            Serial.print("Latitude string: ");
-                            Serial.print(tempStr);
-                        }
-                        //Serial.print("Latitude string: ");
-                        //Serial.print(latitudeString);
-                        //Serial.print(" ");
-                        //Serial.println(gps_sentence.charAt(a+12));
-                        gps.set_lat_decimal(tempStr, gps_sentence.charAt(a + 12));
-                        status_word.status_int &= 0xFFF7;
-                        //Serial.print("Latitude decimal: ");
-                        //Serial.println(gps.get_latitude(), 5);
-                    }
-                    break;
-
-                case LONGITUDE_FIELD_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 11);
-                        if (debugging_enabled) {
-                            Serial.print("longitude string: ");
-                            Serial.print(tempStr);
-                        }
-                        //Serial.print(" ");
-                        //Serial.println(gps_sentence.charAt(a+13));
-                        gps.set_long_decimal(tempStr, gps_sentence.charAt(a + 13));
-                        //Serial.print("Longitude decimal: ");
-                        //Serial.println(gps.get_longitude(), 5);
-                    }
-                    break;
-
-                case NUMBER_OF_SATELLITES_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 3);
-                        gps.set_satellites(tempStr);
-                    }
-                    break;
-
-                case HORIZONTAL_DILUTION_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 3);
-                        gps.set_horizontalDilution(tempStr);
-                        status_word.status_int &= 0xFFF3;
-                        if (gps.get_horizontalDilution() < 2)
-                        {
-                            status_word.status_int |= 0x000C;
-                        }
-                        else if (gps.get_horizontalDilution() < 5)
-                        {
-                            status_word.status_int |= 0x0008;
-                        }
-                        else if (gps.get_horizontalDilution() < 20)
-                        {
-                            status_word.status_int |= 0x0004;
-                        }
-                    }
-                    break;
-
-                default:
-                    //Serial.printf("BAD index in readGpsStream\n");
-                    break;
-                }
-                comma_counter++;
-            }
-        }
-    }
-}
-
-void readGpsStreamDate(void)
-{
-    String gps_sentence = "init";
-    int stringFound = 0;
-    int error = 0;
-    int comma_counter = 0;
-    String prefix_string;
-    while (!stringFound && !error)
-    {
-        gps_sentence = Serial5.readStringUntil('\r');
-        prefix_string = gps_sentence.substring(4, 7);
-        if (prefix_string.equals("RMC"))
-        {
-            //Serial.print("prefix string: ");
-            //Serial.println(prefix_string);
-            //Serial.print("String:");
-            //Serial.println(gps_sentence);
-            stringFound = 1;
-        }
-        else if (gps_sentence.equals("init"))
-        {
-            error = 1;
-            Serial.println("Error reading GPS RMC");
-            writeLogFile("Error reading GPS RMC");
-        }
-    }
-    if (stringFound)
-    {
-        //parse the gps string into latitude, longitude
-        //UTC time is after first comma
-        //Latitude is after second comma (ddmm.mmmm)
-        //N/S indicator is after 3rd comma
-        //longitude is after 4th comma (dddmm.mmmm)
-        //E/W indicator is after 5th comma
-        //quality is after 6th comma
-        //gps_sentence = String("$GNGGA,011545.00,3945.81586,N,10514.09384,W,1,08,1.28,1799.4,M,-21.5,M,,*40");
-        comma_counter = 0;
-
-        String tempStr;
-        for (uint16_t a = 0; a < gps_sentence.length(); a++)
-        {
-            if (gps_sentence.charAt(a) == ',')
-            {
-                switch (comma_counter)
-                {
-                case DATE_FIELD_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 11);
-                        //Serial.print("GPS utc string: ");
-                        if (debugging_enabled)
-                        {
-                            Serial.print("GPS utc string: ");
-                            Serial.println(tempStr);
-                        }
-                        //Serial.println(utc_string);
-                    }
-                    break;
-
-                case LATITUDE_FIELD_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 10);
-                        if (debugging_enabled) {
-                            Serial.print("Latitude string: ");
-                            Serial.print(tempStr);
-                        }
-                        //Serial.print("Latitude string: ");
-                        //Serial.print(latitudeString);
-                        //Serial.print(" ");
-                        //Serial.println(gps_sentence.charAt(a+12));
-                        gps.set_lat_decimal(tempStr, gps_sentence.charAt(a + 12));
-                        status_word.status_int &= 0xFFF7;
-                        //Serial.print("Latitude decimal: ");
-                        //Serial.println(gps.get_latitude(), 5);
-                    }
-                    break;
-
-                case LONGITUDE_FIELD_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 11);
-                        if (debugging_enabled)
-                        {
-                            Serial.print("longitude string: ");
-                            Serial.print(tempStr);
-                        }
-                        //Serial.print(" ");
-                        //Serial.println(gps_sentence.charAt(a+13));
-                        gps.set_long_decimal(tempStr, gps_sentence.charAt(a + 13));
-                        //Serial.print("Longitude decimal: ");
-                        //Serial.println(gps.get_longitude(), 5);
-                    }
-                    break;
-
-                //TODO, make sure this is OK
-                //case NUMBER_OF_SATELLITES_INDEX:
-                case 5:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 3);
-                        gps.set_satellites(tempStr);
-                    }
-                    break;
-
-                case HORIZONTAL_DILUTION_INDEX:
-                    if (gps_sentence.charAt(a + 1) != ',')
-                    {
-                        tempStr = gps_sentence.substring(a + 1, a + 3);
-                        gps.set_horizontalDilution(tempStr);
-                        status_word.status_int &= 0xFFF3;
-                        if (gps.get_horizontalDilution() < 2)
-                        {
-                            status_word.status_int |= 0x000C;
-                        }
-                        else if (gps.get_horizontalDilution() < 5)
-                        {
-                            status_word.status_int |= 0x0008;
-                        }
-                        else if (gps.get_horizontalDilution() < 20)
-                        {
-                            status_word.status_int |= 0x0004;
-                        }
-                    }
-                    break;
-
-                default:
-                    //Serial.println("Received bad index in readGpsStreamDate");
-                    break;
-                }
-                comma_counter++;
-            }
-        }
-    }
-}
 
 // Send a packet to the receiver to change frequency to 100 ms.
 void changeFrequency()
@@ -1778,51 +1529,16 @@ void outputDataToESP(void)
 
     cloud_output_string += String(LATITUDE_PACKET_CONSTANT);
 
-    if (gps.get_latitude() != 0)
-    {
-        if (gps.get_nsIndicator() == 0)
-        {
-            csv_output_string += "-";
-            cloud_output_string += "-";
-        }
-        csv_output_string += String(gps.get_latitude()) + ",";
-        cloud_output_string += String(gps.get_latitude());
-    }
-    else
-    {
+
         csv_output_string += String(geolocation_latitude) + ",";
         cloud_output_string += String(geolocation_latitude);
-    }
 
     cloud_output_string += String(LONGITUDE_PACKET_CONSTANT);
 
-    if (gps.get_longitude() != 0)
-    {
-        if (gps.get_ewIndicator() == 0x01)
-        {
-            csv_output_string += "-";
-            cloud_output_string += "-";
-        }
-        csv_output_string += String(gps.get_longitude()) + ",";
-        cloud_output_string += String(gps.get_longitude());
-    }
-    else
-    {
         csv_output_string += String(geolocation_longitude) + ",";
         cloud_output_string += String(geolocation_longitude);
-    }
 
     cloud_output_string += String(ACCURACY_PACKET_CONSTANT);
-    if (gps.get_longitude() != 0)
-    {
-        csv_output_string += String(gps.get_horizontalDilution() / 10.0) + ",";
-        cloud_output_string += String(gps.get_horizontalDilution() / 10.0);
-    }
-    else
-    {
-        csv_output_string += String(geolocation_accuracy) + ",";
-        cloud_output_string += String(geolocation_accuracy);
-    }
 
     csv_output_string += String(status_word.status_int) + ",";
     csv_output_string += String(Time.format(time, "%d/%m/%y,%H:%M:%S"));
@@ -1833,7 +1549,7 @@ void outputDataToESP(void)
         Serial.println(cloud_output_string);
     }
 
-    //outputToCloud(cloud_output_string, "blahfornow");
+    outputToCloud(cloud_output_string);
 
     if (esp_wifi_connection_status)
     {
@@ -1976,35 +1692,6 @@ void outputDataToESP(void)
         ble_output_array[6 + i * (BLE_PAYLOAD_SIZE)] = floatBytes.bytes[1];
         ble_output_array[7 + i * (BLE_PAYLOAD_SIZE)] = floatBytes.bytes[2];
         ble_output_array[8 + i * (BLE_PAYLOAD_SIZE)] = floatBytes.bytes[3];
-
-        //bytes 9-12 - latitude
-        wordBytes.myWord = gps.get_latitudeWhole();
-        ble_output_array[9 + i * (BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[10 + i * (BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        wordBytes.myWord = gps.get_latitudeFrac();
-        ble_output_array[11 + i * (BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[12 + i * (BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        //bytes 14-17 - longitude
-        wordBytes.myWord = gps.get_longitudeWhole();
-        ble_output_array[13 + i * (BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[14 + i * (BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        wordBytes.myWord = gps.get_longitudeFrac();
-        ble_output_array[15 + i * (BLE_PAYLOAD_SIZE)] = wordBytes.bytes[0];
-        ble_output_array[16 + i * (BLE_PAYLOAD_SIZE)] = wordBytes.bytes[1];
-
-        //byte 18 - east west and north south indicator
-        //  LSB 0 = East, LSB 1 = West
-        //  MSB 0 = South, MSB 1 = North
-        int northSouth = gps.get_nsIndicator();
-        int eastWest = gps.get_ewIndicator();
-
-        ble_output_array[17 + i * (BLE_PAYLOAD_SIZE)] = northSouth | eastWest;
-        ble_output_array[18 + i * (BLE_PAYLOAD_SIZE)] = gps.get_horizontalDilution();
-        ble_output_array[19 + i * (BLE_PAYLOAD_SIZE)] = status_word.byte[1];
-        ble_output_array[20 + i * (BLE_PAYLOAD_SIZE)] = status_word.byte[0];
 
         ble_output_array[21 + i * (BLE_PAYLOAD_SIZE)] = '#';     //delimeter for separating species
     }
@@ -3239,31 +2926,9 @@ void outputCOtoPI(void)
 
     CO_string += String(CO_float_A, 3) + ",";
     CO_string += String(CO_float_B, 3) + ",";
-    if (gps.get_latitude() != 0)
-    {
-        if (gps.get_nsIndicator() == 0)
-        {
-            CO_string += "-";
-        }
-        CO_string += String(gps.get_latitude()) + ",";
-    }
-    else
-    {
-        CO_string += String(geolocation_latitude) + ",";
-    }
+        CO_string += String(geolocation_latitude)+",";
 
-    if (gps.get_longitude() != 0)
-    {
-        if (gps.get_ewIndicator() == 0x01)
-        {
-            CO_string += "-";
-        }
-        CO_string += String(gps.get_longitude()) + ",";
-    }
-    else
-    {
-        CO_string += String(geolocation_longitude) + ",";
-    }
+        CO_string += String(geolocation_longitude)+",";
 
     if (Particle.connected())
     {
@@ -4230,6 +3895,11 @@ int setSerialNumber(String serialNumber)
     }
     EEPROM.put(DEVICE_ID_MEM_ADDRESS, serialNumber.toInt());
     return 1;
+}
+
+String sendGPSData(String i)
+{
+    return numSatellites+","+horizontalDilution;
 }
 
 
