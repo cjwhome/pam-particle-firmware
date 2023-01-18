@@ -1515,11 +1515,22 @@ void loop()
     //getEspWifiStatus();
     if (Serial1.available())
     {
-        sendBluetooth = true;
+        String espMessage = "";
         while(Serial1.available())
         {
-            Serial1.read();
+            espMessage += Serial1.readStringUntil('\n');
         }
+        espMessage.trim();
+        Serial.println("The esp message: "+espMessage);
+        if (espMessage.indexOf("CO2Cal") != -1)
+        {
+            calibrateCO2("1");
+        }
+        else if (espMessage.indexOf("Done") != -1)
+        {
+            sendBluetooth = true;
+        }
+
         Serial1.flush();
     }
     outputDataToESP();
@@ -3259,19 +3270,21 @@ void serialMenu(){
     }
     else if (incomingByte == 'W')
     {
-        if (wifi_enabled == 0)
-        {
-            Serial.println("Enabling wifi uploads...");
-            EEPROM.put(WIFI_ENABLED, 1);
-            wifi_enabled = 1;
-        }
-        else
-        {
-            Serial.println("Disabling wifi uploads... ");
-            EEPROM.put(WIFI_ENABLED, 0);
-            wifi_enabled = 0;
+        Serial.println("Switching BLE types now...");
+        Serial1.println("SWITCHBLE");
+        // if (wifi_enabled == 0)
+        // {
+        //     Serial.println("Enabling wifi uploads...");
+        //     EEPROM.put(WIFI_ENABLED, 1);
+        //     wifi_enabled = 1;
+        // }
+        // else
+        // {
+        //     Serial.println("Disabling wifi uploads... ");
+        //     EEPROM.put(WIFI_ENABLED, 0);
+        //     wifi_enabled = 0;
 
-        }
+        // }
     }
     else if (incomingByte == 'Y')
     {
@@ -4377,7 +4390,7 @@ void outputSerialMenuOptions(void){
     Serial.println("T:  Enable/disable HIH8120 RH sensor");
     Serial.println("U:  Set coreId");
     Serial.println("V:  Calibrate CO2 sensor - must supply ambient level (go outside!)");
-    // Serial.println("W:  Enable/ Disable wifi (This will turn off cellular uploads)");
+    Serial.println("W:  Change Bluetooth type (Beacon or Direct Connect");
     // Serial.println("Y:  Check wifi status");
     Serial.println("Z:  Output cellular information (CCID, IMEI, etc)");
 
