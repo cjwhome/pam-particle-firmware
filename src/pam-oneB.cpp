@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/austi/OldPAM/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -106,7 +106,7 @@ void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
-#line 47 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
+#line 47 "c:/Users/austi/OldPAM/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(10);
 
@@ -1521,7 +1521,6 @@ void loop()
             espMessage += Serial1.readStringUntil('\n');
         }
         espMessage.trim();
-        Serial.println("The esp message: "+espMessage);
         if (espMessage.indexOf("CO2Cal") != -1)
         {
             calibrateCO2("1");

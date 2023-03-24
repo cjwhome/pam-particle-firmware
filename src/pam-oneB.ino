@@ -1458,7 +1458,6 @@ void loop()
             espMessage += Serial1.readStringUntil('\n');
         }
         espMessage.trim();
-        Serial.println("The esp message: "+espMessage);
         if (espMessage.indexOf("CO2Cal") != -1)
         {
             calibrateCO2("1");
