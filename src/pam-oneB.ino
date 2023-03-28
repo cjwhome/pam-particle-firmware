@@ -2917,10 +2917,16 @@ void readSensirion(void){
   } while (ret != SPS30_ERR_OK);
 
     //Serial.printf("PM1:%1.1f,PM2.5:%1.1f,PM10:%1.1f,", val.MassPM1, val.MassPM2, val.MassPM10);
-
-    PM01Value=val.MassPM1; //count PM1.0 value of the air detector module
-    PM2_5Value=val.MassPM2;//count PM2.5 value of the air detector module
-    PM10Value=val.MassPM10; //count PM10 value of the air detector module
+    if (ret == SPS30_ERR_OK)
+    {
+        PM01Value=val.MassPM1; //count PM1.0 value of the air detector module
+        PM2_5Value=val.MassPM2;//count PM2.5 value of the air detector module
+        PM10Value=val.MassPM10; //count PM10 value of the air detector module
+        Serial.println("The different value masses: ");
+        Serial.println(PM01Value);
+        Serial.println(PM2_5Value);
+        Serial.println(PM10Value);
+    }
 }
 
 void readPlantower(void){
