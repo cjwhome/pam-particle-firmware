@@ -48,6 +48,7 @@
 #include "SdFat.h"
 #include "HIH61xx.h"
 #include "CellularHelper.h"
+#include "../lib/sps30/src/sps30.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
 void outputToCloudAveraging();
@@ -70,6 +71,7 @@ float readAlpha1(float sensor_temperature, int species);
 float readAlpha2(float sensor_temperature, int species);
 float read_sensor_temperature(void);
 void outputDataToESP(void);
+void readSensirion(void);
 void readPlantower(void);
 char checkValue(char *thebuf, char leng);
 int transmitPM01(char *thebuf);
@@ -106,7 +108,7 @@ void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
 String buildAverageCloudString();
-#line 47 "c:/Users/austi/OldPAM/pam-particle-firmware/src/pam-oneB.ino"
+#line 48 "c:/Users/austi/OldPAM/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
 PRODUCT_VERSION(10);
 
@@ -299,6 +301,7 @@ float temperature_sum = 0;
 float PM1_sum = 0;
 float PM25_sum = 0;
 float PM10_sum = 0;
+SPS30 * sps30 = nullptr;
 
 int measurement_count = 0;
 int number_of_measurements_skip = NUMBER_OF_MEASUREMENTS_SKIP;
@@ -1191,10 +1194,70 @@ void setup()
     //initialize serial1 for communication with BLE nano from redbear labs
     Serial1.begin(9600);
     //init serial4 to communicate with Plantower PMS5003
-    Serial4.begin(9600);
+    Serial4.begin(115200);
     Serial5.begin(9600);        //gps is connected to this serial port
-    //set the Timeout to 1500ms, longer than the data transmission periodic time of the sensor
-    Serial4.setTimeout(5000);
+
+    // Begin communication channel;
+    sps30 = new SPS30();
+    if (!sps30->setSerialSpeed())
+        Serial.println("could not initialize communication channel.");
+
+    // check for SPS30 connection
+    if (! sps30->probe()) Serial.println("could not probe / connect with SPS30.");
+    else  Serial.println(F("Detected SPS30."));
+
+    // reset SPS30 connection
+    if (! sps30->reset()) Serial.println("could not reset.");
+
+    char buf[32];
+  uint8_t ret;
+  SPS30_version v;
+
+  //try to read serial number
+  ret = sps30->GetSerialNumber(buf, 32);
+  if (ret == SPS30_ERR_OK) {
+    Serial.print(F("Serial number : "));
+    if(strlen(buf) > 0)  Serial.println(buf);
+    else Serial.println(F("not available"));
+  }
+  else
+    Serial.println("could not get serial number");
+
+  // try to get product name
+  ret = sps30->GetProductName(buf, 32);
+  if (ret == SPS30_ERR_OK)  {
+    Serial.print(F("Product name  : "));
+
+    if(strlen(buf) > 0)  Serial.println(buf);
+    else Serial.println(F("not available"));
+  }
+  else
+    Serial.println("could not get product name.");
+
+  // try to get version info
+  ret = sps30->GetVersion(&v);
+  if (ret != SPS30_ERR_OK) {
+    Serial.println(F("Can not read version info"));
+    return;
+  }
+
+  Serial.print(F("Firmware level: "));  Serial.print(v.major);
+  Serial.print("."); Serial.println(v.minor);
+
+  // if (SP30_COMMS != I2C_COMMS) {
+    Serial.print(F("Hardware level: ")); Serial.println(v.HW_version);
+
+    Serial.print(F("SHDLC protocol: ")); Serial.print(v.SHDLC_major);
+    Serial.print("."); Serial.println(v.SHDLC_minor);
+  // }
+
+  Serial.print(F("Library level : "));  Serial.print(v.DRV_major);
+  Serial.print(".");  Serial.println(v.DRV_minor);
+
+  uint32_t val;
+  sps30->GetAutoCleanInt(&val);
+  Serial.println("Auto-cleaning interval: ");
+  Serial.println(val);
 
     // Setup the PMIC manually (resets the BQ24195 charge controller)
     // REG00 Input Source Control Register  (disabled)
@@ -1487,7 +1550,7 @@ void loop()
     // }
 
     //read PM values and apply calibration factors
-    readPlantower();
+    readSensirion();
 
     if(hih8120_enabled)
     {
@@ -2889,6 +2952,41 @@ void outputDataToESP(void){
 
 
 //read from plantower pms 5500
+
+void readSensirion(void){
+    uint8_t ret, error_cnt = 0;
+  struct sps_values val;
+  do {
+
+    ret = sps30->GetValues(&val);
+
+    // data might not have been ready
+    if (ret == SPS30_ERR_DATALENGTH){
+
+        if (error_cnt++ > 3) {
+          Serial.println("Data length error: ");
+          Serial.println(ret);
+          break;
+        }
+        delay(1000);
+    }
+
+    // if other error
+    else if(ret != SPS30_ERR_OK) {
+      Serial.println("Other Error: ");
+      Serial.println(ret);
+      break;
+    }
+
+  } while (ret != SPS30_ERR_OK);
+
+    //Serial.printf("PM1:%1.1f,PM2.5:%1.1f,PM10:%1.1f,", val.MassPM1, val.MassPM2, val.MassPM10);
+
+    PM01Value=val.MassPM1; //count PM1.0 value of the air detector module
+    PM2_5Value=val.MassPM2;//count PM2.5 value of the air detector module
+    PM10Value=val.MassPM10; //count PM10 value of the air detector module
+}
+
 void readPlantower(void){
     if(Serial4.find("B")){    //start to read when detect 0x42
         //if(debugging_enabled)
