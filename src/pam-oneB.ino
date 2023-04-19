@@ -1190,10 +1190,6 @@ void setup()
   Serial.print(F("Library level : "));  Serial.print(v.DRV_major);
   Serial.print(".");  Serial.println(v.DRV_minor);
 
-  uint32_t val;
-  sps30->GetAutoCleanInt(&val);
-  Serial.println("Auto-cleaning interval: ");
-  Serial.println(val);
 
     // Setup the PMIC manually (resets the BQ24195 charge controller)
     // REG00 Input Source Control Register  (disabled)
@@ -2890,6 +2886,8 @@ void outputDataToESP(void){
 //read from plantower pms 5500
 
 void readSensirion(void){
+    Serial4.flush();
+    // delay(1000);
     uint8_t ret, error_cnt = 0;
   struct sps_values val;
   do {
