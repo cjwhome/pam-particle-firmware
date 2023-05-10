@@ -139,7 +139,7 @@ float ads_bitmv = 0.1875; //Bits per mV at defined bit resolution, used to conve
 #define OZONE_PACKET_CONSTANT 'O'           //Ozone
 #define BATTERY_PACKET_CONSTANT 'x'         //Battery in percentage
 
-#define HEADER_STRING "DEV,CO(ppm),CO2(ppm),VOCs(IAQ),PM1,PM2_5,PM10,T(C),Press(mBar),RH(%),O3(ppb),Batt(%),Snd(db),Latitude,Longitude,N/A,N/A,Date/Time"
+#define HEADER_STRING "DEV,CO_A(ppm),CO_B(ppm).CO2(ppm),Press(mBar),Latitude,Longitude,SIV,Horizontal Dilution,Batt(%),Date,Time"
 
 
 #define NUMBER_OF_SPECIES 11    //total number of species (measurements) being output
@@ -244,8 +244,8 @@ int car_topper_power_en = 0;
 double measurement_number = 0;
 
 
-char geolocation_latitude[12] = "111.1111111";
-char geolocation_longitude[13] = "22.22222222";
+char geolocation_latitude[12] = "999.9999999";
+char geolocation_longitude[13] = "99.99999999";
 char geolocation_accuracy[6] = "255.0";
 
 //used for averaging
@@ -370,6 +370,13 @@ void serialResetSettings(void);
 void serialTestRemoteFunction(void);
 void serialIncreaseInputCurrent(void);
 void writeLogFile(String data);
+void outputCOtoPI(void);
+
+void serialSetSensibleIotEnable(void);
+void readAlpha1Constantly(void);
+void serialIncreaseChargeCurrent(void);
+void serialGetUpperLimit(void);
+void serialGetLowerLimit(void);
 
 void outputSerialMenuOptions(void);
 void outputToCloud(void);
@@ -385,6 +392,13 @@ int remoteWriteStoredVars(String addressAndValue);
 int remoteReadStoredVars(String mem_address);
 void writeDefaultSettings(void);
 void readHIH8120(void);
+void serialGetAverageTime(void);
+void serialGetWifiCredentials(void);
+void serialGetZone(void);
+void serialGetTimeDate(void);
+void serialGetCoSlope(void);
+void goToSleepBattery(void);
+void resetESP(void);
 
 //gps functions
 void enableLowPowerGPS(void);
@@ -631,6 +645,25 @@ void writeDefaultSettings(void){
     EEPROM.put(CAR_TOPPER_POWER_MEM_ADDRESS, 0);
 }
 
+float readCO2(void){
+    //read CO2 values and apply calibration factors
+    if(debugging_enabled){
+        t6713.readStatus(1);
+    }
+    CO2_float = t6713.readPPM();
+
+    if(CO2_float == 0){
+        CO2_float = CO2_float_previous;
+    }else{
+        CO2_float_previous = CO2_float;
+    }
+
+    CO2_float += CO2_zero;
+    CO2_float *= CO2_slope;
+
+    
+    return CO2_float;
+}
 
 void setup()
 {
@@ -845,6 +878,28 @@ void setup()
       ads2.setGain(GAIN_TWOTHIRDS);
     }
     //#endif
+    if(!t6713.begin()){
+      //Serial.println("Could not find a valid T6713 sensor, check wiring!");
+      if(debugging_enabled)
+          writeLogFile("Could not find a valid T6713");
+    }
+
+    if (!bme.begin()) {
+      Serial.println("Could not find a valid BME680 sensor, check wiring!");
+      if(debugging_enabled)
+          writeLogFile("Could not find a valid BME680 sensor, check wiring!");
+      //while (1);
+    }else{
+      Serial.println("Initialized BME Sensor");
+      if(debugging_enabled)
+        writeLogFile("Initialized BME Sensor");
+    }
+
+    bme.setTemperatureOversampling(BME680_OS_8X);
+    bme.setHumidityOversampling(BME680_OS_2X);
+    bme.setPressureOversampling(BME680_OS_4X);
+    bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
+    bme.setGasHeater(320, 150); // 320*C for 150 ms
     
     resetESP();
 
@@ -861,18 +916,37 @@ void setup()
     
     Log.info("System version: %s", (const char*)System.version());
     
-
+    Serial.println(HEADER_STRING);
 }
 
 
 void loop() {
-    Serial.println("Top of loop");
     measurement_number++;
 
 
     //read CO values and apply calibration factors
     CO_float_A = readCO_A();
     CO_float_B = readCO_B();
+    CO2_float = readCO2();
+    if (! bme.performReading()) {
+      Serial.println("Failed to read BME680");
+      writeLogFile("Failed to read BME680");
+      return;
+    }else{
+      if(debugging_enabled){
+        Serial.printf("Temp=%1.1f, press=%1.1f, rh=%1.1f\n\r", bme.temperature, bme.pressure/100, bme.humidity);
+      }
+    }
+    //correct for altitude
+    float pressure_correction = bme.pressure/100;
+    if(pressure_correction > LOW_PRESSURE_LIMIT && pressure_correction < HIGH_PRESSURE_LIMIT){
+        pressure_correction /= SEALEVELPRESSURE_HPA;
+        if(debugging_enabled){
+            // Serial.printf("pressure correction factor for CO2:%1.2f\n\r", pressure_correction);
+
+        }
+        CO2_float *= pressure_correction;
+    }
     readGpsStream();
     readGpsStreamDate();        //get the gps date and time along with the cellular time and determine which one to output
                                 //if no gps connection, use the cellular time.
@@ -900,41 +974,41 @@ void loop() {
         }
     }
 
-    if(serial_cellular_enabled){
-        status_word.status_int |= 0x01;
-        //Serial.println("Cellular is enabled.");
-      if (Particle.connected() == false && tried_cellular_connect == false) {
-        tried_cellular_connect = true;
-          if(debugging_enabled){
-            Serial.println("Connecting to cellular network");
-            writeLogFile("Connecting to cellular network");
-          }
-          Cellular.on();
-          if(debugging_enabled){
-            Serial.println("after cellularOn");
-            writeLogFile("After cellularOn");
-          }
-          Particle.connect();
-          if(debugging_enabled){
-            Serial.println("After particle connect");
-            writeLogFile("After particle connect");
-          }
-      }else if(Particle.connected() == true){  //this means that it is already connected
-        if(debugging_enabled){
-          Serial.println("setting tried_cellular_connect to false");
-        }
-        tried_cellular_connect = false;
-      }
-    }else{
-        //Serial.println("Cellular is disabled.");
-      if (Particle.connected() == true) {
-          if(debugging_enabled){
-            Serial.println("Disconnecting from cellular network");
-            writeLogFile("Disconnecting from cellular network");
-          }
-          Cellular.off();
-      }
-    }
+    // if(serial_cellular_enabled){
+    //     status_word.status_int |= 0x01;
+    //     //Serial.println("Cellular is enabled.");
+    //   if (Particle.connected() == false && tried_cellular_connect == false) {
+    //     tried_cellular_connect = true;
+    //       if(debugging_enabled){
+    //         Serial.println("Connecting to cellular network");
+    //         writeLogFile("Connecting to cellular network");
+    //       }
+    //       Cellular.on();
+    //       if(debugging_enabled){
+    //         Serial.println("after cellularOn");
+    //         writeLogFile("After cellularOn");
+    //       }
+    //       Particle.connect();
+    //       if(debugging_enabled){
+    //         Serial.println("After particle connect");
+    //         writeLogFile("After particle connect");
+    //       }
+    //   }else if(Particle.connected() == true){  //this means that it is already connected
+    //     if(debugging_enabled){
+    //       Serial.println("setting tried_cellular_connect to false");
+    //     }
+    //     tried_cellular_connect = false;
+    //   }
+    // }else{
+    //     //Serial.println("Cellular is disabled.");
+    //   if (Particle.connected() == true) {
+    //       if(debugging_enabled){
+    //         Serial.println("Disconnecting from cellular network");
+    //         writeLogFile("Disconnecting from cellular network");
+    //       }
+    //       Cellular.off();
+    //   }
+    // }
 
     //check power
     powerCheck.loop();
@@ -1333,13 +1407,12 @@ float readCO_A(void){
     float CO_float;
     
     CO_float = readAlpha1();
-   
+    CO_float *= CO_slopeA;
 
     float_offset = CO_zeroA;
     float_offset /= 1000;
 
-    //CO_float *= CO_slopeA;
-    //CO_float += float_offset;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -1349,15 +1422,13 @@ float readCO_B(void){
     float float_offset;
     float CO_float;
 
-    
     CO_float = readAlpha2();
+    CO_float *= CO_slopeB;
    
-
     float_offset = CO_zeroB;
     float_offset /= 1000;
 
-    //CO_float *= CO_slopeB;
-    //CO_float += float_offset;
+    CO_float += float_offset;
 
     return CO_float;
 }
@@ -1918,105 +1989,6 @@ void sendWifiInfo(void){
     Serial.println("Success!");
 }
 
-float getEspOzoneData(void){
-    float ozone_value = 0.0;
-    String getOzoneData = "Z&";
-    String recievedData = " ";
-    bool timeOut = false;
-    double counterIndex = 0;
-    //if esp doesn't answer, keep going
-    Serial1.setTimeout(3000);
-    if(debugging_enabled){
-        Serial.println("Getting ozone data from esp");
-        writeLogFile("Getting ozone data from esp");
-      }
-    Serial1.print(getOzoneData);
-    while(!Serial1.available() && timeOut == false){
-      //delay(1);
-      counterIndex++;
-      if(counterIndex > MAX_COUNTER_INDEX){
-        if(debugging_enabled){
-          Serial.printf("Unable to get ozone data from ESP, counter index: %1.1f\n\r", counterIndex);
-        }
-        timeOut = true;
-      }
-    }
-
-
-    delay(10);
-
-    recievedData = Serial1.readString();
-    //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
-    if(debugging_enabled)
-    {
-        Serial.print("RECIEVED DATA FROM ESP: ");
-        Serial.println(recievedData);
-        writeLogFile("Recieved data from ESP");
-    }
-    //parse data if not null
-    int comma_count = 0;
-    int from_index = 0;
-    int index_of_comma = 0;
-    bool still_searching_for_commas = true;
-    String stringArray[NUMBER_OF_FEILDS];
-
-    while(still_searching_for_commas && comma_count < NUMBER_OF_FEILDS){
-        //Serial.printf("From index: %d\n\r", from_index);
-
-        index_of_comma = recievedData.indexOf(',', from_index);
-        if(debugging_enabled){
-          Serial.print("comma index: ");
-          Serial.println(index_of_comma);
-          //writeLogFile("got a comma");
-
-        }
-
-        //if the index of the comma is not zero, then there is data.
-        if(index_of_comma > 0){
-            stringArray[comma_count] = recievedData.substring(from_index, index_of_comma);
-            if(debugging_enabled){
-                Serial.printf("String[%d]:", comma_count);
-                Serial.println(stringArray[comma_count]);
-                //writeLogFile(stringArray[comma_count]);
-            }
-            comma_count++;
-            from_index = index_of_comma;
-            from_index += 1;
-        }else{
-            int index_of_cr = recievedData.indexOf('\r', from_index);
-            if(index_of_cr > 0){
-                stringArray[comma_count] = recievedData.substring(from_index, index_of_cr);
-                if(debugging_enabled){
-                    Serial.printf("String[%d]:", comma_count);
-                    Serial.println(stringArray[comma_count]);
-                }
-            }
-            still_searching_for_commas = false;
-        }
-    }
-    if(comma_count == NUMBER_OF_FIELDS_LOGGING){
-        ozone_value = stringArray[1].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 1 due to logging");
-            //writeLogFile("using string array index 1 due to logging");
-          }
-    }else if(comma_count == (NUMBER_OF_FIELDS_LOGGING - 1)){
-        ozone_value = stringArray[0].toFloat();
-        if(debugging_enabled){
-            Serial.println("using string array index 0, not logging");
-            //writeLogFile("using string array index 0, not logging");
-          }
-    }else if(comma_count == NUMBER_OF_FIELDS_108){
-        ozone_value = stringArray[0].toFloat();
-        if(debugging_enabled){
-            Serial.println("Read ozone from 108!);
-            //writeLogFile("using string array index 0, not logging");
-          }
-    }
-    return ozone_value;
-    //parseOzoneString(recievedData);
-}
-
 void getEspAQSyncData(void){
     
     String getAQSyncData = "Z&";
@@ -2026,10 +1998,10 @@ void getEspAQSyncData(void){
     //if esp doesn't answer, keep going
     Serial1.setTimeout(3000);
     //if(debugging_enabled){
-        Serial.println("Getting aqsync data from esp");
+        // Serial.println("Getting aqsync data from esp");
     //    writeLogFile("Getting aqsync data from esp");
      // }
-    Serial1.print(getAQSyncData);
+    // Serial1.print(getAQSyncData);
     while(!Serial1.available() && timeOut == false){
       //delay(1);
       counterIndex++;
@@ -2048,8 +2020,8 @@ void getEspAQSyncData(void){
     //recievedData = "0.1,1.2,3.3,4.5,1.234,10/12/18,9:22:18";
     //if(debugging_enabled)
     //{
-        Serial.print("RECIEVED DATA FROM ESP: ");
-        Serial.println(recievedData);
+        // Serial.print("RECIEVED DATA FROM ESP: ");
+        // Serial.println(recievedData);
         //writeLogFile("Recieved data from ESP");
     //}
 
@@ -2228,37 +2200,13 @@ void serialMenu(){
     while(!Serial.available());
     incomingByte = Serial.read();
     if(incomingByte == 'a'){
-        serialGetCo2Slope();
+        serialGetCoSlopeA();
     }else if(incomingByte == 'b'){
-        serialGetCo2Zero();
+        serialGetCoZeroA();
     }else if(incomingByte == 'c'){
-        serialGetCoSlope();
+        serialGetCoSlopeB();
     }else if(incomingByte == 'd'){
-        serialGetCoZero();
-    }else if(incomingByte == 'e'){
-        serialGetPm1Slope();
-    }else if(incomingByte == 'f'){
-         serialGetPm1Zero();
-    }else if(incomingByte == 'g'){
-        serialGetPm25Slope();
-    }else if(incomingByte == 'h'){
-        serialGetPm25Zero();
-    }else if(incomingByte == 'i'){
-        serialGetPm10Slope();
-    }else if(incomingByte == 'j'){
-        serialGetPm10Zero();
-    }else if(incomingByte == 'k'){
-        serialGetTemperatureSlope();
-    }else if(incomingByte == 'l'){
-        serialGetTemperatureZero();
-    }else if(incomingByte == 'm'){
-        serialGetPressureSlope();
-    }else if(incomingByte == 'n'){
-        serialGetPressureZero();
-    }else if(incomingByte == 'o'){
-        serialGetHumiditySlope();
-    }else if(incomingByte == 'p'){
-        serialGetHumidityZero();
+        serialGetCoZeroB();
     }else if(incomingByte == 'q'){
         Serial.println("Serial debugging enabled.");
         debugging_enabled = 1;
@@ -2582,13 +2530,16 @@ void serialMenu(){
 
 void outputCOtoPI(void)
 {
-    String CO_string = "*";
-    Serial.println("Outputting CO to PI.");
+    // String CO_string = "*";
+    // Serial.println("Outputting CO to PI.");
     
 
-    CO_string += String(measurement_number, 0) + ",";
-    CO_string += String(CO_float_A, 3) + ",";
-    CO_string += String(CO_float_B, 3) + ",";
+    // CO_string += String(measurement_number, 0) + ",";
+    String CO_string = String(DEVICE_id)+",";
+    CO_string += String(CO_float_A, 2) + ",";
+    CO_string += String(CO_float_B, 2) + ",";
+    CO_string += String(CO2_float, 1) + ",";
+    CO_string += String(bme.pressure/100.0, 1) +",";
     if(gps.get_latitude() != 0){
         if(gps.get_nsIndicator() == 0){
             CO_string += "-";
@@ -2608,17 +2559,27 @@ void outputCOtoPI(void)
         CO_string += String(geolocation_longitude) + ",";
     }
 
+    if (gps.get_longitude() != 0)
+    {
+        CO_string += String(gps.get_satellites())+",";
+    }
+    else
+    {
+        CO_string += "0,";
+    }
     if (gps.get_longitude() != 0) {
         CO_string += String(gps.get_horizontalDillution() / 10.0) + ",";
     } else {
         CO_string += String(geolocation_accuracy) + ",";
     }
 
-    CO_string += String(Time.format(systemTime, "%d/%m/%y,%H:%M:%S"));
+    CO_string += String(fuel.getSoC(), 2)+",";
+    CO_string += String(Time.format(systemTime, "%y/%m/%d,%H:%M:%S"));
     //get a current time string
     
-    CO_string += "\n\r&";
-    Serial1.print(CO_string);
+    // CO_string += "\n\r&";
+    // Serial1.print(CO_string);
+    Serial.println(CO_string);
     //send ending delimeter
     //Serial1.print("&");
 }
@@ -2930,13 +2891,13 @@ void serialGetCo2Zero(void){
     }
 }
 
-void serialGetCoSlope(void){
+void serialGetCoSlopeA(void){
 
     Serial.println();
-    Serial.print("Current CO slope:");
+    Serial.print("Current CO_A slope:");
     Serial.print(String(CO_slopeA, 2));
     Serial.println(" ppm");
-    Serial.print("Enter new CO slope\n\r");
+    Serial.print("Enter new CO_A slope\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     float tempfloat = tempString.toFloat();
@@ -2946,7 +2907,7 @@ void serialGetCoSlope(void){
         CO_slopeA = tempfloat;
         tempfloat *= 100;
         tempValue = tempfloat;
-        Serial.print("\n\rNew COA slope: ");
+        Serial.print("\n\rNew CO_A slope: ");
         Serial.println(String(CO_slopeA,2));
 
         EEPROM.put(CO_SLOPEA_MEM_ADDRESS, tempValue);
@@ -2954,22 +2915,66 @@ void serialGetCoSlope(void){
         Serial.println("\n\rInvalid value!");
     }
 }
+void serialGetCoSlopeB(void){
 
-void serialGetCoZero(void){
+    Serial.println();
+    Serial.print("Current CO_B slope:");
+    Serial.print(String(CO_slopeB, 2));
+    Serial.println(" ppm");
+    Serial.print("Enter new CO_B slope\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    float tempfloat = tempString.toFloat();
+    int tempValue;
+
+    if(tempfloat >= 0.1 && tempfloat < 2.0){
+        CO_slopeB = tempfloat;
+        tempfloat *= 100;
+        tempValue = tempfloat;
+        Serial.print("\n\rNew CO_B slope: ");
+        Serial.println(String(CO_slopeB,2));
+
+        EEPROM.put(CO_SLOPEB_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
+void serialGetCoZeroA(void){
     Serial.println();
     Serial.print("Current CO_A zero:");
     Serial.print(CO_zeroA);
     Serial.println(" ppb");
-    Serial.print("Enter new CO Zero\n\r");
+    Serial.print("Enter new CO_A Zero\n\r");
     Serial.setTimeout(50000);
     String tempString = Serial.readStringUntil('\r');
     int tempValue = tempString.toInt();
 
     if(tempValue >= -5000 && tempValue < 5000){
-        Serial.print("\n\rNew CO zero: ");
+        Serial.print("\n\rNew CO_A zero: ");
         Serial.println(tempValue);
         CO_zeroA = tempValue;
         EEPROM.put(CO_ZEROA_MEM_ADDRESS, tempValue);
+    }else{
+        Serial.println("\n\rInvalid value!");
+    }
+}
+
+void serialGetCoZeroB(void){
+    Serial.println();
+    Serial.print("Current CO_B zero:");
+    Serial.print(CO_zeroB);
+    Serial.println(" ppb");
+    Serial.print("Enter new CO_B Zero\n\r");
+    Serial.setTimeout(50000);
+    String tempString = Serial.readStringUntil('\r');
+    int tempValue = tempString.toInt();
+
+    if(tempValue >= -5000 && tempValue < 5000){
+        Serial.print("\n\rNew CO_B zero: ");
+        Serial.println(tempValue);
+        CO_zeroB = tempValue;
+        EEPROM.put(CO_ZEROB_MEM_ADDRESS, tempValue);
     }else{
         Serial.println("\n\rInvalid value!");
     }
@@ -3322,10 +3327,10 @@ void readAlpha1Constantly(void){
 }
 void outputSerialMenuOptions(void){
     Serial.println("Command:  Description");
-    Serial.println("a:  Adjust CO2 slope");
-    Serial.println("b:  Adjust CO2 zero");
-    Serial.println("c:  Adjust CO slope");
-    Serial.println("d:  Adjust CO zero");
+    Serial.println("a:  Adjust CO_A slope");
+    Serial.println("b:  Adjust CO_A zero");
+    Serial.println("c:  Adjust CO_B slope");
+    Serial.println("d:  Adjust CO_B zero");
     Serial.println("e:  Adjust PM1 slope");
     Serial.println("f:  Adjust PM1 zero");
     Serial.println("g:  Adjust PM2.5 slope");
