@@ -55,6 +55,7 @@ void outputToCloudAveraging();
 void outputToCloud(String data);
 void check_wifi_file(void);
 void button_work();
+void InitializeSPS30();
 void setup();
 void loop();
 void readGpsStream(void);
@@ -1123,6 +1124,69 @@ void button_work()
     return ;
 }
 
+void InitializeSPS30()
+{
+    // Begin communication channel;
+    Serial4.flush();
+    Serial4.end();
+    Serial4.begin(115200);
+    sps30 = new SPS30();
+    if (!sps30->setSerialSpeed())
+        Serial.println("could not initialize communication channel.");
+
+    // check for SPS30 connection
+    if (! sps30->probe()) Serial.println("could not probe / connect with SPS30.");
+    else  Serial.println(F("Detected SPS30."));
+
+    // reset SPS30 connection
+    if (! sps30->reset()) Serial.println("could not reset.");
+
+    char buf[32];
+  uint8_t ret;
+  SPS30_version v;
+
+  //try to read serial number
+  ret = sps30->GetSerialNumber(buf, 32);
+  if (ret == SPS30_ERR_OK) {
+    Serial.print(F("Serial number : "));
+    if(strlen(buf) > 0)  Serial.println(buf);
+    else Serial.println(F("not available"));
+  }
+  else
+    Serial.println("could not get serial number");
+
+  // try to get product name
+  ret = sps30->GetProductName(buf, 32);
+  if (ret == SPS30_ERR_OK)  {
+    Serial.print(F("Product name  : "));
+
+    if(strlen(buf) > 0)  Serial.println(buf);
+    else Serial.println(F("not available"));
+  }
+  else
+    Serial.println("could not get product name.");
+
+  // try to get version info
+  ret = sps30->GetVersion(&v);
+  if (ret != SPS30_ERR_OK) {
+    Serial.println(F("Can not read version info"));
+    return;
+  }
+
+  Serial.print(F("Firmware level: "));  Serial.print(v.major);
+  Serial.print("."); Serial.println(v.minor);
+
+  // if (SP30_COMMS != I2C_COMMS) {
+    Serial.print(F("Hardware level: ")); Serial.println(v.HW_version);
+
+    Serial.print(F("SHDLC protocol: ")); Serial.print(v.SHDLC_major);
+    Serial.print("."); Serial.println(v.SHDLC_minor);
+  // }
+
+  Serial.print(F("Library level : "));  Serial.print(v.DRV_major);
+  Serial.print(".");  Serial.println(v.DRV_minor);
+}
+
 void setup()
 {
     status_word.status_int  = 0;
@@ -1197,63 +1261,7 @@ void setup()
     Serial4.begin(115200);
     Serial5.begin(9600);        //gps is connected to this serial port
 
-    // Begin communication channel;
-    sps30 = new SPS30();
-    if (!sps30->setSerialSpeed())
-        Serial.println("could not initialize communication channel.");
-
-    // check for SPS30 connection
-    if (! sps30->probe()) Serial.println("could not probe / connect with SPS30.");
-    else  Serial.println(F("Detected SPS30."));
-
-    // reset SPS30 connection
-    if (! sps30->reset()) Serial.println("could not reset.");
-
-    char buf[32];
-  uint8_t ret;
-  SPS30_version v;
-
-  //try to read serial number
-  ret = sps30->GetSerialNumber(buf, 32);
-  if (ret == SPS30_ERR_OK) {
-    Serial.print(F("Serial number : "));
-    if(strlen(buf) > 0)  Serial.println(buf);
-    else Serial.println(F("not available"));
-  }
-  else
-    Serial.println("could not get serial number");
-
-  // try to get product name
-  ret = sps30->GetProductName(buf, 32);
-  if (ret == SPS30_ERR_OK)  {
-    Serial.print(F("Product name  : "));
-
-    if(strlen(buf) > 0)  Serial.println(buf);
-    else Serial.println(F("not available"));
-  }
-  else
-    Serial.println("could not get product name.");
-
-  // try to get version info
-  ret = sps30->GetVersion(&v);
-  if (ret != SPS30_ERR_OK) {
-    Serial.println(F("Can not read version info"));
-    return;
-  }
-
-  Serial.print(F("Firmware level: "));  Serial.print(v.major);
-  Serial.print("."); Serial.println(v.minor);
-
-  // if (SP30_COMMS != I2C_COMMS) {
-    Serial.print(F("Hardware level: ")); Serial.println(v.HW_version);
-
-    Serial.print(F("SHDLC protocol: ")); Serial.print(v.SHDLC_major);
-    Serial.print("."); Serial.println(v.SHDLC_minor);
-  // }
-
-  Serial.print(F("Library level : "));  Serial.print(v.DRV_major);
-  Serial.print(".");  Serial.println(v.DRV_minor);
-
+    InitializeSPS30();
 
     // Setup the PMIC manually (resets the BQ24195 charge controller)
     // REG00 Input Source Control Register  (disabled)
@@ -2951,7 +2959,7 @@ void outputDataToESP(void){
 
 void readSensirion(void){
     Serial4.flush();
-    // delay(1000);
+    delay(500);
     uint8_t ret, error_cnt = 0;
   struct sps_values val;
   do {
@@ -2962,8 +2970,8 @@ void readSensirion(void){
     if (ret == SPS30_ERR_DATALENGTH){
 
         if (error_cnt++ > 3) {
-          Serial.println("Data length error: ");
-          Serial.println(ret);
+          Serial.println("Sensirion failed with data length error.");
+          InitializeSPS30();
           break;
         }
         delay(1000);
@@ -2971,8 +2979,9 @@ void readSensirion(void){
 
     // if other error
     else if(ret != SPS30_ERR_OK) {
-      Serial.println("Other Error: ");
+      Serial.print("Sensirion failed with this error: ");
       Serial.println(ret);
+      InitializeSPS30();
       break;
     }
 
@@ -2984,10 +2993,6 @@ void readSensirion(void){
         PM01Value=val.MassPM1; //count PM1.0 value of the air detector module
         PM2_5Value=val.MassPM2;//count PM2.5 value of the air detector module
         PM10Value=val.MassPM10; //count PM10 value of the air detector module
-        Serial.println("The different value masses: ");
-        Serial.println(PM01Value);
-        Serial.println(PM2_5Value);
-        Serial.println(PM10Value);
     }
 }
 

@@ -125,7 +125,8 @@
 #ifndef SPS30_H
 #define SPS30_H
 
-#include "Particle.h"
+// #include <SoftwareSerial.h>
+// #include "Serial4/Serial4.h"
 
 /**
  * library version levels
@@ -469,7 +470,6 @@ class SPS30
   public:
 
     SPS30(void);
-    bool setSerialSpeed();
 
     /**
     * @brief  Enable or disable the printing of sent/response HEX values.
@@ -599,6 +599,7 @@ class SPS30
     float GetNumPM4()   {return(Get_Single_Value(v_NumPM4));}
     float GetNumPM10()  {return(Get_Single_Value(v_NumPM10));}
     float GetPartSize() {return(Get_Single_Value(v_PartSize));}
+    bool setSerialSpeed();
 
    /**
      * @brief : set RX and TX pin for softserial and Serial1 on ESP32
