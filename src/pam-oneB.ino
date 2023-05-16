@@ -43,7 +43,7 @@
 #include "SdFat.h"
 #include "HIH61xx.h"
 #include "CellularHelper.h"
-#include "sps30/src/sps30.h"
+#include "../lib/sps30/src/sps30.h"
 
 PRODUCT_ID(2735);
 PRODUCT_VERSION(10);
