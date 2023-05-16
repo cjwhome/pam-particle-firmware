@@ -48,7 +48,7 @@
 #include "SdFat.h"
 #include "HIH61xx.h"
 #include "CellularHelper.h"
-#include "../lib/sps30/src/sps30.h"
+#include "sps30/src/sps30.h"
 
 void writeRegister(uint8_t reg, uint8_t value);
 void outputToCloudAveraging();
@@ -1501,10 +1501,7 @@ void locationCallback(float lat, float lon, float accuracy) {
 
 void loop() 
 {
-    if (car_topper_power_en)
-    {
-        carTopperCheck();
-    }
+
     //read temp, press, humidity, and TVOCs
     if(debugging_enabled){
       Serial.println("Before reading bme");
@@ -1527,6 +1524,11 @@ void loop()
         hih.process();
     }
     readGpsStream();
+
+    if (car_topper_power_en)
+    {
+        carTopperCheck();
+    }
 
 
     //read CO values and apply calibration factors
