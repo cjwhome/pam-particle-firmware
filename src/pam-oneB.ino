@@ -4238,15 +4238,14 @@ int calibrateCO2(String nothing) // this has a nothing string so we can call thi
             Serial.println("You interrupted the CO2 cal. Restarting now.");
         }*/
         digitalWrite(power_led_en, HIGH);   // Sets the LED on
-        delay(250);                   // waits for a second
+        delay(500);                   // waits for a second
         digitalWrite(power_led_en, LOW);    // Sets the LED off
-        delay(250);
+        delay(500);
         Serial.printf("%d/1800\r", counter);
     }
     System.reset();
     restart = true;
     return 1;
-    // Add a check in the middle to see if you press the button more. If so, turn off and on.
 }
 
 void readAlpha1Constantly(void){
