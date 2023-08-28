@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/austi/OldPAM/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -108,9 +108,9 @@ int setUploadSpeed(String uploadSpeed);
 void readAlpha1Constantly(void);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 47 "c:/Users/abailly/PAM_ESP/pam-particle-firmware/src/pam-oneB.ino"
+#line 47 "c:/Users/austi/OldPAM/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(2735);
-PRODUCT_VERSION(7);
+PRODUCT_VERSION(13);
 
 #define APP_VERSION 7
 #define BUILD_VERSION 22
@@ -1267,9 +1267,10 @@ void loop() {
         Serial.printf("pm2.5 correction factor: %1.2f, %1.2f\n\r", pm_25_correction_factor, readHumidity()/100);
         Serial.printf("PM2.5 value befor correction: %d\n", PM2_5Value);
     }
-    corrected_PM_25 = PM2_5Value / pm_25_correction_factor;
-    corrected_PM_25 = corrected_PM_25 + PM_25_zero;
-    corrected_PM_25 = corrected_PM_25 * PM_25_slope;
+
+    corrected_PM_25 = PM2_5Value;
+    // corrected_PM_25 = corrected_PM_25 + PM_25_zero;
+    // corrected_PM_25 = corrected_PM_25 * PM_25_slope;
 
     //getEspWifiStatus();
     outputDataToESP();
@@ -2557,7 +2558,7 @@ void outputParticles(){
             CO2_float *= pressure_correction;
         }
         pm_25_correction_factor = PM_25_CONSTANT_A + (PM_25_CONSTANT_B*(readHumidity()/100))/(1 - (readHumidity()/100));
-        corrected_PM_25 = PM2_5Value * pm_25_correction_factor;
+        corrected_PM_25 = PM2_5Value;
 
         byte ble_output_array[NUMBER_OF_SPECIES*BLE_PAYLOAD_SIZE];     //19 bytes per data line and 12 species to output
 
