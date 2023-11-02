@@ -2587,22 +2587,16 @@ void getEspOzoneData(void) {
         switch(i)
         { 
             case 0:
+
+            case 1:
                 O3_check = nextData.toFloat();
                 // O3_float = nextData.toFloat();
                 ozone_measurement_count += 1;
                 // I would normally do this averaging with the other varibales, but this is the only way to make sure we are only suming ozone when we get the new measurement
                 // O3_sum += O3_float;
                 break;
-            case 1:
-                O3_CellTemp_check = nextData.toFloat();
-                // O3_CellTemp = nextData.toFloat();
-                if(O3_CellTemp_check > 250)
-                {
-                    O3_CellTemp_check -= 273.15;
-                }
-                // O3_celltemp_sum += O3_CellTemp;
-                break;
             case 2: 
+            
                 O3_CellPress = nextData.toFloat();
                 break;
             case 3:

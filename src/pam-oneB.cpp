@@ -2,7 +2,7 @@
 //       THIS IS A GENERATED FILE - DO NOT EDIT       //
 /******************************************************/
 
-#line 1 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
+#line 1 "c:/Users/austi/OldPAM/pam-particle-firmware/src/pam-oneB.ino"
 /***************************************************************************
   This is a library for the BME680 gas, humidity, temperature & pressure sensor
 
@@ -100,12 +100,12 @@ int setSkipReadings(String numberOfSkips);
 int calibrateCO2(String nothing);
 int setEEPROMAddress(String data);
 int setSerialNumber(String serialNumber);
-#line 36 "c:/Users/abailly/OLD_PAM_PROJECTS/pam-particle-firmware/src/pam-oneB.ino"
+#line 36 "c:/Users/austi/OldPAM/pam-particle-firmware/src/pam-oneB.ino"
 PRODUCT_ID(15205);
-PRODUCT_VERSION(8);
+PRODUCT_VERSION(9);
 
 #define APP_VERSION 7
-#define AQLITE_VERSION 8
+#define AQLITE_VERSION 9
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -2655,22 +2655,16 @@ void getEspOzoneData(void) {
         switch(i)
         { 
             case 0:
+
+            case 1:
                 O3_check = nextData.toFloat();
                 // O3_float = nextData.toFloat();
                 ozone_measurement_count += 1;
                 // I would normally do this averaging with the other varibales, but this is the only way to make sure we are only suming ozone when we get the new measurement
                 // O3_sum += O3_float;
                 break;
-            case 1:
-                O3_CellTemp_check = nextData.toFloat();
-                // O3_CellTemp = nextData.toFloat();
-                if(O3_CellTemp_check > 250)
-                {
-                    O3_CellTemp_check -= 273.15;
-                }
-                // O3_celltemp_sum += O3_CellTemp;
-                break;
             case 2: 
+            
                 O3_CellPress = nextData.toFloat();
                 break;
             case 3:
