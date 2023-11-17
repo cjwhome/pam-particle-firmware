@@ -34,10 +34,10 @@
 #include "CellularHelper.h"
 
 PRODUCT_ID(15205);
-PRODUCT_VERSION(11);
+PRODUCT_VERSION(10);
 
 #define APP_VERSION 7
-#define AQLITE_VERSION 11
+#define AQLITE_VERSION 10
 
 //define constants
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -2580,8 +2580,8 @@ void getEspOzoneData(void) {
     String nextData;
     float O3_check;
     float O3_CellTemp_check;
-    nextData = recievedData.substring(0, recievedData.indexOf(','));
-    recievedData= recievedData.substring(recievedData.indexOf(',')+1, recievedData.length());
+    // nextData = recievedData.substring(0, recievedData.indexOf(','));
+    // recievedData= recievedData.substring(recievedData.indexOf(',')+1, recievedData.length());
     for (int i = 0; i < 4; i++)
     {
         nextData = recievedData.substring(0, recievedData.indexOf(','));
