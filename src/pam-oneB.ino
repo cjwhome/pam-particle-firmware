@@ -2577,11 +2577,23 @@ void getEspOzoneData(void) {
     {
         return ;
     }
+    int amountOfCommas = 0;
+    for (int i = 0; i < recievedData.length(); i++)
+    {
+        if (recievedData[i] == ',')
+        {
+            amountOfCommas++;
+        }
+    }
     String nextData;
     float O3_check;
     float O3_CellTemp_check;
-    // nextData = recievedData.substring(0, recievedData.indexOf(','));
-    // recievedData= recievedData.substring(recievedData.indexOf(',')+1, recievedData.length());
+    if (amountOfCommas == 7)
+    {
+        nextData = recievedData.substring(0, recievedData.indexOf(','));
+        recievedData= recievedData.substring(recievedData.indexOf(',')+1, recievedData.length());
+    }
+
     for (int i = 0; i < 4; i++)
     {
         nextData = recievedData.substring(0, recievedData.indexOf(','));
